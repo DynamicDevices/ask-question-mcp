@@ -9,6 +9,9 @@ git clone https://github.com/DynamicDevices/ask-question-mcp.git
 cd ask-question-mcp
 uv sync
 uv run python scripts/test_match_transcript.py
+uv run python scripts/test_doctor.py
+uv run python scripts/test_windows_backend.py
+uv run python scripts/test_contracts.py
 ```
 
 Optional voice: set `ASK_QUESTION_TTS_URL` and `ASK_QUESTION_STT_URL` to your
@@ -17,6 +20,10 @@ own HTTP services (see [SETUP.md](SETUP.md)). Never commit tokens or
 
 ## Pull requests
 
+- Use the PR template (hosts touched, test table, behaviour contract).
+- CI must pass: `test`, `secrets-hygiene` (and `sbom`). Same-repo hygiene/SBOM run on
+  DynamicDevices **self-hosted** Linux; **external fork** PRs use
+  GitHub-hosted so untrusted code does not run on lab runners.
 - Keep diffs focused; match existing style.
 - Do not add hardcoded private IPs, home-directory paths, or credentials.
 - New features that talk to the network should fail closed when URLs/tokens

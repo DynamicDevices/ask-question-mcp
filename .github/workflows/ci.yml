@@ -1,4 +1,7 @@
-# Public OSS CI — GitHub-hosted (fork-safe; lab self-hosted intentionally not used).
+# Public OSS CI.
+# - test: GitHub-hosted ubuntu (needs apt Gtk4/Adw; DD self-hosted has no sudo)
+# - secrets-hygiene / sbom: DynamicDevices self-hosted Linux for same-repo;
+#   external fork PRs use ubuntu-latest (do not run untrusted fork code on lab runners)
 name: ci
 
 on:
@@ -23,17 +26,18 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
-      - name: Sync + unit tests
+      - name: Sync + unit / contract tests
         run: |
           uv sync
           uv run python scripts/test_match_transcript.py
           uv run python scripts/test_doctor.py
           uv run python scripts/test_windows_backend.py
+          uv run python scripts/test_contracts.py
       - name: Import package
         run: uv run python -c "import ask_question_mcp; print('ok')"
 
   secrets-hygiene:
-    runs-on: ubuntu-latest
+    runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["self-hosted","Linux"]') || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v4
       - name: Block lab IPs and home paths in tracked text
@@ -54,7 +58,7 @@ jobs:
           echo "hygiene ok"
 
   sbom:
-    runs-on: ubuntu-latest
+    runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["self-hosted","Linux"]') || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
