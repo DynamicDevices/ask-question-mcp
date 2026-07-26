@@ -295,6 +295,7 @@ After editing: reload the host. Listings usually show server **`ask-question`**;
 | `ASK_QUESTION_SPEAK_VOLUME` / `ASK_QUESTION_ACK_VOLUME` | `0.60` / `0.55` | Linear playback gain |
 | `ASK_QUESTION_ALWAYS_LISTEN` | on | `0` = Listen button only |
 | `ASK_QUESTION_AGENT` / `LANE_ID` | unset | Fallback for `agent=` if omitted |
+| `ASK_QUESTION_DANGER_ARM_MS` | `4000` | Dangerous dialogs: block OK/Enter this many ms after open (`0` = off) |
 
 Full knobs + prefs paths: [SETUP.md](SETUP.md), [DEPENDENCIES.md](DEPENDENCIES.md).
 
@@ -318,7 +319,7 @@ Full knobs + prefs paths: [SETUP.md](SETUP.md), [DEPENDENCIES.md](DEPENDENCIES.m
 | `recommended_ids` | string[] \| null | no | Multi-select preferred ids |
 | `allow_multiple` | bool | no | default `false` (radio); `true` = checklist |
 | `allow_other` | bool | no | default `true` — appends Something else |
-| `dangerous` | bool | no | Whole-dialog danger chrome |
+| `dangerous` | bool | no | Whole-dialog danger chrome; OK/Enter armed ~4s (`ASK_QUESTION_DANGER_ARM_MS`) |
 | `speak` | bool | no | default `true` (honours mute env / missing TTS) |
 | `title` | string | no | default `"Decide"` — short noun phrase |
 | `agent` | string \| null | **strongly yes** | Window title prefix `[agent]` |
@@ -356,6 +357,10 @@ Full knobs + prefs paths: [SETUP.md](SETUP.md), [DEPENDENCIES.md](DEPENDENCIES.m
   ]
 }
 ```
+
+While `dangerous` is set, OK and Enter stay locked for ~4 seconds (countdown on the
+OK button) so a stray Return cannot confirm. Override with `ASK_QUESTION_DANGER_ARM_MS`
+(`0` disables). Cancel / Escape still work immediately.
 
 ### Return value (JSON string)
 

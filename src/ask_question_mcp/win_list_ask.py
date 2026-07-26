@@ -11,7 +11,14 @@ from __future__ import annotations
 
 import json
 import sys
+from pathlib import Path
 from typing import Any
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+try:
+    import danger_arm as _danger_arm
+except ImportError:  # pragma: no cover
+    _danger_arm = None  # type: ignore[assignment]
 
 
 def main() -> int:
@@ -186,14 +193,66 @@ def main() -> int:
     ttk.Button(btn_row, text="Cancel", command=on_cancel).grid(row=0, column=0, padx=(0, 8))
     ok_btn = ttk.Button(btn_row, text="OK", command=on_ok)
     ok_btn.grid(row=0, column=1)
+
+    if _danger_arm is not None:
+        arm_ms = int(_danger_arm.danger_arm_ms(dangerous=bool(dangerous or danger_ids)))
+    else:
+        arm_ms = 4000 if (dangerous or danger_ids) else 0
+    armed = {"v": arm_ms <= 0}
+
+    def _arm_confirm() -> None:
+        if armed["v"] or closed["v"]:
+            return
+        armed["v"] = True
+        try:
+            ok_btn.configure(state="normal", text="OK")
+        except tk.TclError:
+            pass
+
+    def on_ok_gated() -> None:
+        if not armed["v"]:
+            return
+        on_ok()
+
+    ok_btn.configure(command=on_ok_gated)
+
+    if arm_ms > 0:
+        try:
+            ok_btn.configure(state="disabled")
+        except tk.TclError:
+            pass
+        deadline = {"ms": arm_ms}
+
+        def _arm_tick() -> None:
+            if closed["v"] or armed["v"]:
+                return
+            left = deadline["ms"]
+            if left <= 0:
+                _arm_confirm()
+                return
+            secs = (
+                _danger_arm.arm_label_secs(left)
+                if _danger_arm is not None
+                else max(1, (left + 999) // 1000)
+            )
+            try:
+                ok_btn.configure(text=f"OK ({secs}s)")
+            except tk.TclError:
+                return
+            deadline["ms"] = left - 200
+            root.after(200, _arm_tick)
+
+        _arm_tick()
+
     try:
-        ok_btn.focus_set()
+        if armed["v"]:
+            ok_btn.focus_set()
     except tk.TclError:
         pass
 
     root.protocol("WM_DELETE_WINDOW", on_cancel)
     root.bind("<Escape>", lambda _e: on_cancel())
-    root.bind("<Return>", lambda _e: on_ok())
+    root.bind("<Return>", lambda _e: on_ok_gated())
 
     if timeout_sec > 0:
 
