@@ -1,14 +1,17 @@
-"""Present MCQs via Gtk4/Adw list (native look, no type-to-filter).
+"""Present MCQs via a desktop list dialog (Gtk4/Adw on Linux; tkinter on Windows).
 
-Zenity 4 ``--list`` always attaches a GtkSearchBar with key-capture on the
-column view, so typing filters the list even when the search entry is
+Linux: Zenity 4 ``--list`` always attaches a GtkSearchBar with key-capture on
+the column view, so typing filters the list even when the search entry is
 CSS-hidden. List choices therefore use ``gtk4_list_ask.py`` (system
 PyGObject). Freeform ``Something else`` / ``opens_entry`` options use
 ``gtk4_entry_ask.py`` (type + Listen / STT); zenity ``--entry`` is fallback.
 
+Windows (Phase 1): ``win_list_ask.py`` / ``win_entry_ask.py`` (tkinter) —
+text click/type only; no speak/duck/STT.
+
 Recommended options are listed first and pre-selected. Dangerous decisions
-get a red in-dialog title (Pango) plus ⚠ marks. Window title includes the
-raising agent/lane. Ack speechs are cached WAVs played synchronously.
+get danger chrome. Window title includes the raising agent/lane. On Linux,
+ack speechs are cached WAVs played synchronously when voice is active.
 """
 
 from __future__ import annotations
@@ -38,6 +41,18 @@ OTHER_LABEL = "Something else…"
 # Standalone Gtk4 dialogs (must run under system python with gi/Adw).
 _GTK4_LIST_ASK = Path(__file__).resolve().with_name("gtk4_list_ask.py")
 _GTK4_ENTRY_ASK = Path(__file__).resolve().with_name("gtk4_entry_ask.py")
+# Windows tkinter dialogs (may run under uv venv python if tkinter works).
+_WIN_LIST_ASK = Path(__file__).resolve().with_name("win_list_ask.py")
+_WIN_ENTRY_ASK = Path(__file__).resolve().with_name("win_entry_ask.py")
+
+
+def _is_windows() -> bool:
+    return sys.platform == "win32"
+
+
+def ui_backend() -> str:
+    """Return ``win`` or ``gtk`` for the active desktop UI backend."""
+    return "win" if _is_windows() else "gtk"
 
 
 def _probe_gi_adw(py: str) -> tuple[bool, str]:
@@ -63,12 +78,45 @@ def _probe_gi_adw(py: str) -> tuple[bool, str]:
         return False, str(exc)
 
 
-def _ensure_ui_ready() -> str:
-    """Require DISPLAY + Gtk dialog stack before any speak / duck / STT.
+def _probe_tkinter(py: str) -> tuple[bool, str]:
+    try:
+        r = subprocess.run(
+            [py, "-c", "import tkinter; print('ok')"],
+            capture_output=True,
+            text=True,
+            timeout=8,
+            check=False,
+        )
+        if r.returncode == 0 and "ok" in (r.stdout or ""):
+            return True, py
+        err = (r.stderr or r.stdout or "").strip()[:200]
+        return False, err or f"exit {r.returncode}"
+    except Exception as exc:  # noqa: BLE001
+        return False, str(exc)
 
-    Display is mandatory; audio must not start when the MCQ cannot be shown.
-    Returns the DISPLAY value.
+
+def _ensure_ui_ready() -> str:
+    """Require a working dialog stack before any speak / duck / STT.
+
+    Linux: DISPLAY + Gtk4/Adw. Windows: win_* scripts + tkinter.
+    Returns a display token (DISPLAY value on Linux; ``win32`` on Windows).
     """
+    if _is_windows():
+        if not _WIN_LIST_ASK.is_file():
+            raise RuntimeError(
+                f"missing Windows list dialog: {_WIN_LIST_ASK}. "
+                "Point mcp.json --directory at the ask-question-mcp checkout."
+            )
+        win_py = _resolve_win_python()
+        ok, detail = _probe_tkinter(win_py)
+        if not ok:
+            raise RuntimeError(
+                f"tkinter unavailable on {win_py}: {detail}. "
+                "Install Python from python.org with tcl/tk (DEPENDENCIES.md "
+                "tier B Windows)."
+            )
+        return "win32"
+
     display = os.environ.get("DISPLAY", "").strip()
     if not display:
         raise RuntimeError(
@@ -101,6 +149,19 @@ def _resolve_gtk_python() -> str:
     raise RuntimeError(
         "No Gtk-capable python3 found. Set ASK_QUESTION_GTK_PYTHON "
         "or install python3 with PyGObject/Adw."
+    )
+
+
+def _resolve_win_python() -> str:
+    """Python with tkinter — uv venv is fine on Windows."""
+    env = os.environ.get("ASK_QUESTION_WIN_PYTHON", "").strip()
+    candidates = [env, sys.executable, shutil.which("python") or "", shutil.which("python3") or ""]
+    for c in candidates:
+        if c and Path(c).is_file():
+            return c
+    raise RuntimeError(
+        "No Python found for Windows dialogs. Set ASK_QUESTION_WIN_PYTHON "
+        "or install Python from python.org with tcl/tk."
     )
 
 
@@ -150,10 +211,46 @@ def _entry_text(
     auto_listen: bool = False,
     voice_enabled: bool = True,
 ) -> tuple[str, dict[str, Any]]:
-    """Open freeform edit box; prefer Gtk (type + Listen), else zenity.
+    """Open freeform edit box; Windows tkinter, else Gtk (+ zenity fallback).
 
     Returns ``(text, voice_meta)``.
     """
+    if _is_windows():
+        if not _WIN_ENTRY_ASK.is_file():
+            raise AskCancelled(f"missing Windows entry dialog: {_WIN_ENTRY_ASK}")
+        win_py = _resolve_win_python()
+        payload = {
+            "title": title,
+            "prompt": prompt,
+            "initial_text": initial_text or "",
+            "timeout_sec": timeout_sec,
+        }
+        try:
+            proc = subprocess.run(
+                [win_py, str(_WIN_ENTRY_ASK)],
+                input=json.dumps(payload),
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=timeout_sec + 30 if timeout_sec > 0 else None,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise AskCancelled("entry timed out") from exc
+        raw = (proc.stdout or "").strip()
+        if not raw:
+            err = (proc.stderr or "").strip()
+            raise AskCancelled(err or "Windows entry produced no output")
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise AskCancelled(f"bad win entry output: {raw!r}") from exc
+        if data.get("cancelled"):
+            raise AskCancelled(str(data.get("reason") or "entry cancelled"))
+        text = str(data.get("text") or "").strip()
+        if not text:
+            raise AskCancelled("empty freeform entry")
+        return text, {}
+
     env = {**os.environ, "DISPLAY": display}
     if _GTK4_ENTRY_ASK.is_file():
         try:
@@ -266,12 +363,75 @@ def _ask_list(
     audio_mode: str = "text_only",
     capability_notes: list[str] | None = None,
 ) -> tuple[list[str], dict[str, Any], str | None]:
-    """Gtk4/Adw radiolist/checklist — no SearchBar, so typing does not filter.
+    """Radiolist/checklist via Gtk (Linux) or tkinter (Windows).
 
-    Returns ``(chosen_ids, voice_meta, freeform_text_or_None)``. When the Gtk
-    dialog already confirmed a spoken freeform answer, ``freeform_text`` is set
-    and the zenity entry step is skipped.
+    Returns ``(chosen_ids, voice_meta, freeform_text_or_None)``. When the
+    dialog already confirmed a spoken/typed freeform answer, ``freeform_text``
+    is set and the entry step is skipped.
     """
+    if _is_windows():
+        if not _WIN_LIST_ASK.is_file():
+            raise RuntimeError(f"missing Windows list dialog: {_WIN_LIST_ASK}")
+        win_py = _resolve_win_python()
+        payload = {
+            "question": question.strip(),
+            "title": title,
+            "ids": ids,
+            "labels": labels,
+            "preselect": sorted(preselect),
+            "recommended_ids": sorted(preselect),
+            "danger_ids": sorted(danger_ids),
+            "dangerous": bool(dangerous or danger_ids),
+            "allow_multiple": allow_multiple,
+            "allow_other": bool(allow_other),
+            "timeout_sec": timeout_sec,
+            "speak_enabled": False,
+            "speak_text": "",
+            "voice_answer": False,
+            "audio_mode": audio_mode or "text_only",
+            "capability_notes": list(capability_notes or []),
+        }
+        try:
+            proc = subprocess.run(
+                [win_py, str(_WIN_LIST_ASK)],
+                input=json.dumps(payload),
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=timeout_sec + 15 if timeout_sec > 0 else None,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise AskCancelled("Windows list timed out") from exc
+
+        raw = (proc.stdout or "").strip()
+        if not raw:
+            err = (proc.stderr or "").strip()
+            raise AskCancelled(err or "Windows list produced no output")
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise AskCancelled(f"bad win list output: {raw!r}") from exc
+
+        voice_meta: dict[str, Any] = {}
+        freeform_text = data.get("freeform_text")
+        if isinstance(freeform_text, str):
+            freeform_text = freeform_text.strip() or None
+        else:
+            freeform_text = None
+
+        if data.get("cancelled"):
+            raise AskCancelled(str(data.get("reason") or "user cancelled"))
+
+        chosen = [str(x) for x in (data.get("ids") or [])]
+        if not chosen:
+            raise AskCancelled("empty selection")
+        bad = [c for c in chosen if c not in labels]
+        if bad:
+            raise AskCancelled(f"unexpected ids: {bad!r}")
+        if not allow_multiple:
+            return chosen[:1], voice_meta, freeform_text
+        return chosen, voice_meta, freeform_text
+
     if not _GTK4_LIST_ASK.is_file():
         raise RuntimeError(f"missing gtk4 list dialog: {_GTK4_LIST_ASK}")
     gtk_py = _resolve_gtk_python()
@@ -642,7 +802,11 @@ def ask_zenity(
             zenity=zenity,
             display=display,
             title=win_title,
-            prompt="Type or Listen your answer — Ctrl+Enter to OK:",
+            prompt=(
+                "Type your answer — Ctrl+Enter to OK:"
+                if _is_windows()
+                else "Type or Listen your answer — Ctrl+Enter to OK:"
+            ),
             timeout_sec=timeout_sec,
             initial_text=seed,
             auto_listen=auto_listen and do_listen,

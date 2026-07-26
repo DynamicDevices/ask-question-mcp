@@ -143,6 +143,24 @@ def main() -> None:
     assert unsupported["status"] == "unsupported"
     assert unsupported["ask_feedback"] is False
 
+    windows = classify_platform(
+        {
+            "system": "Windows",
+            "pretty_name": "Windows 11",
+            "distro_id": "",
+            "id_like": [],
+            "version_id": "",
+            "desktop": "windows",
+            "desktop_raw": "windows",
+            "audio": "n/a",
+            "arch": "AMD64",
+            "display_set": True,
+            "python": "3.12.0",
+        }
+    )
+    assert windows["status"] == "unverified", windows
+    assert windows["ask_feedback"] is True
+
     assert "platform" in r
     assert r["platform"]["status"] in {"verified", "unverified", "unsupported"}
 

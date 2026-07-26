@@ -67,13 +67,17 @@ still speak if installed — set `ASK_QUESTION_SPEAK=0` for silence.
 
 | Host | Config path (typical) | Reload |
 |------|----------------------|--------|
-| **Cursor** | `~/.cursor/mcp.json` | Developer → Reload Window |
+| **Cursor** (Linux) | `~/.cursor/mcp.json` | Developer → Reload Window |
+| **Cursor** (Windows) | `%USERPROFILE%\.cursor\mcp.json` | Developer → Reload Window |
 | **Claude Desktop** (Linux) | `~/.config/Claude/claude_desktop_config.json` | Full quit / relaunch |
 | **Claude Desktop** (macOS) | `~/Library/Application Support/Claude/claude_desktop_config.json` | Full quit / relaunch |
 | Other stdio MCP clients | Product MCP settings | Per product |
 
-Same `mcpServers` / `command`+`args`+`env` shape. Process must inherit
+On Windows use absolute `uv.exe` and a Windows `--directory` path. Same
+`mcpServers` / `command`+`args`+`env` shape. Linux process must inherit
 `DISPLAY`. Not a remote/HTTP MCP — see README [MCP client configuration](README.md#mcp-client-configuration).
+
+Windows Phase 1 is text-only (tkinter); omit TTS/STT `env` entries.
 
 ### Tokens (optional)
 

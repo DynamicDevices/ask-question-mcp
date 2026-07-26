@@ -28,6 +28,7 @@ jobs:
           uv sync
           uv run python scripts/test_match_transcript.py
           uv run python scripts/test_doctor.py
+          uv run python scripts/test_windows_backend.py
       - name: Import package
         run: uv run python -c "import ask_question_mcp; print('ok')"
 

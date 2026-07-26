@@ -145,103 +145,188 @@ def run_checks(*, want_voice: bool | None = None) -> list[Check]:
             )
         )
 
-    # Platform
-    display = os.environ.get("DISPLAY", "").strip()
-    if display:
-        checks.append(
-            Check("display", "DISPLAY", "ok", f"DISPLAY={display}", docs=[DOCS_README, DOCS_DEPS])
-        )
-    else:
+    # Platform UI stack
+    if sys.platform == "win32":
         checks.append(
             Check(
                 "display",
-                "DISPLAY",
-                "fail",
-                "DISPLAY is unset — Gtk dialogs cannot appear.",
-                fix="Run the MCP inside a Linux desktop session (or export DISPLAY=:0).",
+                "Desktop",
+                "ok",
+                "Windows desktop (tkinter Phase 1 text-only)",
                 docs=[DOCS_README, DOCS_DEPS],
             )
         )
-
-    py = _gtk_python()
-    if not py:
-        checks.append(
-            Check(
-                "gtk_python",
-                "Gtk Python",
-                "fail",
-                "No system python3 found for Gtk dialogs.",
-                fix="Install python3 and set ASK_QUESTION_GTK_PYTHON if needed.",
-                docs=[DOCS_DEPS],
-            )
+        win_py = (
+            os.environ.get("ASK_QUESTION_WIN_PYTHON", "").strip()
+            or sys.executable
         )
-    else:
-        ok, detail = _gi_adw_ok(py)
-        if ok:
+        try:
+            r = subprocess.run(
+                [win_py, "-c", "import tkinter; print('ok')"],
+                capture_output=True,
+                text=True,
+                timeout=8,
+                check=False,
+            )
+            tk_ok = r.returncode == 0 and "ok" in (r.stdout or "")
+            tk_detail = (
+                f"{win_py} has tkinter"
+                if tk_ok
+                else ((r.stderr or r.stdout or "").strip()[:200] or f"exit {r.returncode}")
+            )
+        except Exception as exc:  # noqa: BLE001
+            tk_ok = False
+            tk_detail = str(exc)
+        if tk_ok:
             checks.append(
-                Check("gtk_python", "Gtk4 + Adw", "ok", detail, docs=[DOCS_DEPS])
+                Check("tkinter", "tkinter", "ok", tk_detail, docs=[DOCS_DEPS])
             )
         else:
             checks.append(
                 Check(
-                    "gtk_python",
-                    "Gtk4 + Adw",
+                    "tkinter",
+                    "tkinter",
                     "fail",
-                    f"PyGObject Gtk4/Adw missing on {py}: {detail}",
-                    fix="Install Gtk4/Adw GI bindings, e.g. Debian/Ubuntu: "
-                    "`sudo apt install python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 zenity`. "
-                    "Set ASK_QUESTION_GTK_PYTHON to that interpreter if needed.",
+                    f"tkinter missing on {win_py}: {tk_detail}",
+                    fix="Install Python from https://www.python.org/downloads/ "
+                    "with tcl/tk enabled (not a Store build without Tk). "
+                    "Optional: set ASK_QUESTION_WIN_PYTHON.",
                     docs=[DOCS_DEPS],
                 )
             )
-
-    list_ask = Path(__file__).resolve().with_name("gtk4_list_ask.py")
-    if list_ask.is_file():
-        checks.append(
-            Check("gtk_script", "gtk4_list_ask.py", "ok", str(list_ask), docs=[DOCS_DEPS])
-        )
-    else:
-        checks.append(
-            Check(
-                "gtk_script",
-                "gtk4_list_ask.py",
-                "fail",
-                f"Missing dialog script: {list_ask}",
-                fix="Re-clone or repair the ask-question-mcp checkout; MCP --directory must point at the repo root.",
-                docs=[DOCS_README, DOCS_DEPS],
+        win_list = Path(__file__).resolve().with_name("win_list_ask.py")
+        if win_list.is_file():
+            checks.append(
+                Check("win_script", "win_list_ask.py", "ok", str(win_list), docs=[DOCS_DEPS])
             )
-        )
-
-    zenity = shutil.which("zenity")
-    if zenity:
-        checks.append(Check("zenity", "zenity", "ok", zenity, docs=[DOCS_DEPS]))
-    else:
-        checks.append(
-            Check(
-                "zenity",
-                "zenity",
-                "warn",
-                "zenity not on PATH (recommended freeform fallback).",
-                fix="sudo apt install zenity",
-                docs=[DOCS_DEPS],
+        else:
+            checks.append(
+                Check(
+                    "win_script",
+                    "win_list_ask.py",
+                    "fail",
+                    f"Missing dialog script: {win_list}",
+                    fix="Re-clone or repair the ask-question-mcp checkout; "
+                    "MCP --directory must point at the repo root.",
+                    docs=[DOCS_README, DOCS_DEPS],
+                )
             )
-        )
-
-    pw = shutil.which("pw-play")
-    if pw:
-        checks.append(Check("pw_play", "pw-play", "ok", pw, docs=[DOCS_DEPS]))
-    else:
+        # Audio / zenity not applicable on Windows Phase 1
         checks.append(
             Check(
                 "pw_play",
                 "pw-play",
-                "warn",
-                "pw-play not found — speak/duck need PipeWire (text-only still works).",
-                fix="sudo apt install pipewire-pulse pipewire-audio-client-libraries "
-                "(or mute with ASK_QUESTION_SPEAK=0).",
-                docs=[DOCS_DEPS, DOCS_SETUP],
+                "skip",
+                "Windows Phase 1: media duck / PipeWire not used.",
+                docs=[DOCS_DEPS],
             )
         )
+    else:
+        display = os.environ.get("DISPLAY", "").strip()
+        if display:
+            checks.append(
+                Check(
+                    "display",
+                    "DISPLAY",
+                    "ok",
+                    f"DISPLAY={display}",
+                    docs=[DOCS_README, DOCS_DEPS],
+                )
+            )
+        else:
+            checks.append(
+                Check(
+                    "display",
+                    "DISPLAY",
+                    "fail",
+                    "DISPLAY is unset — Gtk dialogs cannot appear.",
+                    fix="Run the MCP inside a Linux desktop session (or export DISPLAY=:0).",
+                    docs=[DOCS_README, DOCS_DEPS],
+                )
+            )
+
+        py = _gtk_python()
+        if not py:
+            checks.append(
+                Check(
+                    "gtk_python",
+                    "Gtk Python",
+                    "fail",
+                    "No system python3 found for Gtk dialogs.",
+                    fix="Install python3 and set ASK_QUESTION_GTK_PYTHON if needed.",
+                    docs=[DOCS_DEPS],
+                )
+            )
+        else:
+            ok, detail = _gi_adw_ok(py)
+            if ok:
+                checks.append(
+                    Check("gtk_python", "Gtk4 + Adw", "ok", detail, docs=[DOCS_DEPS])
+                )
+            else:
+                checks.append(
+                    Check(
+                        "gtk_python",
+                        "Gtk4 + Adw",
+                        "fail",
+                        f"PyGObject Gtk4/Adw missing on {py}: {detail}",
+                        fix="Install Gtk4/Adw GI bindings, e.g. Debian/Ubuntu: "
+                        "`sudo apt install python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 zenity`. "
+                        "Set ASK_QUESTION_GTK_PYTHON to that interpreter if needed.",
+                        docs=[DOCS_DEPS],
+                    )
+                )
+
+        list_ask = Path(__file__).resolve().with_name("gtk4_list_ask.py")
+        if list_ask.is_file():
+            checks.append(
+                Check(
+                    "gtk_script", "gtk4_list_ask.py", "ok", str(list_ask), docs=[DOCS_DEPS]
+                )
+            )
+        else:
+            checks.append(
+                Check(
+                    "gtk_script",
+                    "gtk4_list_ask.py",
+                    "fail",
+                    f"Missing dialog script: {list_ask}",
+                    fix="Re-clone or repair the ask-question-mcp checkout; "
+                    "MCP --directory must point at the repo root.",
+                    docs=[DOCS_README, DOCS_DEPS],
+                )
+            )
+
+        zenity = shutil.which("zenity")
+        if zenity:
+            checks.append(Check("zenity", "zenity", "ok", zenity, docs=[DOCS_DEPS]))
+        else:
+            checks.append(
+                Check(
+                    "zenity",
+                    "zenity",
+                    "warn",
+                    "zenity not on PATH (recommended freeform fallback).",
+                    fix="sudo apt install zenity",
+                    docs=[DOCS_DEPS],
+                )
+            )
+
+        pw = shutil.which("pw-play")
+        if pw:
+            checks.append(Check("pw_play", "pw-play", "ok", pw, docs=[DOCS_DEPS]))
+        else:
+            checks.append(
+                Check(
+                    "pw_play",
+                    "pw-play",
+                    "warn",
+                    "pw-play not found — speak/duck need PipeWire (text-only still works).",
+                    fix="sudo apt install pipewire-pulse pipewire-audio-client-libraries "
+                    "(or mute with ASK_QUESTION_SPEAK=0).",
+                    docs=[DOCS_DEPS, DOCS_SETUP],
+                )
+            )
 
     # Voice intent
     tts = _tts_base()
@@ -249,17 +334,37 @@ def run_checks(*, want_voice: bool | None = None) -> list[Check]:
     speak_off = _falsy("ASK_QUESTION_SPEAK")
     voice_off = _falsy("ASK_QUESTION_VOICE_ANSWER")
     if want_voice is None:
-        want_voice = bool(tts or stt) and not (speak_off and voice_off)
+        # Windows Phase 1 ignores TTS/STT for readiness.
+        if sys.platform == "win32":
+            want_voice = False
+        else:
+            want_voice = bool(tts or stt) and not (speak_off and voice_off)
 
     if not tts:
-        sev: Severity = "warn" if want_voice else "skip"
+        if sys.platform == "win32":
+            sev: Severity = "skip"
+            tts_detail = (
+                "ASK_QUESTION_TTS_URL unset — Windows Phase 1 is text-only "
+                "(speak not supported yet)."
+            )
+            tts_fix = "Windows Phase 1: leave unset; text MCQ only."
+        else:
+            sev = "warn" if want_voice else "skip"
+            tts_detail = (
+                "ASK_QUESTION_TTS_URL (and ALEX_VOICE_SVC) unset — live speak/acks "
+                "via TTS disabled; bundled ack WAVs still work."
+            )
+            tts_fix = (
+                "Set ASK_QUESTION_TTS_URL to your Qwen3-TTS (or compatible) base URL, "
+                "e.g. http://127.0.0.1:8200"
+            )
         checks.append(
             Check(
                 "tts_url",
                 "TTS URL",
                 sev,
-                "ASK_QUESTION_TTS_URL (and ALEX_VOICE_SVC) unset — live speak/acks via TTS disabled; bundled ack WAVs still work.",
-                fix="Set ASK_QUESTION_TTS_URL to your Qwen3-TTS (or compatible) base URL, e.g. http://127.0.0.1:8200",
+                tts_detail,
+                fix=tts_fix,
                 docs=[DOCS_VOICE, DOCS_SETUP],
             )
         )
@@ -286,14 +391,27 @@ def run_checks(*, want_voice: bool | None = None) -> list[Check]:
             )
 
     if not stt:
-        sev = "warn" if want_voice else "skip"
+        if sys.platform == "win32":
+            sev = "skip"
+            stt_detail = (
+                "ASK_QUESTION_STT_URL unset — Windows Phase 1 is text-only "
+                "(mic answers not supported yet)."
+            )
+            stt_fix = "Windows Phase 1: leave unset; click/type only."
+        else:
+            sev = "warn" if want_voice else "skip"
+            stt_detail = "ASK_QUESTION_STT_URL unset — voice answers disabled."
+            stt_fix = (
+                "Set ASK_QUESTION_STT_URL to faster-whisper (or compatible) "
+                "transcribe URL, e.g. http://127.0.0.1:8201/transcribe"
+            )
         checks.append(
             Check(
                 "stt_url",
                 "STT URL",
                 sev,
-                "ASK_QUESTION_STT_URL unset — voice answers disabled.",
-                fix="Set ASK_QUESTION_STT_URL to faster-whisper (or compatible) transcribe URL, e.g. http://127.0.0.1:8201/transcribe",
+                stt_detail,
+                fix=stt_fix,
                 docs=[DOCS_VOICE, DOCS_SETUP],
             )
         )
@@ -347,7 +465,10 @@ def summarize(checks: list[Check]) -> dict[str, Any]:
     warns = [c for c in checks if c.severity == "warn"]
     ok = not fails
     soft_fail_ids = {c.id for c in checks if c.severity == "fail"}
-    ready_software = not soft_fail_ids.intersection({"gtk_python", "gtk_script"})
+    if sys.platform == "win32":
+        ready_software = not soft_fail_ids.intersection({"tkinter", "win_script"})
+    else:
+        ready_software = not soft_fail_ids.intersection({"gtk_python", "gtk_script"})
     ready_host = not soft_fail_ids.intersection({"uv", "python"})
     ready_ui = ready_software and "display" not in soft_fail_ids
     ready_tts = any(c.id == "tts_url" and c.severity == "ok" for c in checks)
@@ -364,6 +485,52 @@ def summarize(checks: list[Check]) -> dict[str, Any]:
     apt_audio = (
         "sudo apt install -y pipewire pipewire-pulse pipewire-audio-client-libraries"
     )
+    if sys.platform == "win32":
+        b_ui = {
+            "required": True,
+            "items": ["Windows desktop", "tkinter", "win_list_ask.py"],
+            "windows_note": (
+                "Install Python 3.12+ from python.org with tcl/tk enabled "
+                "(avoid Store builds without Tk)."
+            ),
+            "status": {
+                "display": by_id["display"].severity if "display" in by_id else "skip",
+                "tkinter": by_id["tkinter"].severity if "tkinter" in by_id else "skip",
+                "win_script": by_id["win_script"].severity if "win_script" in by_id else "skip",
+            },
+        }
+        c_audio = {
+            "required": False,
+            "items": [],
+            "windows_note": "Windows Phase 1: speak/duck not supported.",
+            "status": {
+                "pw_play": by_id["pw_play"].severity if "pw_play" in by_id else "skip",
+            },
+        }
+    else:
+        b_ui = {
+            "required": True,
+            "items": [
+                "DISPLAY",
+                "Gtk4+Adw GI",
+                "gtk4_list_ask.py",
+                "zenity (recommended)",
+            ],
+            "apt_debian_ubuntu": apt_ui,
+            "status": {
+                "display": by_id["display"].severity if "display" in by_id else "skip",
+                "gtk_python": by_id["gtk_python"].severity if "gtk_python" in by_id else "skip",
+                "zenity": by_id["zenity"].severity if "zenity" in by_id else "skip",
+            },
+        }
+        c_audio = {
+            "required": False,
+            "items": ["pw-play (PipeWire)"],
+            "apt_debian_ubuntu": apt_audio,
+            "status": {
+                "pw_play": by_id["pw_play"].severity if "pw_play" in by_id else "skip",
+            },
+        }
     dependencies = {
         "doc": DOCS_DEPS,
         "tiers": {
@@ -375,24 +542,8 @@ def summarize(checks: list[Check]) -> dict[str, Any]:
                     "python": by_id["python"].severity if "python" in by_id else "skip",
                 },
             },
-            "B_ui": {
-                "required": True,
-                "items": ["DISPLAY", "Gtk4+Adw GI", "gtk4_list_ask.py", "zenity (recommended)"],
-                "apt_debian_ubuntu": apt_ui,
-                "status": {
-                    "display": by_id["display"].severity if "display" in by_id else "skip",
-                    "gtk_python": by_id["gtk_python"].severity if "gtk_python" in by_id else "skip",
-                    "zenity": by_id["zenity"].severity if "zenity" in by_id else "skip",
-                },
-            },
-            "C_audio": {
-                "required": False,
-                "items": ["pw-play (PipeWire)"],
-                "apt_debian_ubuntu": apt_audio,
-                "status": {
-                    "pw_play": by_id["pw_play"].severity if "pw_play" in by_id else "skip",
-                },
-            },
+            "B_ui": b_ui,
+            "C_audio": c_audio,
             "D_voice": {
                 "required": False,
                 "items": ["ASK_QUESTION_TTS_URL", "ASK_QUESTION_STT_URL"],
@@ -407,6 +558,10 @@ def summarize(checks: list[Check]) -> dict[str, Any]:
             "debian_ubuntu_ui": apt_ui,
             "debian_ubuntu_audio": apt_audio,
             "python_package": "uv sync",
+            "windows_ui": (
+                "Install Python 3.12+ from https://www.python.org/downloads/ "
+                "with tcl/tk; then: winget install astral-sh.uv  (or uv install script)"
+            ),
         },
     }
 
@@ -463,11 +618,19 @@ def summarize(checks: list[Check]) -> dict[str, Any]:
             {"id": "ui_only", "label": "Use UI only — skip voice for now (recommended)"}
         )
         walk_opts.append({"id": "done", "label": "Looks fine — continue"})
-        if not ready_tts and not _falsy("ASK_QUESTION_SPEAK"):
+        if (
+            sys.platform != "win32"
+            and not ready_tts
+            and not _falsy("ASK_QUESTION_SPEAK")
+        ):
             walk_opts.append(
                 {"id": "tts", "label": "Set up Qwen3-TTS (spoken questions)"}
             )
-        if not ready_stt and not _falsy("ASK_QUESTION_VOICE_ANSWER"):
+        if (
+            sys.platform != "win32"
+            and not ready_stt
+            and not _falsy("ASK_QUESTION_VOICE_ANSWER")
+        ):
             walk_opts.append(
                 {"id": "stt", "label": "Set up faster-whisper STT (voice answers)"}
             )
@@ -556,31 +719,53 @@ def setup_guide(topic: str) -> dict[str, Any]:
     sections: dict[str, Any] = {}
 
     sections["ui"] = {
-        "title": "Linux UI dependencies (required for dialogs)",
+        "title": "Desktop UI dependencies (required for dialogs)",
         "summary": (
-            "Tier B in DEPENDENCIES.md: DISPLAY + Gtk4/Adw PyGObject + recommended zenity. "
-            "Without these, ask_multiple_choice cannot show a dialog."
+            "Tier B in DEPENDENCIES.md. Linux: DISPLAY + Gtk4/Adw. "
+            "Windows: tkinter (Phase 1 text-only)."
         ),
-        "steps": [
-            "Use a Linux desktop session (GNOME/KDE/etc.) with a working display.",
-            "Confirm: `echo $DISPLAY` prints something like `:0` or `:1`.",
-            "Debian/Ubuntu one-liner: "
-            "`sudo apt install -y python3 python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 zenity`.",
-            "Verify GI: `/usr/bin/python3 -c \"import gi; gi.require_version('Gtk','4.0'); "
-            "gi.require_version('Adw','1'); from gi.repository import Gtk, Adw; print('ok')\"`.",
-            "Optional audio (tier C): "
-            "`sudo apt install -y pipewire pipewire-pulse pipewire-audio-client-libraries` "
-            "for `pw-play` (speak/duck). Text-only works without this.",
-            "Smoke test from the repo: "
-            "`uv run python -c \"from ask_question_mcp.zenity_ask import ask_zenity; "
-            "print(ask_zenity('Smoke?', [{'id':'a','label':'OK (recommended)'},"
-            "{'id':'b','label':'Other'}], recommended_id='a'))\"`.",
-        ],
+        "steps": (
+            [
+                "Install Python 3.12+ from https://www.python.org/downloads/ "
+                "(tick tcl/tk / Tcl/Tk option). Avoid Store builds without Tk.",
+                "Confirm: `python -c \"import tkinter; print('ok')\"`.",
+                "Install uv: https://docs.astral.sh/uv/getting-started/installation/ "
+                "or `winget install astral-sh.uv`.",
+                "Clone the repo and `uv sync` in the checkout.",
+                "Smoke: `uv run python -c \"from ask_question_mcp.zenity_ask import ask_zenity; "
+                "print(ask_zenity('Smoke?', [{'id':'a','label':'OK (recommended)'},"
+                "{'id':'b','label':'Other'}], recommended_id='a'))\"`.",
+            ]
+            if sys.platform == "win32"
+            else [
+                "Use a Linux desktop session (GNOME/KDE/etc.) with a working display.",
+                "Confirm: `echo $DISPLAY` prints something like `:0` or `:1`.",
+                "Debian/Ubuntu one-liner: "
+                "`sudo apt install -y python3 python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 zenity`.",
+                "Verify GI: `/usr/bin/python3 -c \"import gi; gi.require_version('Gtk','4.0'); "
+                "gi.require_version('Adw','1'); from gi.repository import Gtk, Adw; print('ok')\"`.",
+                "Optional audio (tier C): "
+                "`sudo apt install -y pipewire pipewire-pulse pipewire-audio-client-libraries` "
+                "for `pw-play` (speak/duck). Text-only works without this.",
+                "Smoke test from the repo: "
+                "`uv run python -c \"from ask_question_mcp.zenity_ask import ask_zenity; "
+                "print(ask_zenity('Smoke?', [{'id':'a','label':'OK (recommended)'},"
+                "{'id':'b','label':'Other'}], recommended_id='a'))\"`.",
+            ]
+        ),
         "install_commands": {
             "debian_ubuntu_ui": "sudo apt install -y python3 python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 zenity",
             "debian_ubuntu_audio": "sudo apt install -y pipewire pipewire-pulse pipewire-audio-client-libraries",
+            "windows_ui": (
+                "Install Python 3.12+ from python.org with tcl/tk; "
+                "winget install astral-sh.uv"
+            ),
         },
-        "verify": "check_setup: display + gtk_python + gtk_script ok; ready.text_mcq true.",
+        "verify": (
+            "check_setup: display + tkinter + win_script ok; ready.text_mcq true."
+            if sys.platform == "win32"
+            else "check_setup: display + gtk_python + gtk_script ok; ready.text_mcq true."
+        ),
         "docs": [DOCS_DEPS, DOCS_README],
     }
 
@@ -598,18 +783,20 @@ def setup_guide(topic: str) -> dict[str, Any]:
             "Edit the host MCP config and add a stdio server (absolute uv + REPO_ROOT):",
             {
                 "ask-question": {
-                    "command": "/home/YOU/.local/bin/uv",
+                    "command": "/absolute/path/to/uv",  # Windows: C:\\Users\\YOU\\.local\\bin\\uv.exe
                     "args": [
                         "run",
                         "--directory",
-                        "/absolute/path/to/ask-question-mcp",
+                        "/absolute/path/to/ask-question-mcp",  # Windows: C:\\path\\to\\ask-question-mcp
                         "ask-question-mcp",
                     ],
                 }
             },
             "Cursor: ~/.cursor/mcp.json → Reload Window. "
+            "Windows Cursor: same file under %USERPROFILE%\\.cursor\\mcp.json — use absolute "
+            "path to uv.exe (e.g. %USERPROFILE%\\.local\\bin\\uv.exe or where.exe uv). "
             "Claude Desktop (Linux): ~/.config/Claude/claude_desktop_config.json → full quit/relaunch. "
-            "Other stdio hosts: same command/args/env shape; process must inherit DISPLAY.",
+            "Other stdio hosts: same command/args/env shape; Linux process must inherit DISPLAY.",
             "Call check_setup; confirm ask_multiple_choice works (text-only is fine).",
         ],
         "install_commands": {"python_package": "uv sync"},

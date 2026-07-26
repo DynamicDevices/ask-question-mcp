@@ -1,13 +1,14 @@
 """Voice capability detection — prefer text-only MCQ when TTS/STT unset.
 
-The Gtk dialog must always work with click / type. Missing remote TTS or STT
-is a **flag**, not a hard failure.
+The dialog must always work with click / type. Missing remote TTS or STT
+is a **flag**, not a hard failure. Windows Phase 1 is text-only (tkinter).
 """
 
 from __future__ import annotations
 
 import os
 import shutil
+import sys
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
@@ -75,6 +76,28 @@ def resolve_voice_capabilities(*, speak_requested: bool) -> VoiceCapabilities:
 
     tts = bool(tts_base_url())
     stt = bool(stt_transcribe_url())
+
+    # Windows Phase 1: tkinter text MCQ only — no duck / STT / local speak path.
+    if sys.platform == "win32":
+        notes = [
+            "Windows Phase 1: text-only MCQ (tkinter) — speak/listen not supported yet.",
+        ]
+        if tts or stt:
+            notes.append(
+                "TTS/STT URLs are ignored on Windows until Phase 2 voice support."
+            )
+        return VoiceCapabilities(
+            tts_configured=tts,
+            stt_configured=stt,
+            piper_available=False,
+            notify_voice_available=False,
+            speak_requested=bool(speak_requested),
+            speak_active=False,
+            listen_active=False,
+            audio_mode="text_only",
+            notes=notes,
+        )
+
     piper = piper_available()
     notify = notify_voice_available()
 

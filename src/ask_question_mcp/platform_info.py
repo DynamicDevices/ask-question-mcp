@@ -118,8 +118,16 @@ def detect_platform() -> dict[str, Any]:
     }
     version_id = osr.get("VERSION_ID") or ""
     pretty = osr.get("PRETTY_NAME") or system or "unknown"
-    desktop = _desktop_family()
-    audio = _audio_stack()
+    if system.casefold() == "windows":
+        # os-release is empty on Windows; surface a usable pretty name.
+        pretty = pretty if pretty not in {"", "Windows"} else f"Windows {platform.release()}"
+        desktop = "windows"
+        audio = "n/a"
+        display_set = True  # desktop session assumed for Cursor users
+    else:
+        desktop = _desktop_family()
+        audio = _audio_stack()
+        display_set = bool(os.environ.get("DISPLAY", "").strip())
     return {
         "system": system,
         "pretty_name": pretty,
@@ -129,18 +137,24 @@ def detect_platform() -> dict[str, Any]:
         "desktop": desktop,
         "desktop_raw": os.environ.get("XDG_CURRENT_DESKTOP")
         or os.environ.get("DESKTOP_SESSION")
-        or "",
+        or ("windows" if system.casefold() == "windows" else ""),
         "audio": audio,
         "arch": platform.machine() or "",
-        "display_set": bool(os.environ.get("DISPLAY", "").strip()),
+        "display_set": display_set,
         "python": platform.python_version(),
+        "ui_backend": "win" if system.casefold() == "windows" else "gtk",
     }
 
 
 def _matches_verified(host: dict[str, Any], row: dict[str, Any]) -> bool:
+    # Windows verified rows use system=windows instead of Linux distro ids.
+    if (row.get("system") or "").casefold() == "windows":
+        return (host.get("system") or "").casefold() == "windows"
+    if (host.get("system") or "").casefold() == "windows":
+        return False
     distro = host.get("distro_id") or ""
     # Strict: verified rows key off ID= (e.g. ubuntu), not merely ID_LIKE=debian.
-    if distro not in row["distro_ids"]:
+    if distro not in row.get("distro_ids", frozenset()):
         return False
     ver = str(host.get("version_id") or "")
     if row.get("version_prefixes") and not any(
@@ -161,7 +175,7 @@ def classify_platform(host: dict[str, Any] | None = None) -> dict[str, Any]:
     """Classify host as verified | unverified | unsupported."""
     host = host or detect_platform()
     system = (host.get("system") or "").casefold()
-    if system in {"windows", "darwin"} or system.startswith("cygwin"):
+    if system == "darwin" or system.startswith("cygwin"):
         return {
             "status": "unsupported",
             "verified": False,
@@ -170,7 +184,36 @@ def classify_platform(host: dict[str, Any] | None = None) -> dict[str, Any]:
             "host": host,
             "summary": (
                 f"{host.get('pretty_name') or system}: not supported "
-                "(Linux desktop Gtk UI only)."
+                "(no native desktop UI backend yet)."
+            ),
+            "docs": [README_PLATFORMS],
+        }
+
+    if system == "windows":
+        for row in VERIFIED_PLATFORMS:
+            if _matches_verified(host, row):
+                return {
+                    "status": "verified",
+                    "verified": True,
+                    "ask_feedback": False,
+                    "matched": {
+                        "id": row["id"],
+                        "label": row["label"],
+                        "notes": row.get("notes") or "",
+                    },
+                    "host": host,
+                    "summary": f"Verified platform: {row['label']}.",
+                    "docs": [README_PLATFORMS],
+                }
+        return {
+            "status": "unverified",
+            "verified": False,
+            "ask_feedback": True,
+            "matched": None,
+            "host": host,
+            "summary": (
+                "Unverified platform (Windows + tkinter text MCQ). "
+                "Please tell us if the dialog works — GitHub issue or README table PR."
             ),
             "docs": [README_PLATFORMS],
         }

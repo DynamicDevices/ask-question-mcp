@@ -37,6 +37,18 @@ sudo apt install -y pipewire pipewire-pulse pipewire-audio-client-libraries
 see [VOICE-BACKENDS.md](docs/VOICE-BACKENDS.md). No apt packages in this repo
 for model weights.
 
+## Quick install (Windows 10/11 — Phase 1 text-only)
+
+1. Install **Python 3.12+** from [python.org](https://www.python.org/downloads/)
+   with **tcl/tk** checked. Confirm: `python -c "import tkinter; print('ok')"`.
+2. Install [uv](https://docs.astral.sh/uv/) (`winget install astral-sh.uv`).
+3. Clone + `uv sync` in the repo.
+4. Wire absolute `uv.exe` + repo path into Cursor `%USERPROFILE%\.cursor\mcp.json`
+   (see [README — Windows quick start](README.md#windows-cursor--text-only-phase-1--for-anthony-and-other-win-users)).
+
+No Gtk, zenity, or PipeWire required. Speak / STT are **not** supported on
+Windows in Phase 1.
+
 ---
 
 ## Dependency tiers
@@ -44,22 +56,24 @@ for model weights.
 | Tier | Needed for | Fail closed? |
 |------|------------|--------------|
 | **A — Host / MCP process** | Start the stdio server | Yes |
-| **B — Desktop UI** | Show Gtk MCQ (text click/type) | Yes for dialogs |
-| **C — Audio out** | Speak / acks / duck | No — text-only works |
-| **D — Voice backends** | Live TTS + STT | No — flagged in `capabilities` |
+| **B — Desktop UI** | Show MCQ (text click/type) | Yes for dialogs |
+| **C — Audio out** | Speak / acks / duck (Linux) | No — text-only works |
+| **D — Voice backends** | Live TTS + STT (Linux) | No — flagged in `capabilities` |
 
 ### A — Host / MCP process (required)
 
 | Dependency | Why | Check |
 |------------|-----|--------|
-| Linux + desktop session | Gtk needs a GUI | `echo $DISPLAY` → `:0` / `:1` / … |
-| [`uv`](https://docs.astral.sh/uv/) on `PATH` | `mcp.json` runs `uv run … ask-question-mcp` | `uv --version` |
-| Python ≥ **3.12** | Package `requires-python` | `uv python list` / `python3 --version` |
+| Desktop session | Dialog needs a GUI | Linux: `echo $DISPLAY`; Windows: interactive desktop |
+| [`uv`](https://docs.astral.sh/uv/) on `PATH` | `mcp.json` runs `uv run … ask-question-mcp` | `uv --version` / `where uv` |
+| Python ≥ **3.12** | Package `requires-python` | `uv python list` / `python --version` |
 | PyPI deps via `uv.lock` | MCP SDK (`mcp[cli]`) | `uv sync` in repo root |
 
 Wire the absolute repo path into Cursor `mcp.json` (see [README.md](README.md)).
 
 ### B — Desktop UI (required for dialogs)
+
+**Linux**
 
 | Dependency | Role | Debian / Ubuntu packages |
 |------------|------|---------------------------|
@@ -71,6 +85,19 @@ Verify:
 
 ```bash
 /usr/bin/python3 -c "import gi; gi.require_version('Gtk','4.0'); gi.require_version('Adw','1'); from gi.repository import Gtk, Adw; print('ok')"
+```
+
+**Windows (Phase 1)**
+
+| Dependency | Role | Notes |
+|------------|------|--------|
+| **tkinter** | List / entry UI (`win_list_ask.py`, `win_entry_ask.py`) | Bundled with python.org installer when tcl/tk is selected |
+| Python used by MCP | May be the uv venv interpreter | Override: `ASK_QUESTION_WIN_PYTHON` |
+
+Verify:
+
+```bat
+python -c "import tkinter; print('ok')"
 ```
 
 ### C — Audio out (optional)

@@ -8,9 +8,10 @@
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](pyproject.toml)
 [![MCP](https://img.shields.io/badge/MCP-stdio-informational.svg)](README.md#mcp-client-configuration)
 
-**Stdio MCP server** that shows a **Linux desktop multiple-choice dialog**
+**Stdio MCP server** that shows a **desktop multiple-choice dialog**
 (`ask_multiple_choice`) so coding agents can ask the human a real decision
 when the host IDE has no native AskQuestion UI (or the model lacks that tool).
+Linux uses Gtk4/Adw; Windows Phase 1 uses tkinter (text-only).
 
 > **Use at your own risk.** This project is **heavily AI-facilitated**
 > (design, implementation, and docs). It runs on your desktop with access to
@@ -28,7 +29,7 @@ when the host IDE has no native AskQuestion UI (or the model lacks that tool).
 | **Demo** | [YouTube — ask-question-mcp in action](https://www.youtube.com/watch?v=5wVKCIXAfi4) |
 | **License** | [GPL-3.0-or-later](LICENSE) ([NOTICE](NOTICE)) — use at your own risk |
 | **Maintainers** | [MAINTAINERS.md](MAINTAINERS.md) |
-| **Platform** | Linux desktop only (`DISPLAY` + Gtk4/Adw; zenity fallback) — [tested matrix](#tested-platforms) |
+| **Platform** | Linux (Gtk4/Adw) · **Windows Phase 1** (tkinter text-only) — [tested matrix](#tested-platforms) |
 | **Transport** | MCP over **stdio** (local process — not GitHub Pages / not remote HTTP) |
 | **Voice** | Optional; off until TTS/STT URLs set — [docs/VOICE-BACKENDS.md](docs/VOICE-BACKENDS.md) |
 | **Self-check** | MCP `check_setup` / `setup_guide` · CLI `python -m ask_question_mcp.doctor` |
@@ -40,9 +41,10 @@ when the host IDE has no native AskQuestion UI (or the model lacks that tool).
 
 ## For humans (quick start)
 
-You need a **Linux desktop** (Gtk). The MCP host (Cursor today; Claude Desktop /
-other stdio clients later) starts a **local** process — cloning the repo is
-required; a website cannot show the dialog.
+The MCP host (Cursor today; Claude Desktop / other stdio clients later) starts a
+**local** process — cloning the repo is required; a website cannot show the dialog.
+
+### Linux (Gtk — full features)
 
 1. Install packages + clone (Debian/Ubuntu):
    ```bash
@@ -52,15 +54,46 @@ required; a website cannot show the dialog.
    cd ask-question-mcp && uv sync
    pwd   # ← this absolute path is REPO_ROOT
    ```
-2. Register the server in your MCP host — see [MCP client configuration](#mcp-client-configuration).
-   Prefer an **absolute path to `uv`** (GUI apps often lack `~/.local/bin` on `PATH`).
-3. Reload the host (Cursor: Developer → Reload Window; Claude Desktop: full quit/relaunch).
+2. Register the server — see [MCP client configuration](#mcp-client-configuration).
+   Prefer an **absolute path to `uv`**.
+3. Reload the host (Cursor: Developer → Reload Window).
 4. Ask the agent to call **`check_setup`**, then a smoke **`ask_multiple_choice`**.
-5. Voice is optional — leave TTS/STT unset for click/type only. If a local
-   Piper / `notify-voice.sh` is installed, questions may still speak; set
-   `ASK_QUESTION_SPEAK=0` for silence.
+5. Voice is optional — leave TTS/STT unset for click/type only.
 
-Demo: [YouTube](https://www.youtube.com/watch?v=5wVKCIXAfi4). Risks: [disclaimer](#ask-question-mcp) above.
+### Windows (Cursor — text-only Phase 1) — for Anthony and other Win users
+
+1. Install **Python 3.12+** from [python.org](https://www.python.org/downloads/)
+   with **tcl/tk** enabled (do not use a Store build that lacks Tk).
+2. Install [uv](https://docs.astral.sh/uv/) (`winget install astral-sh.uv` or the
+   install script). Note the absolute path to `uv.exe` (`where uv`).
+3. Clone + sync:
+   ```bat
+   git clone https://github.com/DynamicDevices/ask-question-mcp.git
+   cd ask-question-mcp
+   uv sync
+   cd
+   ```
+   Note the absolute path to the clone (e.g. `C:\Users\YOU\src\ask-question-mcp`).
+4. Confirm Tk: `python -c "import tkinter; print('ok')"`.
+5. Register in `%USERPROFILE%\.cursor\mcp.json` (absolute `uv.exe` + repo path):
+   ```json
+   "ask-question": {
+     "command": "C:\\Users\\YOU\\.local\\bin\\uv.exe",
+     "args": [
+       "run",
+       "--directory",
+       "C:\\Users\\YOU\\src\\ask-question-mcp",
+       "ask-question-mcp"
+     ]
+   }
+   ```
+6. Cursor → **Developer: Reload Window**. Ask the agent for **`check_setup`**,
+   then a smoke **`ask_multiple_choice`**.
+7. Phase 1 is **click/type only** (no speak / mic / media duck). After a successful
+   dialog, please report via the platform-feedback nudge or a GitHub issue so we
+   can mark Windows **Verified** in the matrix.
+
+Demo (Linux voice): [YouTube](https://www.youtube.com/watch?v=5wVKCIXAfi4). Risks: [disclaimer](#ask-question-mcp) above.
 
 ---
 
@@ -72,8 +105,9 @@ correctly**. Follow this checklist in order.
 
 ### Integration checklist
 
-1. **Confirm platform:** Linux GUI session with `DISPLAY` set. Do **not**
-   install this on headless CI, Windows, or macOS expecting the Gtk UI to work.
+1. **Confirm platform:** Linux GUI (`DISPLAY` + Gtk) **or** Windows desktop
+   (tkinter Phase 1 text-only). Do **not** expect the dialog on headless CI or
+   macOS yet.
 2. **Install host + UI deps** (see [DEPENDENCIES.md](DEPENDENCIES.md)):
    ```bash
    # Debian/Ubuntu
@@ -83,12 +117,12 @@ correctly**. Follow this checklist in order.
    cd ask-question-mcp
    uv sync
    ```
-   Require: Linux desktop with `DISPLAY`, [uv](https://docs.astral.sh/uv/),
-   Python ≥ 3.12, Gtk4 + libadwaita GI. Absolute path to the clone = `REPO_ROOT`.
+   On **Windows**: python.org Python 3.12+ with tcl/tk + `uv sync` (no Gtk).
+   Absolute path to the clone = `REPO_ROOT`.
 3. **Register MCP** in the client’s MCP config (Cursor: user/global
    `mcp.json`; Claude Desktop / other stdio hosts: see
    [MCP client configuration](#mcp-client-configuration)). Use an **absolute**
-   path to `uv` plus absolute `REPO_ROOT`. Reload the IDE / MCP servers.
+   path to `uv` / `uv.exe` plus absolute `REPO_ROOT`. Reload the IDE / MCP servers.
 4. **Self-check (required):** call MCP tool **`check_setup`**.
    Inspect `dependencies.tiers` and `dependencies.install_commands`.
    - If `ok` is false or `ready.ui` / `ready.text_mcq` is false → present
@@ -96,11 +130,9 @@ correctly**. Follow this checklist in order.
      for the chosen topic (`ui` / `mcp` / `tts` / `stt` / `voice` / `ui_only`).
    - Re-run `check_setup` after each change. CLI:
      `uv run python -m ask_question_mcp.doctor --json`
-5. **Optional voice:** only after `ready.ui` is true, and only if the human
-   wants spoken questions / mic answers. Use `setup_guide` topic `tts`
-   (Qwen3-TTS) and `stt` (faster-whisper). Detail:
-   [docs/VOICE-BACKENDS.md](docs/VOICE-BACKENDS.md). UI works without voice;
-   do not chase audio while the dialog still fails.
+5. **Optional voice (Linux only for now):** only after `ready.ui` is true, and
+   only if the human wants spoken questions / mic answers. Use `setup_guide`
+   topic `tts` / `stt`. Windows Phase 1 stays text-only.
 6. **Teach the agent:** when making a decision fork, prefer this MCP tool
    over inventing markdown A/B/C in chat. Follow [How agents must call the tool](#how-agents-must-call-the-tool).
 
@@ -124,7 +156,7 @@ correctly**. Follow this checklist in order.
 | A Gtk dialog for **decision forks** (pick one / several / freeform) | A general chat UI or notification centre |
 | Useful **text-only** when TTS/STT unset (`audio_mode=text_only`, flagged) | Broken without voice backends |
 | Optional TTS/STT to **operator-run** HTTP services | Bundled GPU models or a hosted voice SaaS |
-| Linux desktop (Cursor **or** other stdio MCP hosts) | Portable to Windows/macOS GUI as-is |
+| Linux desktop (Gtk) or Windows (tkinter text-only) | Portable to macOS GUI as-is |
 
 ### Non-negotiable agent behaviour
 
@@ -179,9 +211,10 @@ Optional voice (omit `env` for text-only):
 
 | | |
 |--|--|
-| **Config** | User/global `mcp.json` (often `~/.cursor/mcp.json`) |
+| **Config** | User/global `mcp.json` (Linux: `~/.cursor/mcp.json`; Windows: `%USERPROFILE%\.cursor\mcp.json`) |
 | **Shape** | `{ "mcpServers": { "ask-question": { … } } }` |
 | **Reload** | Command Palette → **Developer: Reload Window**, or toggle the server in MCP settings |
+| **Windows** | Use absolute `uv.exe` and Windows-style `--directory` path; see [Windows quick start](#windows-cursor--text-only-phase-1--for-anthony-and-other-win-users) |
 
 ### Claude Desktop (and similar)
 
@@ -348,14 +381,16 @@ error — call `setup_guide` if the human wants speech later.
 
 ### Minimal (UI)
 
-- Linux desktop, `DISPLAY` set
-- Gtk 4 + libadwaita (primary UI); `zenity` useful as fallback
+- **Linux:** desktop with `DISPLAY`, Gtk 4 + libadwaita
+- **Windows:** desktop + Python with **tkinter** (Phase 1 text-only)
 - Python ≥ 3.12 and [`uv`](https://docs.astral.sh/uv/)
 
-### Optional (voice)
+### Optional (voice — Linux)
 
 - Audio stack for speak / duck — see [Audio stack](#audio-stack) (PipeWire preferred)
 - Your own TTS/STT HTTP services — [SETUP.md](SETUP.md)
+
+Windows voice is Phase 2 (not in this release). See [docs/WINDOWS.md](docs/WINDOWS.md).
 
 ### Prefs
 
@@ -416,8 +451,9 @@ this table). See [CONTRIBUTING.md](CONTRIBUTING.md).
 | KDE Plasma / other DEs | PipeWire | — | — | — | Needs `DISPLAY` + Gtk4/Adw; DE-agnostic in theory | **Not yet reported** |
 | Any Linux desktop | Classic PulseAudio (no PW) | — | Yes (expected) | Speak+duck expected via `paplay`/`pactl` | Not maintainer-tested | **Not yet reported** |
 | Any Linux | Pure ALSA only | — | Yes | Speak partial (`aplay`); duck **no** | Text-only recommended | **Partial / unsupported for duck** |
+| **Windows 10/11** | n/a | Cursor | Yes (text) | No | tkinter backend (`win_list_ask.py`); Phase 1 | **Not yet reported** (Anthony / community) |
 | Headless / CI | n/a | GitHub Actions | No | No | Unit/doctor only — no interactive dialog | **N/A** (by design) |
-| Windows / macOS | — | — | No | No | No native Gtk desktop path in this package | **Unsupported** |
+| macOS | — | — | No | No | No native UI backend yet | **Unsupported** |
 
 **How to add a row:** open a PR or issue with distro + version, desktop
 environment, audio stack (PipeWire / Pulse / other), MCP client (e.g. Cursor),
