@@ -17,7 +17,7 @@ when the host IDE has no native AskQuestion UI (or the model lacks that tool).
 | **Demo** | [YouTube — ask-question-mcp in action](https://www.youtube.com/watch?v=5wVKCIXAfi4) |
 | **License** | [GPL-3.0-or-later](LICENSE) ([NOTICE](NOTICE)) |
 | **Maintainers** | [MAINTAINERS.md](MAINTAINERS.md) |
-| **Platform** | Linux desktop only (`DISPLAY` + Gtk4/Adw; zenity fallback) |
+| **Platform** | Linux desktop only (`DISPLAY` + Gtk4/Adw; zenity fallback) — [tested matrix](#tested-platforms) |
 | **Transport** | MCP over **stdio** (Cursor / Claude Desktop–style `mcpServers`) |
 | **Voice** | Optional; off until TTS/STT URLs set — [docs/VOICE-BACKENDS.md](docs/VOICE-BACKENDS.md) |
 | **Self-check** | MCP `check_setup` / `setup_guide` · CLI `python -m ask_question_mcp.doctor` |
@@ -320,6 +320,30 @@ No prefs file required. Optional `~/.config/ask-question-mcp/prefs.json`
 | `speak_volume` | `0.60` |
 | `ack_volume` | `0.55` |
 | `always_listen` | `true` |
+
+---
+
+## Tested platforms
+
+Community / maintainer feedback on where the **Gtk MCQ** (and optional
+PipeWire duck / speak) actually works. This is not an exhaustive support
+matrix — if your setup is missing, please report it (issue or PR updating
+this table). See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+| Distro / desktop | Audio | MCP host | UI dialog | Speak / duck | Notes | Status |
+|------------------|-------|----------|-----------|--------------|-------|--------|
+| **Ubuntu 24.04** + GNOME (Classic) | PipeWire | Cursor | Yes | Yes | x86_64; Gtk4 + Adw GI; maintainer daily driver | **Verified** (2026-07) |
+| Debian / Ubuntu (other) | PipeWire | — | — | — | Apt packages match [DEPENDENCIES.md](DEPENDENCIES.md); likely fine | **Not yet reported** |
+| Fedora | PipeWire | — | — | — | See DEPENDENCIES sketch (`python3-gobject`, `gtk4`, `libadwaita`) | **Not yet reported** |
+| Arch | PipeWire | — | — | — | See DEPENDENCIES sketch | **Not yet reported** |
+| KDE Plasma / other DEs | PipeWire | — | — | — | Needs `DISPLAY` + Gtk4/Adw; DE-agnostic in theory | **Not yet reported** |
+| Headless / CI | n/a | GitHub Actions | No | No | Unit/doctor only — no interactive dialog | **N/A** (by design) |
+| Windows / macOS | — | — | No | No | No native Gtk desktop path in this package | **Unsupported** |
+
+**How to add a row:** open a PR or issue with distro + version, desktop
+environment, audio stack (PipeWire / Pulse / other), MCP client (e.g. Cursor),
+and what you checked (text-only MCQ / speak / duck / STT). Keep claims honest —
+“works for me” is enough; mark **Partial** if only UI works.
 
 ---
 
