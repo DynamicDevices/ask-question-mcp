@@ -307,7 +307,7 @@ error — call `setup_guide` if the human wants speech later.
 
 ### Optional (voice)
 
-- PipeWire + `pw-play`
+- Audio stack for speak / duck — see [Audio stack](#audio-stack) (PipeWire preferred)
 - Your own TTS/STT HTTP services — [SETUP.md](SETUP.md)
 
 ### Prefs
@@ -323,20 +323,52 @@ No prefs file required. Optional `~/.config/ask-question-mcp/prefs.json`
 
 ---
 
+## Audio stack
+
+The **Gtk dialog does not need audio**. Speak, acks, media duck, and Bluetooth
+mic helpers are optional and layered on top.
+
+| Capability | What we use | PipeWire | PulseAudio | Pure ALSA |
+|------------|-------------|----------|------------|-----------|
+| Text-only MCQ | Gtk only | Yes | Yes | Yes |
+| Play question / ack WAV | `pw-play` → `paplay` → `aplay` | Yes (`pw-play`) | Yes (`paplay`) | Partial (`aplay` only; no volume duck) |
+| Duck other apps while speaking | `pactl` sink-input volume | Yes (via `pipewire-pulse`) | Yes | **No** |
+| BT profile / A2DP restore (Listen) | `pactl` cards/sinks | Yes | Yes | **No** |
+
+**Summary**
+
+- We are **not** PulseAudio-only. We talk to the **Pulse client API** (`pactl`
+  / `paplay`), which both **PipeWire** (`pipewire-pulse`) and classic
+  **PulseAudio** provide. Maintainer testing is on **PipeWire**.
+- **PipeWire** is the preferred path: install `pw-play` + `pactl` (usually
+  `pipewire`, `pipewire-pulse`, `pipewire-audio-client-libraries` on Debian/Ubuntu).
+- **Classic PulseAudio** (no PipeWire): speak via `paplay` and duck via `pactl`
+  should work; report it in [Tested platforms](#tested-platforms) if you verify.
+- **Pure ALSA** (no Pulse/PipeWire session): UI still works; WAV playback may
+  work via `aplay` as a last resort; **media duck and BT mic helpers will not**.
+  Prefer PipeWire/Pulse on the desktop for voice features.
+- Mute speak entirely with `ASK_QUESTION_SPEAK=0` or leave TTS unset (text-only).
+
+Detail / packages: [DEPENDENCIES.md](DEPENDENCIES.md) tier C.
+
+---
+
 ## Tested platforms
 
 Community / maintainer feedback on where the **Gtk MCQ** (and optional
-PipeWire duck / speak) actually works. This is not an exhaustive support
+speak / duck) actually works. This is not an exhaustive support
 matrix — if your setup is missing, please report it (issue or PR updating
 this table). See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 | Distro / desktop | Audio | MCP host | UI dialog | Speak / duck | Notes | Status |
 |------------------|-------|----------|-----------|--------------|-------|--------|
-| **Ubuntu 24.04** + GNOME (Classic) | PipeWire | Cursor | Yes | Yes | x86_64; Gtk4 + Adw GI; maintainer daily driver | **Verified** (2026-07) |
+| **Ubuntu 24.04** + GNOME (Classic) | PipeWire (+ pulse compat) | Cursor | Yes | Yes | x86_64; Gtk4 + Adw GI; maintainer daily driver | **Verified** (2026-07) |
 | Debian / Ubuntu (other) | PipeWire | — | — | — | Apt packages match [DEPENDENCIES.md](DEPENDENCIES.md); likely fine | **Not yet reported** |
 | Fedora | PipeWire | — | — | — | See DEPENDENCIES sketch (`python3-gobject`, `gtk4`, `libadwaita`) | **Not yet reported** |
 | Arch | PipeWire | — | — | — | See DEPENDENCIES sketch | **Not yet reported** |
 | KDE Plasma / other DEs | PipeWire | — | — | — | Needs `DISPLAY` + Gtk4/Adw; DE-agnostic in theory | **Not yet reported** |
+| Any Linux desktop | Classic PulseAudio (no PW) | — | Yes (expected) | Speak+duck expected via `paplay`/`pactl` | Not maintainer-tested | **Not yet reported** |
+| Any Linux | Pure ALSA only | — | Yes | Speak partial (`aplay`); duck **no** | Text-only recommended | **Partial / unsupported for duck** |
 | Headless / CI | n/a | GitHub Actions | No | No | Unit/doctor only — no interactive dialog | **N/A** (by design) |
 | Windows / macOS | — | — | No | No | No native Gtk desktop path in this package | **Unsupported** |
 

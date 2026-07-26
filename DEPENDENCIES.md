@@ -77,8 +77,14 @@ Verify:
 
 | Dependency | Role | Notes |
 |------------|------|--------|
-| PipeWire + **`pw-play`** | Play question/ack WAVs; media duck | Text-only if missing |
-| `pw-cli` / `pactl` | Duck / Bluetooth helpers | Soft; duck degrades gracefully |
+| **PipeWire** + **`pw-play`** (preferred) | Play question/ack WAVs | Also provides `pactl` via `pipewire-pulse` |
+| **`pactl`** | Media duck + BT helpers | Pulse client API — works on PipeWire *or* classic PulseAudio |
+| **`paplay`** | Speak fallback if no `pw-play` | Pulse/PipeWire |
+| **`aplay`** | Last-resort play | Raw ALSA only — **no duck** |
+
+We do **not** require classic PulseAudio specifically. We use the Pulse
+compatibility API. Pure ALSA desktops: text MCQ works; duck/BT features do not.
+See [README — Audio stack](README.md#audio-stack).
 
 Without C: set `ASK_QUESTION_SPEAK=0` or leave TTS unset — MCQ stays click/type.
 
