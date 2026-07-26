@@ -21,7 +21,7 @@ own HTTP services (see [SETUP.md](SETUP.md)). Never commit tokens or
 ## Pull requests
 
 - Use the PR template (hosts touched, test table, behaviour contract).
-- CI must pass: `test`, `secrets-hygiene` (and `sbom`). Same-repo PRs run on
+- CI must pass: `test`, `secrets-hygiene` (and `sbom`). Same-repo hygiene/SBOM run on
   DynamicDevices **self-hosted** Linux; **external fork** PRs use
   GitHub-hosted so untrusted code does not run on lab runners.
 - Keep diffs focused; match existing style.
