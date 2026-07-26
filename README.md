@@ -12,8 +12,11 @@
 (`ask_multiple_choice`) so coding agents can ask the human a real decision
 when the host IDE has no native AskQuestion UI (or the model lacks that tool).
 
+**Example:** [demo video on YouTube](https://www.youtube.com/watch?v=5wVKCIXAfi4)
+
 | | |
 |--|--|
+| **Demo** | [YouTube — ask-question-mcp in action](https://www.youtube.com/watch?v=5wVKCIXAfi4) |
 | **License** | [GPL-3.0-or-later](LICENSE) ([NOTICE](NOTICE)) |
 | **Maintainers** | [MAINTAINERS.md](MAINTAINERS.md) |
 | **Platform** | Linux desktop only (`DISPLAY` + Gtk4/Adw; zenity fallback) |
