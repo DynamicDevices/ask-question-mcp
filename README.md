@@ -10,6 +10,7 @@ when the host IDE has no native AskQuestion UI (or the model lacks that tool).
 | | |
 |--|--|
 | **License** | [GPL-3.0-or-later](LICENSE) ([NOTICE](NOTICE)) |
+| **Maintainers** | [MAINTAINERS.md](MAINTAINERS.md) |
 | **Platform** | Linux desktop only (`DISPLAY` + Gtk4/Adw; zenity fallback) |
 | **Transport** | MCP over **stdio** (Cursor / Claude Desktop–style `mcpServers`) |
 | **Voice** | Optional; off until TTS/STT URLs set — [docs/VOICE-BACKENDS.md](docs/VOICE-BACKENDS.md) |

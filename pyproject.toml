@@ -7,6 +7,7 @@ requires-python = ">=3.12"
 license = "GPL-3.0-or-later"
 authors = [
   { name = "Dynamic Devices Ltd" },
+  { name = "Alex Lennon", email = "alex.lennon@dynamicdevices.co.uk" },
 ]
 dependencies = [
   "mcp[cli]>=1.9.0",
