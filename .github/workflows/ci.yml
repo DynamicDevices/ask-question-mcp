@@ -22,6 +22,7 @@ jobs:
         run: |
           uv sync
           uv run python scripts/test_match_transcript.py
+          uv run python scripts/test_doctor.py
       - name: Import package
         run: uv run python -c "import ask_question_mcp; print('ok')"
 

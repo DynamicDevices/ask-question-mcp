@@ -1,8 +1,18 @@
 # Setup: voice services + Cursor MCP
 
 Deep dive for **optional** TTS/STT and prefs. For **install + MCP registration
-+ how agents must call the tool**, start with [README.md](README.md)
++ self-check + how agents must call the tool**, start with [README.md](README.md)
 (AI-oriented integration brief).
+
+**Voice backend detail (Qwen3-TTS + faster-whisper):** [docs/VOICE-BACKENDS.md](docs/VOICE-BACKENDS.md).
+
+**Self-check:** MCP tools `check_setup` / `setup_guide`, or:
+
+```bash
+uv run python -m ask_question_mcp.doctor --json
+uv run python -m ask_question_mcp.doctor --guide tts
+uv run python -m ask_question_mcp.doctor --guide stt
+```
 
 Dialogs work with **speak/listen disabled**. Voice needs HTTP services you
 operate; this repo does **not** hardcode private lab addresses.

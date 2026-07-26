@@ -1,4 +1,4 @@
-"""MCP server: ask_multiple_choice via tk/zenity (no list search box)."""
+"""MCP server: ask_multiple_choice + self-check / setup walkthrough tools."""
 
 from __future__ import annotations
 
@@ -6,15 +6,21 @@ import json
 
 from mcp.server.fastmcp import FastMCP
 
+from ask_question_mcp.doctor import doctor_report, hint_for_error
+from ask_question_mcp.doctor import setup_guide as build_setup_guide
 from ask_question_mcp.zenity_ask import AskCancelled, ask_zenity
 
 mcp = FastMCP(
     "ask-question",
     instructions=(
-        "Use ask_multiple_choice for decision forks (preferred over native "
-        "Cursor AskQuestion). "
-        "ALWAYS pass agent= your LANE.id (or chat/lane name) so the window "
-        "title shows [agent] — operators often run multiple agents. "
+        "Tools: ask_multiple_choice (decision dialogs), check_setup (diagnose "
+        "DISPLAY/Gtk/TTS/STT), setup_guide (walkthrough for ui|mcp|tts|stt|voice). "
+        "On first use in a session, or when ask_multiple_choice returns an error / "
+        "cancelled with setup hints, call check_setup. If not ready, present "
+        "offer_walkthrough via ask_multiple_choice, then setup_guide for the "
+        "chosen topic (Qwen3-TTS / faster-whisper detail in docs/VOICE-BACKENDS.md). "
+        "Re-run check_setup after config changes. "
+        "For decision forks: ALWAYS pass agent= your LANE.id (or chat name). "
         "Write question like a short colleague ask (usually one sentence). "
         "No meta about the dialog/voice; no 'please decide carefully' — use "
         "dangerous=true for risk chrome instead. "
@@ -33,6 +39,32 @@ mcp = FastMCP(
         "Treat freeform_text as the answer."
     ),
 )
+
+
+@mcp.tool()
+def check_setup(want_voice: bool | None = None) -> str:
+    """Diagnose ask-question-mcp readiness (DISPLAY, Gtk, TTS, STT).
+
+    Call this when enabling the MCP, when dialogs fail, or before enabling voice.
+    Returns JSON with checks[], ready{ui,tts,stt,voice}, next_actions, and
+    offer_walkthrough (options to pass into ask_multiple_choice).
+
+    Args:
+        want_voice: If true, missing/unreachable TTS/STT count as failures.
+            If null, inferred from whether TTS/STT URLs are set.
+    """
+    return json.dumps(doctor_report(want_voice=want_voice), ensure_ascii=False)
+
+
+@mcp.tool()
+def setup_guide(topic: str = "all") -> str:
+    """Step-by-step setup walkthrough for humans (agent presents the steps).
+
+    Topics: ui | mcp | tts | stt | voice | ui_only | all.
+    tts = Qwen3-TTS (or compatible); stt = faster-whisper (or compatible).
+    After the human applies changes, call check_setup again.
+    """
+    return json.dumps(build_setup_guide(topic), ensure_ascii=False)
 
 
 @mcp.tool()
@@ -61,6 +93,9 @@ def ask_multiple_choice(
     For irreversible / fuse / send-email / destroy-data forks: set
     ``dangerous=true`` and/or ``"dangerous": true`` on the risky option(s).
 
+    If this returns ``cancelled`` with ``setup`` hints, call ``check_setup``
+    and walk the user through configuration.
+
     Args:
         question: Decision prompt only (no Recommended line).
         options: 1–8 objects with ``id`` + ``label``; optional ``dangerous``,
@@ -74,7 +109,7 @@ def ask_multiple_choice(
             Treat returned ``freeform_text`` as the answer.
         dangerous: Whole-question danger banner (also true if any option is).
         speak: Read the question aloud via local TTS (default true).
-            ``notify-voice.sh``; Piper fallback. Pass false to mute.
+            Piper fallback when TTS missing. Pass false to mute.
             Env ``ASK_QUESTION_SPEAK=0`` forces mute when set.
         title: Short topic title (e.g. ``Drive mirror``; default ``Decide``).
         agent: Who is asking — shown as ``[agent]`` in the window title.
@@ -86,7 +121,7 @@ def ask_multiple_choice(
     Returns:
         Single: ``{"id", "label", "agent", ...}``; freeform adds ``freeform_text``.
         Multi: ``{"ids", "labels", "agent", ...}``.
-        Cancelled: ``{"cancelled": true, "reason": "..."}``.
+        Cancelled: ``{"cancelled": true, "reason": "..."}``; may include ``setup``.
     """
     try:
         result = ask_zenity(
@@ -115,7 +150,11 @@ def ask_multiple_choice(
         return json.dumps(payload, ensure_ascii=False)
     except (ValueError, RuntimeError) as exc:
         return json.dumps(
-            {"cancelled": True, "reason": f"error: {exc}"},
+            {
+                "cancelled": True,
+                "reason": f"error: {exc}",
+                "setup": hint_for_error(exc),
+            },
             ensure_ascii=False,
         )
 

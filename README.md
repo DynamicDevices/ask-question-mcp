@@ -12,16 +12,17 @@ when the host IDE has no native AskQuestion UI (or the model lacks that tool).
 | **License** | [GPL-3.0-or-later](LICENSE) ([NOTICE](NOTICE)) |
 | **Platform** | Linux desktop only (`DISPLAY` + Gtk4/Adw; zenity fallback) |
 | **Transport** | MCP over **stdio** (Cursor / Claude Desktop–style `mcpServers`) |
-| **Voice** | Optional; off by default until you set TTS/STT URLs |
+| **Voice** | Optional; off until TTS/STT URLs set — [docs/VOICE-BACKENDS.md](docs/VOICE-BACKENDS.md) |
+| **Self-check** | MCP `check_setup` / `setup_guide` · CLI `python -m ask_question_mcp.doctor` |
 | **Security** | [SECURITY.md](SECURITY.md) · CRA notes: [docs/CRA-COMPLIANCE.md](docs/CRA-COMPLIANCE.md) |
-| **Voice backends** | [SETUP.md](SETUP.md) · packages: [DEPENDENCIES.md](DEPENDENCIES.md) |
+| **Voice backends** | [docs/VOICE-BACKENDS.md](docs/VOICE-BACKENDS.md) · [SETUP.md](SETUP.md) · [DEPENDENCIES.md](DEPENDENCIES.md) |
 
 ---
 
 ## For AI assistants (read this first)
 
 If a human pointed you at this README, your job is usually: **install the
-repo, register the MCP in their client, then call `ask_multiple_choice`
+repo, register the MCP, self-check, then call `ask_multiple_choice`
 correctly**. Follow this checklist in order.
 
 ### Integration checklist
@@ -39,13 +40,28 @@ correctly**. Follow this checklist in order.
 3. **Register MCP** in the client’s MCP config (Cursor: user/global
    `mcp.json`). Use the JSON template in [MCP client configuration](#mcp-client-configuration).
    Replace `REPO_ROOT` with the absolute path. Reload the IDE / MCP servers.
-4. **Verify:** call tool `ask_multiple_choice` with a 2-option smoke question
-   (or run the [smoke test](#smoke-test) from a terminal with `DISPLAY`).
+4. **Self-check (required):** call MCP tool **`check_setup`**.
+   - If `ok` is false or `ready.ui` is false → present
+     `offer_walkthrough` via `ask_multiple_choice`, then **`setup_guide`**
+     for the chosen topic (`ui` / `mcp` / `tts` / `stt` / `voice` / `ui_only`).
+   - Re-run `check_setup` after each change. CLI equivalent:
+     `uv run python -m ask_question_mcp.doctor --json`
 5. **Optional voice:** only if the human wants spoken questions / mic answers.
-   Set `ASK_QUESTION_TTS_URL` and/or `ASK_QUESTION_STT_URL` (see [SETUP.md](SETUP.md)).
-   UI works without voice.
+   Use `setup_guide` topic `tts` (Qwen3-TTS) and `stt` (faster-whisper).
+   Detail: [docs/VOICE-BACKENDS.md](docs/VOICE-BACKENDS.md). UI works without voice.
 6. **Teach the agent:** when making a decision fork, prefer this MCP tool
    over inventing markdown A/B/C in chat. Follow [How agents must call the tool](#how-agents-must-call-the-tool).
+
+### Self-describing tools
+
+| Tool | Purpose |
+|------|---------|
+| `check_setup` | Diagnose DISPLAY / Gtk / TTS / STT; returns `ready`, `next_actions`, `offer_walkthrough` |
+| `setup_guide` | Step-by-step JSON walkthrough (`topic`: `ui`\|`mcp`\|`tts`\|`stt`\|`voice`\|`ui_only`\|`all`) |
+| `ask_multiple_choice` | Human decision dialog; on config errors includes a `setup` hint block |
+
+**Agent pattern:** `check_setup` → (if needed) `ask_multiple_choice(offer_walkthrough)` →
+`setup_guide(topic)` → human applies steps → `check_setup` again → then normal MCQs.
 
 ### What this MCP is / is not
 
@@ -297,12 +313,12 @@ Or register the MCP and invoke `ask_multiple_choice` from the agent.
 
 | Symptom | Likely fix |
 |---------|------------|
-| Tool missing in client | Check `mcp.json` path; `uv` on `PATH`; reload MCP |
-| Dialog never appears | `echo $DISPLAY`; run smoke test in same desktop session |
+| Tool missing in client | Check `mcp.json` path; `uv` on `PATH`; reload MCP; run `check_setup` |
+| Dialog never appears | `check_setup` → fix `display` / `gtk_*`; `echo $DISPLAY`; smoke test |
 | Hang / timeout | Human must click; or raise `timeout_sec`; check for off-screen dialog |
-| No speech | Expected if TTS URL unset; or set `ASK_QUESTION_SPEAK=0` intentionally |
-| Mic never listens | STT URL unset, or `ASK_QUESTION_VOICE_ANSWER=0` |
-| Import / Gtk errors | Install Gtk4/Adw GI bindings for system Python used by the dialog helper |
+| No speech | Expected if TTS URL unset; `setup_guide` topic `tts`; or `ASK_QUESTION_SPEAK=0` |
+| Mic never listens | STT URL unset — `setup_guide` topic `stt`; or `ASK_QUESTION_VOICE_ANSWER=0` |
+| Import / Gtk errors | Install Gtk4/Adw GI bindings; see `check_setup` failing checks |
 
 ---
 
