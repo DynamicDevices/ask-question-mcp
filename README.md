@@ -12,10 +12,21 @@
 (`ask_multiple_choice`) so coding agents can ask the human a real decision
 when the host IDE has no native AskQuestion UI (or the model lacks that tool).
 
+> **Use at your own risk.** This project is **heavily AI-facilitated**
+> (design, implementation, and docs). It runs on your desktop with access to
+> your display, optional microphone/TTS, and local audio controls. Bugs may
+> cause unexpected behaviour, including **disruption or corruption of your
+> system or data**, and (depending on how you wire TTS/STT or logs)
+> **unintended data leakage**. There is **no warranty**. That said, we want
+> this to be solid: **please report problems and platform feedback** via
+> [GitHub Issues](https://github.com/DynamicDevices/ask-question-mcp/issues)
+> (or a PR) so we can fix them — see [Tested platforms](#tested-platforms)
+> and [SECURITY.md](SECURITY.md). GPLv3 also disclaims warranty — [LICENSE](LICENSE).
+
 | | |
 |--|--|
 | **Demo** | [YouTube — ask-question-mcp in action](https://www.youtube.com/watch?v=5wVKCIXAfi4) |
-| **License** | [GPL-3.0-or-later](LICENSE) ([NOTICE](NOTICE)) |
+| **License** | [GPL-3.0-or-later](LICENSE) ([NOTICE](NOTICE)) — use at your own risk |
 | **Maintainers** | [MAINTAINERS.md](MAINTAINERS.md) |
 | **Platform** | Linux desktop only (`DISPLAY` + Gtk4/Adw; zenity fallback) — [tested matrix](#tested-platforms) |
 | **Transport** | MCP over **stdio** (Cursor / Claude Desktop–style `mcpServers`) |
