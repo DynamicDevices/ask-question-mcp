@@ -225,9 +225,12 @@ section accurate and help verify the Claude Code row in
 
 #### CLI (recommended)
 
+Use an **absolute path to `uv`** — find yours with `command -v uv`
+(e.g. `/home/YOU/.local/bin/uv`).
+
 ```bash
 claude mcp add --transport stdio ask-question -- \
-  uv run --directory /absolute/path/to/ask-question-mcp ask-question-mcp
+  /absolute/path/to/uv run --directory /absolute/path/to/ask-question-mcp ask-question-mcp
 ```
 
 With voice env vars:
@@ -237,7 +240,7 @@ claude mcp add --transport stdio \
   --env ASK_QUESTION_TTS_URL=http://127.0.0.1:8200 \
   --env ASK_QUESTION_STT_URL=http://127.0.0.1:8201/transcribe \
   ask-question -- \
-  uv run --directory /absolute/path/to/ask-question-mcp ask-question-mcp
+  /absolute/path/to/uv run --directory /absolute/path/to/ask-question-mcp ask-question-mcp
 ```
 
 #### Project `.mcp.json` (shared with team)
@@ -246,7 +249,7 @@ claude mcp add --transport stdio \
 {
   "mcpServers": {
     "ask-question": {
-      "command": "uv",
+      "command": "/absolute/path/to/uv",
       "args": [
         "run",
         "--directory",
@@ -494,7 +497,7 @@ this table). See [CONTRIBUTING.md](CONTRIBUTING.md).
 | Distro / desktop | Audio | MCP host | UI dialog | Speak / duck | Notes | Status |
 |------------------|-------|----------|-----------|--------------|-------|--------|
 | **Ubuntu 24.04** + GNOME (Classic) | PipeWire (+ pulse compat) | Cursor | Yes | Yes | x86_64; Gtk4 + Adw GI; maintainer daily driver | **Verified** (2026-07) |
-| Any Linux desktop (as above) | PipeWire | **Claude Code** | — | — | Stdio transport; same Gtk requirements as Cursor. Owner: [@jackghx](https://github.com/jackghx) | **Not yet reported** (Jack — please verify) |
+| Any Linux desktop (as above) | PipeWire | **Claude Code** | Yes | No (text-only) | Stdio transport; Ubuntu 24.04 + GNOME + PipeWire; text-only MCQ verified. Owner: [@jackghx](https://github.com/jackghx) | **Verified** (2026-07) |
 | Debian / Ubuntu (other) | PipeWire | — | — | — | Apt packages match [DEPENDENCIES.md](DEPENDENCIES.md); likely fine | **Not yet reported** |
 | Fedora | PipeWire | — | — | — | See DEPENDENCIES sketch (`python3-gobject`, `gtk4`, `libadwaita`) | **Not yet reported** |
 | Arch | PipeWire | — | — | — | See DEPENDENCIES sketch | **Not yet reported** |

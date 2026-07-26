@@ -79,11 +79,12 @@ On Windows use absolute `uv.exe` and a Windows `--directory` path. Same
 
 Windows Phase 1 is text-only (tkinter); omit TTS/STT `env` entries.
 
-**Claude Code** — CLI or project `.mcp.json`:
+**Claude Code** — CLI or project `.mcp.json`. Use an absolute path to `uv`
+(find yours with `command -v uv`):
 
 ```bash
 claude mcp add --transport stdio ask-question -- \
-  uv run --directory /absolute/path/to/ask-question-mcp ask-question-mcp
+  /absolute/path/to/uv run --directory /absolute/path/to/ask-question-mcp ask-question-mcp
 ```
 
 Or add to `.mcp.json` at your project root (same JSON as Cursor).
