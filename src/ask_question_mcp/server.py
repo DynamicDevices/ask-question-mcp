@@ -13,43 +13,15 @@ from ask_question_mcp.zenity_ask import AskCancelled, ask_zenity
 mcp = FastMCP(
     "ask-question",
     instructions=(
-        "Tools: ask_multiple_choice (decision dialogs), check_setup (diagnose "
-        "DISPLAY/Gtk/TTS/STT/platform), setup_guide (walkthrough for ui|mcp|tts|stt|voice), "
-        "record_platform_feedback (persist dont_ask / later after the feedback MCQ). "
-        "On first use in a session, or when ask_multiple_choice returns an error / "
-        "cancelled with setup hints, call check_setup. If not ready, present "
-        "offer_walkthrough via ask_multiple_choice, then setup_guide for the "
-        "chosen topic (Qwen3-TTS / faster-whisper detail in docs/VOICE-BACKENDS.md). "
-        "Missing TTS/STT is OK: ask_multiple_choice still works as text-only "
-        "(click/type); response audio_mode/capabilities.notes flag the gap — offer "
-        "setup_guide when the human wants voice. "
-        "If ready.ui is false: fix DISPLAY/Gtk only — do not offer TTS/STT until "
-        "the dialog works (display before audio). "
-        "If check_setup.platform.status is unverified (or ask_multiple_choice returns "
-        "platform_feedback): once the dialog works, present that feedback MCQ. "
-        "On works/broken, use github_issue_draft_* — AI fills host details + what was "
-        "tested — and help open https://github.com/DynamicDevices/ask-question-mcp/issues "
-        "or a README Tested platforms PR. On dont_ask/later call record_platform_feedback. "
-        "For missing packages, use check_setup.dependencies.install_commands and "
-        "DEPENDENCIES.md (tiers A host, B UI, C audio, D voice). "
-        "Re-run check_setup after config changes. "
-        "For decision forks: ALWAYS pass agent= your LANE.id (or chat name). "
-        "Write question like a short colleague ask (usually one sentence). "
-        "No meta about the dialog/voice; no 'please decide carefully' — use "
-        "dangerous=true for risk chrome instead. "
-        "Option labels: short verb phrases; mark recommended only in the label. "
-        "title: short noun phrase (not 'Decide'). "
-        "Pops a native Gtk4/Adw list dialog (no type-to-filter search). "
-        "Recommended option is listed first and pre-selected. "
-        "Set dangerous=true (or option.dangerous) for irreversible / high-risk "
-        "choices — ⚠ in title/text and on those options. "
-        "speak defaults true (spoken question via local TTS; never the user); "
-        "pass speak=false to mute. "
-        "Set allow_multiple=true when several options may apply together. "
-        "ALWAYS leave allow_other=true (Something else → edit+Listen box) for "
-        "decision MCQs; only allow_other=false when freeform must be disabled. "
-        "Option flags: opens_entry, auto_listen. Pass entry_seed to prefill. "
-        "Treat freeform_text as the answer."
+        "Desktop MCQ MCP (Linux Gtk / Windows tkinter). "
+        "Tools: ask_multiple_choice, check_setup, setup_guide, record_platform_feedback. "
+        "First use / errors: check_setup → offer_walkthrough → setup_guide; re-check. "
+        "UI before audio: if ready.ui false, fix display/Gtk/tkinter only — no TTS/STT yet. "
+        "Missing TTS/STT OK (text-only; audio_mode/capabilities.notes). "
+        "Unverified platform: after a successful dialog, present platform_feedback once. "
+        "Decision forks: agent=LANE.id; short question; recommended only in label + "
+        "recommended_id; dangerous=true for irreversible; allow_other=true default; "
+        "treat freeform_text as the answer. Detail: repo README / DEPENDENCIES.md."
     ),
 )
 
@@ -116,46 +88,14 @@ def ask_multiple_choice(
     entry_seed: str | None = None,
     timeout_sec: int = 300,
 ) -> str:
-    """Ask the user a multiple-choice question via a desktop dialog.
+    """Desktop MCQ dialog (Gtk Linux / tkinter Windows). Prefer over native AskQuestion.
 
-    Prefer this tool over Cursor's native AskQuestion when both exist.
+    Mark recommended only in the option label + pass recommended_id (listed first).
+    dangerous=true for irreversible forks. allow_other=true default (Something else);
+    treat freeform_text as the answer. Pass agent=LANE.id. speak defaults true
+    (Linux; Windows Phase 1 is text-only). On cancel/setup hints → check_setup.
 
-    Mark the recommended choice in the option **label** only, e.g.
-    ``"Idle (recommended)"``, and pass ``recommended_id`` so it is listed
-    **first** and pre-selected.
-
-    For irreversible / fuse / send-email / destroy-data forks: set
-    ``dangerous=true`` and/or ``"dangerous": true`` on the risky option(s).
-
-    If this returns ``cancelled`` with ``setup`` hints, call ``check_setup``
-    and walk the user through configuration.
-
-    Args:
-        question: Decision prompt only (no Recommended line).
-        options: 1–8 objects with ``id`` + ``label``; optional ``dangerous``,
-            ``opens_entry`` (open edit+Listen box), ``auto_listen`` (start mic).
-        recommended_id: Preferred id — listed first and pre-selected.
-        recommended_ids: Preferred ids for multi-select.
-        allow_multiple: Checklist (several) vs radiolist (one).
-        allow_other: Leave **true** for decision MCQs (default) — appends
-            "Something else… (inline type box)" → Gtk entry with Listen.
-            Only pass false when freeform entry must be disabled (e.g. secret-entry workflows).
-            Treat returned ``freeform_text`` as the answer.
-        dangerous: Whole-question danger banner (also true if any option is).
-        speak: Read the question aloud via local TTS (default true).
-            Piper fallback when TTS missing. Pass false to mute.
-            Env ``ASK_QUESTION_SPEAK=0`` forces mute when set.
-        title: Short topic title (e.g. ``Drive mirror``; default ``Decide``).
-        agent: Who is asking — shown as ``[agent]`` in the window title.
-            Pass your ``LANE.id`` (or chat name). Falls back to ``LANE.id`` in
-            cwd, then ``ASK_QUESTION_AGENT`` / ``LANE_ID`` env.
-        entry_seed: Prefill text for edit box (voice-turn transcript confirm).
-        timeout_sec: Dialog timeout in seconds (default 300; 0 = no timeout).
-
-    Returns:
-        Single: ``{"id", "label", "agent", ...}``; freeform adds ``freeform_text``.
-        Multi: ``{"ids", "labels", "agent", ...}``.
-        Cancelled: ``{"cancelled": true, "reason": "..."}``; may include ``setup``.
+    Returns JSON: id/label (or ids/labels), optional freeform_text, or cancelled.
     """
     try:
         result = ask_zenity(
