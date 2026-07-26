@@ -1,7 +1,12 @@
 # ask-question-mcp
 
-[![ci](https://github.com/DynamicDevices/ask-question-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/DynamicDevices/ask-question-mcp/actions/workflows/ci.yml)
+[![CI](https://github.com/DynamicDevices/ask-question-mcp/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/DynamicDevices/ask-question-mcp/actions/workflows/ci.yml)
+[![tests](https://img.shields.io/github/actions/workflow/status/DynamicDevices/ask-question-mcp/ci.yml?branch=main&job=test&label=tests)](https://github.com/DynamicDevices/ask-question-mcp/actions/workflows/ci.yml)
+[![secrets-hygiene](https://img.shields.io/github/actions/workflow/status/DynamicDevices/ask-question-mcp/ci.yml?branch=main&job=secrets-hygiene&label=secrets-hygiene)](https://github.com/DynamicDevices/ask-question-mcp/actions/workflows/ci.yml)
+[![sbom](https://img.shields.io/github/actions/workflow/status/DynamicDevices/ask-question-mcp/ci.yml?branch=main&job=sbom&label=sbom)](https://github.com/DynamicDevices/ask-question-mcp/actions/workflows/ci.yml)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPLv3+-blue.svg)](LICENSE)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](pyproject.toml)
+[![MCP](https://img.shields.io/badge/MCP-stdio-informational.svg)](README.md#mcp-client-configuration)
 
 **Stdio MCP server** that shows a **Linux desktop multiple-choice dialog**
 (`ask_multiple_choice`) so coding agents can ask the human a real decision
