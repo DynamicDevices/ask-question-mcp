@@ -19,6 +19,15 @@ def main() -> None:
     r = doctor_report(want_voice=False)
     assert "audio_mode" in r and "capabilities" in r
     assert "text_mcq" in r["ready"]
+    assert "host" in r["ready"]
+    deps = r.get("dependencies") or {}
+    assert deps.get("doc") == "DEPENDENCIES.md"
+    assert "A_host" in deps.get("tiers", {})
+    assert "B_ui" in deps["tiers"]
+    cmds = deps.get("install_commands") or {}
+    assert "gir1.2-gtk-4.0" in cmds.get("debian_ubuntu_ui", "")
+    assert "zenity" in cmds["debian_ubuntu_ui"]
+    assert cmds.get("python_package") == "uv sync"
     # Headless CI has no DISPLAY — ui may be false; software readiness is enough.
     assert r["ready"]["text_mcq"] is True, r["checks"]
     if os.environ.get("DISPLAY", "").strip():
@@ -40,9 +49,12 @@ def main() -> None:
 
     assert setup_guide("tts")["ok"] is True
     assert setup_guide("stt")["ok"] is True
+    ui = setup_guide("ui")
+    assert ui["ok"] is True
+    assert "gir1.2-adw-1" in ui["guide"]["install_commands"]["debian_ubuntu_ui"]
     assert setup_guide("nope")["ok"] is False
 
-    print("OK doctor + text-only / capability flags")
+    print("OK doctor + text-only / capability flags + dependencies")
 
 
 if __name__ == "__main__":

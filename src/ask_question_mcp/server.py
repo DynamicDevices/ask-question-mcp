@@ -22,6 +22,8 @@ mcp = FastMCP(
         "Missing TTS/STT is OK: ask_multiple_choice still works as text-only "
         "(click/type); response audio_mode/capabilities.notes flag the gap — offer "
         "setup_guide when the human wants voice. "
+        "For missing packages, use check_setup.dependencies.install_commands and "
+        "DEPENDENCIES.md (tiers A host, B UI, C audio, D voice). "
         "Re-run check_setup after config changes. "
         "For decision forks: ALWAYS pass agent= your LANE.id (or chat name). "
         "Write question like a short colleague ask (usually one sentence). "

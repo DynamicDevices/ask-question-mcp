@@ -150,6 +150,12 @@ def _entry_text(
             return text, voice_meta
         # Fall through to zenity if gtk produced nothing.
 
+    if not zenity:
+        raise AskCancelled(
+            "freeform entry needs Gtk entry dialog or zenity on PATH "
+            "(install: sudo apt install zenity python3-gi gir1.2-gtk-4.0 gir1.2-adw-1)"
+        )
+
     cmd = [
         zenity,
         "--entry",
@@ -410,9 +416,9 @@ def ask_zenity(
         preselect.add(core[0])
     ids = core + other_tail
 
-    zenity = shutil.which("zenity")
-    if not zenity:
-        raise RuntimeError("zenity not found on PATH")
+    zenity = shutil.which("zenity") or ""
+    # Zenity is only needed for freeform entry fallback when Gtk entry fails.
+    # Primary list UI is Gtk4 — do not hard-fail when zenity is absent.
 
     display = os.environ.get("DISPLAY")
     if not display:

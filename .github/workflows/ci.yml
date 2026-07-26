@@ -18,7 +18,8 @@ jobs:
       - name: Install Gtk4 / Adw GI (dialog stack)
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq python3-gi gir1.2-gtk-4.0 gir1.2-adw-1
+          sudo apt-get install -y -qq \
+            python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 zenity
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true

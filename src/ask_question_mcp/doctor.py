@@ -12,6 +12,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import urllib.error
 import urllib.request
 from dataclasses import asdict, dataclass, field
@@ -24,6 +25,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 DOCS_VOICE = "docs/VOICE-BACKENDS.md"
 DOCS_SETUP = "SETUP.md"
 DOCS_README = "README.md"
+DOCS_DEPS = "DEPENDENCIES.md"
 
 
 @dataclass
@@ -101,11 +103,53 @@ def run_checks(*, want_voice: bool | None = None) -> list[Check]:
     """Run environment checks. ``want_voice`` None = infer from env intent."""
     checks: list[Check] = []
 
+    # Host tooling
+    uv = shutil.which("uv")
+    if uv:
+        checks.append(
+            Check("uv", "uv", "ok", uv, docs=[DOCS_DEPS, DOCS_README])
+        )
+    else:
+        checks.append(
+            Check(
+                "uv",
+                "uv",
+                "fail",
+                "uv not on PATH — mcp.json typically runs `uv run …`.",
+                fix="Install uv: https://docs.astral.sh/uv/getting-started/installation/ "
+                "then re-open the shell / Cursor.",
+                docs=[DOCS_DEPS],
+            )
+        )
+
+    py_ver = sys.version_info
+    if py_ver >= (3, 12):
+        checks.append(
+            Check(
+                "python",
+                "Python ≥ 3.12",
+                "ok",
+                f"{sys.executable} ({py_ver.major}.{py_ver.minor}.{py_ver.micro})",
+                docs=[DOCS_DEPS],
+            )
+        )
+    else:
+        checks.append(
+            Check(
+                "python",
+                "Python ≥ 3.12",
+                "fail",
+                f"{sys.executable} is {py_ver.major}.{py_ver.minor} — need ≥ 3.12",
+                fix="Install Python 3.12+ and point uv at it (`uv python install 3.12`).",
+                docs=[DOCS_DEPS],
+            )
+        )
+
     # Platform
     display = os.environ.get("DISPLAY", "").strip()
     if display:
         checks.append(
-            Check("display", "DISPLAY", "ok", f"DISPLAY={display}", docs=[DOCS_README])
+            Check("display", "DISPLAY", "ok", f"DISPLAY={display}", docs=[DOCS_README, DOCS_DEPS])
         )
     else:
         checks.append(
@@ -115,7 +159,7 @@ def run_checks(*, want_voice: bool | None = None) -> list[Check]:
                 "fail",
                 "DISPLAY is unset — Gtk dialogs cannot appear.",
                 fix="Run the MCP inside a Linux desktop session (or export DISPLAY=:0).",
-                docs=[DOCS_README],
+                docs=[DOCS_README, DOCS_DEPS],
             )
         )
 
@@ -128,13 +172,15 @@ def run_checks(*, want_voice: bool | None = None) -> list[Check]:
                 "fail",
                 "No system python3 found for Gtk dialogs.",
                 fix="Install python3 and set ASK_QUESTION_GTK_PYTHON if needed.",
-                docs=[DOCS_README, "DEPENDENCIES.md"],
+                docs=[DOCS_DEPS],
             )
         )
     else:
         ok, detail = _gi_adw_ok(py)
         if ok:
-            checks.append(Check("gtk_python", "Gtk4 + Adw", "ok", detail))
+            checks.append(
+                Check("gtk_python", "Gtk4 + Adw", "ok", detail, docs=[DOCS_DEPS])
+            )
         else:
             checks.append(
                 Check(
@@ -142,16 +188,17 @@ def run_checks(*, want_voice: bool | None = None) -> list[Check]:
                     "Gtk4 + Adw",
                     "fail",
                     f"PyGObject Gtk4/Adw missing on {py}: {detail}",
-                    fix="Install gir1.2-gtk-4.0 gir1.2-adw-1 python3-gi (Debian/Ubuntu) "
-                    "or equivalent; set ASK_QUESTION_GTK_PYTHON to that interpreter.",
-                    docs=["DEPENDENCIES.md"],
+                    fix="Install Gtk4/Adw GI bindings, e.g. Debian/Ubuntu: "
+                    "`sudo apt install python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 zenity`. "
+                    "Set ASK_QUESTION_GTK_PYTHON to that interpreter if needed.",
+                    docs=[DOCS_DEPS],
                 )
             )
 
     list_ask = Path(__file__).resolve().with_name("gtk4_list_ask.py")
     if list_ask.is_file():
         checks.append(
-            Check("gtk_script", "gtk4_list_ask.py", "ok", str(list_ask))
+            Check("gtk_script", "gtk4_list_ask.py", "ok", str(list_ask), docs=[DOCS_DEPS])
         )
     else:
         checks.append(
@@ -161,37 +208,38 @@ def run_checks(*, want_voice: bool | None = None) -> list[Check]:
                 "fail",
                 f"Missing dialog script: {list_ask}",
                 fix="Re-clone or repair the ask-question-mcp checkout; MCP --directory must point at the repo root.",
-                docs=[DOCS_README],
+                docs=[DOCS_README, DOCS_DEPS],
             )
         )
 
     zenity = shutil.which("zenity")
     if zenity:
-        checks.append(Check("zenity", "zenity", "ok", zenity, docs=["DEPENDENCIES.md"]))
+        checks.append(Check("zenity", "zenity", "ok", zenity, docs=[DOCS_DEPS]))
     else:
         checks.append(
             Check(
                 "zenity",
                 "zenity",
                 "warn",
-                "zenity not on PATH (Gtk list is primary; entry fallback may fail).",
-                fix="Optional: apt install zenity",
-                docs=["DEPENDENCIES.md"],
+                "zenity not on PATH (recommended freeform fallback).",
+                fix="sudo apt install zenity",
+                docs=[DOCS_DEPS],
             )
         )
 
     pw = shutil.which("pw-play")
     if pw:
-        checks.append(Check("pw_play", "pw-play", "ok", pw))
+        checks.append(Check("pw_play", "pw-play", "ok", pw, docs=[DOCS_DEPS]))
     else:
         checks.append(
             Check(
                 "pw_play",
                 "pw-play",
                 "warn",
-                "pw-play not found — speak/duck need PipeWire.",
-                fix="Install pipewire-pulse / PipeWire tools, or mute with ASK_QUESTION_SPEAK=0.",
-                docs=[DOCS_SETUP],
+                "pw-play not found — speak/duck need PipeWire (text-only still works).",
+                fix="sudo apt install pipewire-pulse pipewire-audio-client-libraries "
+                "(or mute with ASK_QUESTION_SPEAK=0).",
+                docs=[DOCS_DEPS, DOCS_SETUP],
             )
         )
 
@@ -300,6 +348,7 @@ def summarize(checks: list[Check]) -> dict[str, Any]:
     ok = not fails
     soft_fail_ids = {c.id for c in checks if c.severity == "fail"}
     ready_software = not soft_fail_ids.intersection({"gtk_python", "gtk_script"})
+    ready_host = not soft_fail_ids.intersection({"uv", "python"})
     ready_ui = ready_software and "display" not in soft_fail_ids
     ready_tts = any(c.id == "tts_url" and c.severity == "ok" for c in checks)
     ready_stt = any(c.id == "stt_url" and c.severity == "ok" for c in checks)
@@ -308,15 +357,71 @@ def summarize(checks: list[Check]) -> dict[str, Any]:
 
     caps = resolve_voice_capabilities(speak_requested=True)
 
+    by_id = {c.id: c for c in checks}
+    apt_ui = (
+        "sudo apt install -y python3 python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 zenity"
+    )
+    apt_audio = (
+        "sudo apt install -y pipewire pipewire-pulse pipewire-audio-client-libraries"
+    )
+    dependencies = {
+        "doc": DOCS_DEPS,
+        "tiers": {
+            "A_host": {
+                "required": True,
+                "items": ["uv", "python≥3.12", "uv sync (mcp[cli])"],
+                "status": {
+                    "uv": by_id["uv"].severity if "uv" in by_id else "skip",
+                    "python": by_id["python"].severity if "python" in by_id else "skip",
+                },
+            },
+            "B_ui": {
+                "required": True,
+                "items": ["DISPLAY", "Gtk4+Adw GI", "gtk4_list_ask.py", "zenity (recommended)"],
+                "apt_debian_ubuntu": apt_ui,
+                "status": {
+                    "display": by_id["display"].severity if "display" in by_id else "skip",
+                    "gtk_python": by_id["gtk_python"].severity if "gtk_python" in by_id else "skip",
+                    "zenity": by_id["zenity"].severity if "zenity" in by_id else "skip",
+                },
+            },
+            "C_audio": {
+                "required": False,
+                "items": ["pw-play (PipeWire)"],
+                "apt_debian_ubuntu": apt_audio,
+                "status": {
+                    "pw_play": by_id["pw_play"].severity if "pw_play" in by_id else "skip",
+                },
+            },
+            "D_voice": {
+                "required": False,
+                "items": ["ASK_QUESTION_TTS_URL", "ASK_QUESTION_STT_URL"],
+                "docs": [DOCS_VOICE],
+                "status": {
+                    "tts": "ok" if ready_tts else ("warn" if caps.tts_configured else "skip"),
+                    "stt": "ok" if ready_stt else ("warn" if caps.stt_configured else "skip"),
+                },
+            },
+        },
+        "install_commands": {
+            "debian_ubuntu_ui": apt_ui,
+            "debian_ubuntu_audio": apt_audio,
+            "python_package": "uv sync",
+        },
+    }
+
     next_actions: list[str] = []
     for c in fails + warns:
         if c.fix:
             next_actions.append(f"{c.id}: {c.fix}")
+    if not ready_host:
+        next_actions.insert(0, f"Host tools: install uv + Python ≥ 3.12 — see {DOCS_DEPS}")
+    if not ready_software:
+        next_actions.insert(0, f"UI packages: `{apt_ui}` — see {DOCS_DEPS}")
     if caps.audio_mode == "text_only":
-        next_actions.insert(
-            0,
-            "Text-only MCQ is available when DISPLAY+Gtk are ready (click/type). "
-            "Optional: setup_guide topic tts/stt for voice.",
+        next_actions.append(
+            "Text-only MCQ works once DISPLAY+Gtk are ready; optional voice via "
+            "setup_guide topic tts/stt."
         )
 
     # Suggested MCQ for the agent to present to the human
@@ -349,6 +454,7 @@ def summarize(checks: list[Check]) -> dict[str, Any]:
         "ok": ok,
         "ready": {
             "ui": ready_ui,
+            "host": ready_host,
             "tts": ready_tts,
             "stt": ready_stt,
             "voice": ready_tts and ready_stt,
@@ -357,6 +463,7 @@ def summarize(checks: list[Check]) -> dict[str, Any]:
         },
         "audio_mode": caps.audio_mode,
         "capabilities": caps.as_dict(),
+        "dependencies": dependencies,
         "counts": {
             "fail": len(fails),
             "warn": len(warns),
@@ -369,6 +476,7 @@ def summarize(checks: list[Check]) -> dict[str, Any]:
             "readme": DOCS_README,
             "setup": DOCS_SETUP,
             "voice_backends": DOCS_VOICE,
+            "dependencies": DOCS_DEPS,
             "repo": "https://github.com/DynamicDevices/ask-question-mcp",
         },
         "agent_instructions": (
@@ -403,28 +511,41 @@ def setup_guide(topic: str) -> dict[str, Any]:
     sections: dict[str, Any] = {}
 
     sections["ui"] = {
-        "title": "Linux UI (required for dialogs)",
+        "title": "Linux UI dependencies (required for dialogs)",
+        "summary": (
+            "Tier B in DEPENDENCIES.md: DISPLAY + Gtk4/Adw PyGObject + recommended zenity. "
+            "Without these, ask_multiple_choice cannot show a dialog."
+        ),
         "steps": [
             "Use a Linux desktop session (GNOME/KDE/etc.) with a working display.",
             "Confirm: `echo $DISPLAY` prints something like `:0` or `:1`.",
-            "Install Gtk4 + libadwaita GI bindings, e.g. Debian/Ubuntu: "
-            "`sudo apt install python3-gi gir1.2-gtk-4.0 gir1.2-adw-1`.",
-            "Optional: `sudo apt install zenity` (entry fallback).",
-            "Optional speak path: PipeWire + `pw-play`.",
+            "Debian/Ubuntu one-liner: "
+            "`sudo apt install -y python3 python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 zenity`.",
+            "Verify GI: `/usr/bin/python3 -c \"import gi; gi.require_version('Gtk','4.0'); "
+            "gi.require_version('Adw','1'); from gi.repository import Gtk, Adw; print('ok')\"`.",
+            "Optional audio (tier C): "
+            "`sudo apt install -y pipewire pipewire-pulse pipewire-audio-client-libraries` "
+            "for `pw-play` (speak/duck). Text-only works without this.",
             "Smoke test from the repo: "
             "`uv run python -c \"from ask_question_mcp.zenity_ask import ask_zenity; "
             "print(ask_zenity('Smoke?', [{'id':'a','label':'OK (recommended)'},"
             "{'id':'b','label':'Other'}], recommended_id='a'))\"`.",
         ],
-        "verify": "check_setup should report display + gtk_python + gtk_script as ok.",
-        "docs": [DOCS_README, "DEPENDENCIES.md"],
+        "install_commands": {
+            "debian_ubuntu_ui": "sudo apt install -y python3 python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 zenity",
+            "debian_ubuntu_audio": "sudo apt install -y pipewire pipewire-pulse pipewire-audio-client-libraries",
+        },
+        "verify": "check_setup: display + gtk_python + gtk_script ok; ready.text_mcq true.",
+        "docs": [DOCS_DEPS, DOCS_README],
     }
 
     sections["mcp"] = {
         "title": "Register the MCP in Cursor (or compatible host)",
+        "summary": "Tier A: uv + Python ≥ 3.12 + uv sync, then mcp.json.",
         "steps": [
+            "Install uv if needed: https://docs.astral.sh/uv/getting-started/installation/",
             "Clone: `git clone https://github.com/DynamicDevices/ask-question-mcp.git`",
-            "In the clone: `uv sync` (needs uv + Python ≥ 3.12).",
+            "In the clone: `uv sync` (installs mcp[cli] from uv.lock).",
             "Edit MCP config (`mcp.json`) and add a stdio server:",
             {
                 "ask-question": {
@@ -439,10 +560,11 @@ def setup_guide(topic: str) -> dict[str, Any]:
             },
             "Replace the directory with your absolute REPO_ROOT.",
             "Reload the Cursor window / MCP servers.",
-            "Confirm tool `ask_multiple_choice` appears; on problems call `check_setup`.",
+            "Call check_setup; confirm ask_multiple_choice works.",
         ],
+        "install_commands": {"python_package": "uv sync"},
         "verify": "Agent can call ask_multiple_choice and a dialog appears.",
-        "docs": [DOCS_README],
+        "docs": [DOCS_README, DOCS_DEPS],
     }
 
     sections["tts"] = {

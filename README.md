@@ -20,8 +20,9 @@ when the host IDE has no native AskQuestion UI (or the model lacks that tool).
 | **Transport** | MCP over **stdio** (Cursor / Claude Desktop–style `mcpServers`) |
 | **Voice** | Optional; off until TTS/STT URLs set — [docs/VOICE-BACKENDS.md](docs/VOICE-BACKENDS.md) |
 | **Self-check** | MCP `check_setup` / `setup_guide` · CLI `python -m ask_question_mcp.doctor` |
+| **Dependencies** | [DEPENDENCIES.md](DEPENDENCIES.md) (tiers A–D + apt one-liners) |
 | **Security** | [SECURITY.md](SECURITY.md) · CRA notes: [docs/CRA-COMPLIANCE.md](docs/CRA-COMPLIANCE.md) |
-| **Voice backends** | [docs/VOICE-BACKENDS.md](docs/VOICE-BACKENDS.md) · [SETUP.md](SETUP.md) · [DEPENDENCIES.md](DEPENDENCIES.md) |
+| **Voice backends** | [docs/VOICE-BACKENDS.md](docs/VOICE-BACKENDS.md) · [SETUP.md](SETUP.md) |
 
 ---
 
@@ -35,22 +36,26 @@ correctly**. Follow this checklist in order.
 
 1. **Confirm platform:** Linux GUI session with `DISPLAY` set. Do **not**
    install this on headless CI, Windows, or macOS expecting the Gtk UI to work.
-2. **Install:**
+2. **Install host + UI deps** (see [DEPENDENCIES.md](DEPENDENCIES.md)):
    ```bash
+   # Debian/Ubuntu
+   sudo apt install -y python3 python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 zenity
+   curl -LsSf https://astral.sh/uv/install.sh | sh   # if needed
    git clone https://github.com/DynamicDevices/ask-question-mcp.git
    cd ask-question-mcp
    uv sync
    ```
-   Require: [uv](https://docs.astral.sh/uv/), Python ≥ 3.12, Gtk4 + libadwaita
-   (and optionally `zenity`). Absolute path to the clone = `REPO_ROOT`.
+   Require: Linux desktop with `DISPLAY`, [uv](https://docs.astral.sh/uv/),
+   Python ≥ 3.12, Gtk4 + libadwaita GI. Absolute path to the clone = `REPO_ROOT`.
 3. **Register MCP** in the client’s MCP config (Cursor: user/global
    `mcp.json`). Use the JSON template in [MCP client configuration](#mcp-client-configuration).
    Replace `REPO_ROOT` with the absolute path. Reload the IDE / MCP servers.
 4. **Self-check (required):** call MCP tool **`check_setup`**.
-   - If `ok` is false or `ready.ui` is false → present
+   Inspect `dependencies.tiers` and `dependencies.install_commands`.
+   - If `ok` is false or `ready.ui` / `ready.text_mcq` is false → present
      `offer_walkthrough` via `ask_multiple_choice`, then **`setup_guide`**
      for the chosen topic (`ui` / `mcp` / `tts` / `stt` / `voice` / `ui_only`).
-   - Re-run `check_setup` after each change. CLI equivalent:
+   - Re-run `check_setup` after each change. CLI:
      `uv run python -m ask_question_mcp.doctor --json`
 5. **Optional voice:** only if the human wants spoken questions / mic answers.
    Use `setup_guide` topic `tts` (Qwen3-TTS) and `stt` (faster-whisper).
