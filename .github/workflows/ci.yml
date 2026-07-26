@@ -1,4 +1,7 @@
-# Public OSS CI — GitHub-hosted (fork-safe; lab self-hosted intentionally not used).
+# Public OSS CI.
+# Prefer DynamicDevices self-hosted Linux for same-repo pushes/PRs.
+# External fork PRs fall back to GitHub-hosted (do not run untrusted fork
+# code on lab self-hosted runners).
 name: ci
 
 on:
@@ -12,28 +15,35 @@ permissions:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["self-hosted","Linux"]') || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v4
       - name: Install Gtk4 / Adw GI (dialog stack)
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq \
-            python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 zenity
+          set -euo pipefail
+          if command -v apt-get >/dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq \
+              python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 zenity
+          else
+            echo "apt-get missing — assuming GI packages already on self-hosted image"
+            python3 -c "import gi; gi.require_version('Gtk','4.0'); gi.require_version('Adw','1')"
+          fi
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
-      - name: Sync + unit tests
+      - name: Sync + unit / contract tests
         run: |
           uv sync
           uv run python scripts/test_match_transcript.py
           uv run python scripts/test_doctor.py
           uv run python scripts/test_windows_backend.py
+          uv run python scripts/test_contracts.py
       - name: Import package
         run: uv run python -c "import ask_question_mcp; print('ok')"
 
   secrets-hygiene:
-    runs-on: ubuntu-latest
+    runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["self-hosted","Linux"]') || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v4
       - name: Block lab IPs and home paths in tracked text
@@ -54,7 +64,7 @@ jobs:
           echo "hygiene ok"
 
   sbom:
-    runs-on: ubuntu-latest
+    runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["self-hosted","Linux"]') || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
