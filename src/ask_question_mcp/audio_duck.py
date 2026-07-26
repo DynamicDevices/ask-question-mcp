@@ -24,6 +24,7 @@ _CACHE_ROOT = Path.home() / ".cache" / "ask-question-mcp"
 _DUCK_STATE_FILE = _CACHE_ROOT / "audio.duck.json"
 _DUCK_HOLD_FILE = _CACHE_ROOT / "audio.duck.hold"
 _DUCK_LOCK_FILE = _CACHE_ROOT / "audio.duck.lock"
+_DUCK_PLAYBACK_OWNER = _CACHE_ROOT / "audio.duck.playback"
 
 
 def _duck_lock():
@@ -704,24 +705,60 @@ def duck_hold_count() -> int:
     return _read_hold()
 
 
+def mark_playback_duck_owner() -> None:
+    """Record that this process owns a non-session duck (for kill recovery)."""
+    try:
+        _CACHE_ROOT.mkdir(parents=True, exist_ok=True)
+        _DUCK_PLAYBACK_OWNER.write_text("1", encoding="utf-8")
+    except OSError:
+        pass
+
+
+def clear_playback_duck_owner() -> None:
+    try:
+        _DUCK_PLAYBACK_OWNER.unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
 def play_with_duck(play_fn) -> bool:
     """Run ``play_fn()`` under duck hold. Nestable with listen-window holds.
 
-    If a session hold is already active (MCQ open), do **not** release at the
-    end of this play — that was restoring Spotify mid-dialog / after every
-    sample and sounded like speech was “too loud”.
+    If a session hold is already active (MCQ open), do **not** increment the
+    hold counter — killed TTS children used to leave orphaned nest counts
+    (Spotify stuck quiet). Session owner restores at dialog end.
     """
     already = _read_hold() > 0
-    acquire_duck_hold(ramp=not already)
+    if already:
+        try:
+            prepare_playback_sink()
+            refresh_duck(ramp=False)
+            return bool(play_fn())
+        except Exception:
+            return False
+    acquire_duck_hold(ramp=True)
+    mark_playback_duck_owner()
     try:
         prepare_playback_sink()
         return bool(play_fn())
     finally:
-        if already:
-            # Drop our nested count only; keep session duck until dialog end.
-            release_duck_hold(ramp=False)
-        else:
-            release_duck_hold(ramp=True)
+        clear_playback_duck_owner()
+        release_duck_hold(ramp=True)
+
+
+def release_orphaned_playback_duck() -> None:
+    """If a TTS child was killed mid ``play_with_duck``, force-restore media.
+
+    Session MCQ holds do not set the playback-owner flag, so listen-window
+    duck stays intact.
+    """
+    try:
+        if not _DUCK_PLAYBACK_OWNER.is_file():
+            return
+    except OSError:
+        return
+    clear_playback_duck_owner()
+    release_duck_hold(ramp=True, force=True)
 
 
 if __name__ == "__main__":

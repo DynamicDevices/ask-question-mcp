@@ -854,17 +854,29 @@ def _stream_speak_charlize(
     try:
         from ask_question_mcp.audio_duck import (
             acquire_duck_hold,
+            clear_playback_duck_owner,
+            duck_hold_count,
+            mark_playback_duck_owner,
+            refresh_duck,
             release_duck_hold,
         )
 
-        try:
-            # Duck early (other apps ramp down while TTS generates). Do NOT
-            # prepare/preroll here — that must run immediately before first play.
-            # Hold is nestable with listen-window holds.
+        # Duck early (other apps ramp down while TTS generates). Do NOT
+        # prepare/preroll here — that must run immediately before first play.
+        # If a session hold is already active, do not nest — killed children
+        # used to orphan hold counts and leave media stuck quiet.
+        already = duck_hold_count() > 0
+        if not already:
             acquire_duck_hold(ramp=True)
+            mark_playback_duck_owner()
+        else:
+            refresh_duck(ramp=False)
+        try:
             return _run()
         finally:
-            release_duck_hold(ramp=True)
+            if not already:
+                clear_playback_duck_owner()
+                release_duck_hold(ramp=True)
     except Exception:
         return _run()
 
@@ -1092,8 +1104,12 @@ def stop_speak() -> None:
             pass
     # Playback child may have been killed mid-duck — restore other audio.
     try:
-        from ask_question_mcp.audio_duck import restore_other_audio
+        from ask_question_mcp.audio_duck import (
+            release_orphaned_playback_duck,
+            restore_other_audio,
+        )
 
+        release_orphaned_playback_duck()
         restore_other_audio(ramp=True)
     except Exception:
         pass

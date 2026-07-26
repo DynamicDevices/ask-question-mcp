@@ -482,27 +482,43 @@ def ask_zenity(
 
     # Hold duck for the whole MCQ: question → listen → ack. Stops Spotify
     # blasting between speech finishing and the mic opening.
+    # Text-only: never duck — and heal any orphaned hold left by a killed TTS child.
     duck_mod = None
     duck_held = False
     try:
         from ask_question_mcp import audio_duck as duck_mod
     except ImportError:
         duck_mod = None
-    if duck_mod is not None and do_speak:
+    if duck_mod is not None:
         try:
-            duck_mod.acquire_duck_hold(ramp=True)
-            duck_held = True
+            if not do_speak:
+                if duck_mod.duck_hold_count() > 0:
+                    duck_mod.release_duck_hold(ramp=True, force=True)
+            else:
+                # Clear orphaned nest counts before taking the session hold.
+                if duck_mod.duck_hold_count() > 0:
+                    duck_mod.release_duck_hold(ramp=False, force=True)
+                duck_mod.acquire_duck_hold(ramp=True)
+                duck_held = True
         except Exception:
             duck_held = False
 
     def _release_session_duck() -> None:
         nonlocal duck_held
-        if duck_held and duck_mod is not None:
-            duck_held = False
-            try:
-                duck_mod.release_duck_hold(ramp=True, force=True)
-            except Exception:
-                pass
+        if duck_mod is not None:
+            if duck_held:
+                duck_held = False
+                try:
+                    duck_mod.release_duck_hold(ramp=True, force=True)
+                except Exception:
+                    pass
+            elif not do_speak:
+                # Belt-and-braces: text-only must never leave media ducked.
+                try:
+                    if duck_mod.duck_hold_count() > 0:
+                        duck_mod.release_duck_hold(ramp=True, force=True)
+                except Exception:
+                    pass
         # Always gentle-flush A2DP in case a listen left HFP pending.
         try:
             from ask_question_mcp import voice_answer as _va
