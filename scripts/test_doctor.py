@@ -81,7 +81,69 @@ def main() -> None:
             assert "DISPLAY" in str(exc)
             assert "audio" in str(exc).lower() or "UI" in str(exc)
 
-    print("OK doctor + text-only / capability flags + dependencies + UI-before-audio")
+    from ask_question_mcp.platform_info import classify_platform, github_issue_draft
+
+    verified = classify_platform(
+        {
+            "system": "Linux",
+            "pretty_name": "Ubuntu 24.04.4 LTS",
+            "distro_id": "ubuntu",
+            "id_like": ["debian"],
+            "version_id": "24.04",
+            "desktop": "gnome",
+            "desktop_raw": "GNOME",
+            "audio": "pipewire",
+            "arch": "x86_64",
+            "display_set": True,
+            "python": "3.12.0",
+        }
+    )
+    assert verified["status"] == "verified", verified
+    assert verified["ask_feedback"] is False
+
+    unverified = classify_platform(
+        {
+            "system": "Linux",
+            "pretty_name": "Fedora Linux 41",
+            "distro_id": "fedora",
+            "id_like": [],
+            "version_id": "41",
+            "desktop": "kde",
+            "desktop_raw": "KDE",
+            "audio": "pipewire",
+            "arch": "x86_64",
+            "display_set": True,
+            "python": "3.13.0",
+        }
+    )
+    assert unverified["status"] == "unverified"
+    assert unverified["ask_feedback"] is True
+    draft = github_issue_draft(works=True, host=unverified["host"])
+    assert "Fedora" in draft["title"] or "fedora" in draft["body"].casefold()
+    assert "issues/new" in draft["new_issue_url"]
+
+    unsupported = classify_platform(
+        {
+            "system": "Darwin",
+            "pretty_name": "macOS",
+            "distro_id": "",
+            "id_like": [],
+            "version_id": "",
+            "desktop": "unknown",
+            "desktop_raw": "",
+            "audio": "unknown",
+            "arch": "arm64",
+            "display_set": False,
+            "python": "3.12.0",
+        }
+    )
+    assert unsupported["status"] == "unsupported"
+    assert unsupported["ask_feedback"] is False
+
+    assert "platform" in r
+    assert r["platform"]["status"] in {"verified", "unverified", "unsupported"}
+
+    print("OK doctor + text-only / capability flags + dependencies + UI-before-audio + platform")
 
 
 if __name__ == "__main__":

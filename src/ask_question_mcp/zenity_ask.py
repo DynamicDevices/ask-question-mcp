@@ -601,6 +601,39 @@ def ask_zenity(
             payload["voice"] = meta
         payload["audio_mode"] = caps.audio_mode
         payload["capabilities"] = caps.as_dict()
+        # One-shot nudge when host is not on the README verified matrix.
+        try:
+            from ask_question_mcp.platform_info import (
+                classify_platform,
+                mark_session_nudged,
+                offer_platform_feedback,
+                session_nudge_pending,
+            )
+
+            classification = classify_platform()
+            if (
+                classification.get("ask_feedback")
+                and session_nudge_pending()
+                and not payload.get("cancelled")
+            ):
+                payload["platform"] = {
+                    "status": classification["status"],
+                    "verified": False,
+                    "summary": classification["summary"],
+                    "host": classification["host"],
+                }
+                payload["platform_feedback"] = offer_platform_feedback(
+                    classification["host"]
+                )
+                payload["agent_note"] = (
+                    "Unverified platform — present platform_feedback via "
+                    "ask_multiple_choice (once). On works/broken use "
+                    "github_issue_draft_* and help open a GitHub issue or "
+                    "README Tested platforms PR."
+                )
+                mark_session_nudged()
+        except Exception:
+            pass
         return payload
 
     def _open_entry(*, auto_listen: bool) -> str:

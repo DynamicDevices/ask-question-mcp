@@ -14,7 +14,8 @@ mcp = FastMCP(
     "ask-question",
     instructions=(
         "Tools: ask_multiple_choice (decision dialogs), check_setup (diagnose "
-        "DISPLAY/Gtk/TTS/STT), setup_guide (walkthrough for ui|mcp|tts|stt|voice). "
+        "DISPLAY/Gtk/TTS/STT/platform), setup_guide (walkthrough for ui|mcp|tts|stt|voice), "
+        "record_platform_feedback (persist dont_ask / later after the feedback MCQ). "
         "On first use in a session, or when ask_multiple_choice returns an error / "
         "cancelled with setup hints, call check_setup. If not ready, present "
         "offer_walkthrough via ask_multiple_choice, then setup_guide for the "
@@ -24,6 +25,11 @@ mcp = FastMCP(
         "setup_guide when the human wants voice. "
         "If ready.ui is false: fix DISPLAY/Gtk only — do not offer TTS/STT until "
         "the dialog works (display before audio). "
+        "If check_setup.platform.status is unverified (or ask_multiple_choice returns "
+        "platform_feedback): once the dialog works, present that feedback MCQ. "
+        "On works/broken, use github_issue_draft_* — AI fills host details + what was "
+        "tested — and help open https://github.com/DynamicDevices/ask-question-mcp/issues "
+        "or a README Tested platforms PR. On dont_ask/later call record_platform_feedback. "
         "For missing packages, use check_setup.dependencies.install_commands and "
         "DEPENDENCIES.md (tiers A host, B UI, C audio, D voice). "
         "Re-run check_setup after config changes. "
@@ -53,8 +59,8 @@ def check_setup(want_voice: bool | None = None) -> str:
     """Diagnose ask-question-mcp readiness (DISPLAY, Gtk, TTS, STT).
 
     Call this when enabling the MCP, when dialogs fail, or before enabling voice.
-    Returns JSON with checks[], ready{ui,tts,stt,voice}, next_actions, and
-    offer_walkthrough (options to pass into ask_multiple_choice).
+    Returns JSON with checks[], ready{ui,tts,stt,voice}, platform{status,verified,
+    offer_platform_feedback}, next_actions, and offer_walkthrough.
 
     Args:
         want_voice: If true, missing/unreachable TTS/STT count as failures.
@@ -72,6 +78,27 @@ def setup_guide(topic: str = "all") -> str:
     After the human applies changes, call check_setup again.
     """
     return json.dumps(build_setup_guide(topic), ensure_ascii=False)
+
+
+@mcp.tool()
+def record_platform_feedback(choice_id: str) -> str:
+    """Persist the human's answer to the unverified-platform feedback MCQ.
+
+    Call after presenting ``platform.offer_platform_feedback`` /
+    ``platform_feedback`` from check_setup or ask_multiple_choice.
+
+    Args:
+        choice_id: One of works | broken | later | dont_ask (or aliases).
+            ``dont_ask`` stops future nudges on this machine.
+            ``later`` snoozes; works/broken are noted for the agent’s GitHub draft.
+    """
+    from ask_question_mcp.platform_info import record_feedback_choice
+
+    record_feedback_choice(choice_id)
+    return json.dumps(
+        {"ok": True, "choice_id": (choice_id or "").strip().lower()},
+        ensure_ascii=False,
+    )
 
 
 @mcp.tool()

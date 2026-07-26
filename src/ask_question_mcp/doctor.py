@@ -410,6 +410,20 @@ def summarize(checks: list[Check]) -> dict[str, Any]:
         },
     }
 
+    from ask_question_mcp.platform_info import platform_report
+
+    plat = platform_report()
+    # Only nudge for feedback once UI can actually be exercised.
+    ask = bool(plat.get("ask_feedback") and ready_ui)
+    plat = {**plat, "ask_feedback": ask}
+    if ask and "offer_platform_feedback" not in plat:
+        from ask_question_mcp.platform_info import offer_platform_feedback
+
+        plat["offer_platform_feedback"] = offer_platform_feedback(plat.get("host"))
+    if not ask:
+        plat.pop("offer_platform_feedback", None)
+        plat.pop("agent_instructions", None)
+
     next_actions: list[str] = []
     for c in fails + warns:
         if c.fix:
@@ -425,6 +439,13 @@ def summarize(checks: list[Check]) -> dict[str, Any]:
         next_actions.append(
             "Text-only MCQ is ready; optional voice via setup_guide topic tts/stt "
             "(only after ready.ui)."
+        )
+
+    if ask:
+        next_actions.append(
+            "Platform unverified: present offer_platform_feedback via "
+            "ask_multiple_choice; on works/broken help open a GitHub issue "
+            "(draft title/body included) or README table PR."
         )
 
     # Suggested MCQ for the agent to present to the human.
@@ -456,6 +477,26 @@ def summarize(checks: list[Check]) -> dict[str, Any]:
     if walk_opts and "(recommended)" not in walk_opts[0]["label"]:
         walk_opts[0]["label"] = walk_opts[0]["label"] + " (recommended)"
 
+    agent_bits = [
+        "If ready.ui is false: fix display/Gtk only (setup_guide topic=ui / mcp). "
+        "Do not offer TTS/STT or speak until ready.ui is true — display is "
+        "required before audio. "
+        "If ok is false or the human wants voice (and ready.ui): call setup_guide "
+        "with the chosen topic, then present the steps. Prefer ask_multiple_choice "
+        "to ask which walkthrough they want (use offer_walkthrough). After they "
+        "change env/mcp.json, re-run check_setup. Do not invent lab IPs — use "
+        "127.0.0.1 or URLs they provide."
+    ]
+    if ask:
+        agent_bits.append(
+            "PLATFORM UNVERIFIED: after a successful dialog, present "
+            "platform.offer_platform_feedback (or the same object at top level) "
+            "via ask_multiple_choice once. On works/broken use "
+            "github_issue_draft_* — fill MCP client / test notes and help open "
+            f"{plat.get('issues_url')} or a README Tested platforms PR. "
+            "On dont_ask / ASK_QUESTION_PLATFORM_FEEDBACK=0, stop nudging."
+        )
+
     return {
         "ok": ok,
         "ready": {
@@ -469,6 +510,7 @@ def summarize(checks: list[Check]) -> dict[str, Any]:
         },
         "audio_mode": caps.audio_mode,
         "capabilities": caps.as_dict(),
+        "platform": plat,
         "dependencies": dependencies,
         "counts": {
             "fail": len(fails),
@@ -483,18 +525,12 @@ def summarize(checks: list[Check]) -> dict[str, Any]:
             "setup": DOCS_SETUP,
             "voice_backends": DOCS_VOICE,
             "dependencies": DOCS_DEPS,
+            "tested_platforms": "README.md#tested-platforms",
             "repo": "https://github.com/DynamicDevices/ask-question-mcp",
+            "issues": plat.get("issues_url")
+            or "https://github.com/DynamicDevices/ask-question-mcp/issues/new",
         },
-        "agent_instructions": (
-            "If ready.ui is false: fix display/Gtk only (setup_guide topic=ui / mcp). "
-            "Do not offer TTS/STT or speak until ready.ui is true — display is "
-            "required before audio. "
-            "If ok is false or the human wants voice (and ready.ui): call setup_guide "
-            "with the chosen topic, then present the steps. Prefer ask_multiple_choice "
-            "to ask which walkthrough they want (use offer_walkthrough). After they "
-            "change env/mcp.json, re-run check_setup. Do not invent lab IPs — use "
-            "127.0.0.1 or URLs they provide."
-        ),
+        "agent_instructions": " ".join(agent_bits),
         "offer_walkthrough": {
             "question": "What should we configure for ask-question-mcp?",
             "title": "MCP setup",

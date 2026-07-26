@@ -345,6 +345,11 @@ environment, audio stack (PipeWire / Pulse / other), MCP client (e.g. Cursor),
 and what you checked (text-only MCQ / speak / duck / STT). Keep claims honest —
 “works for me” is enough; mark **Partial** if only UI works.
 
+The MCP also detects unverified hosts: `check_setup.platform` and a one-shot
+`platform_feedback` nudge on `ask_multiple_choice` ask the human whether the
+dialog worked; the agent can draft a GitHub issue from the filled-in host
+details (`record_platform_feedback` persists “don’t ask again”).
+
 ---
 
 ## Smoke test

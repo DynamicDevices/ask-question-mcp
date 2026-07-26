@@ -32,6 +32,10 @@ Please help keep the [Tested platforms](README.md#tested-platforms) table honest
 - Prefer updating the README table in the same PR when you verify a new row.
 - Use **Verified** / **Partial** / **Not yet reported** / **Unsupported** —
   do not mark Verified without a real interactive dialog test.
+- On unverified desktops the MCP prompts once via `ask_multiple_choice`
+  (`platform_feedback`); agents should draft the GitHub issue body from the
+  auto-filled host fields. Mute with `ASK_QUESTION_PLATFORM_FEEDBACK=0` or
+  choose “Don’t ask again” (`record_platform_feedback`).
 
 ## Security
 
