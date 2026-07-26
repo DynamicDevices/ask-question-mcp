@@ -458,20 +458,20 @@ def summarize(checks: list[Check]) -> dict[str, Any]:
         walk_opts.append({"id": "mcp", "label": "Show mcp.json wiring again"})
         walk_opts.append({"id": "done", "label": "Looks fine — continue"})
     else:
+        # New-user default: text MCQ is enough. Voice is optional, not recommended.
+        walk_opts.append(
+            {"id": "ui_only", "label": "Use UI only — skip voice for now (recommended)"}
+        )
+        walk_opts.append({"id": "done", "label": "Looks fine — continue"})
         if not ready_tts and not _falsy("ASK_QUESTION_SPEAK"):
             walk_opts.append(
-                {
-                    "id": "tts",
-                    "label": "Set up Qwen3-TTS (spoken questions) (recommended)",
-                }
+                {"id": "tts", "label": "Set up Qwen3-TTS (spoken questions)"}
             )
         if not ready_stt and not _falsy("ASK_QUESTION_VOICE_ANSWER"):
             walk_opts.append(
                 {"id": "stt", "label": "Set up faster-whisper STT (voice answers)"}
             )
         walk_opts.append({"id": "mcp", "label": "Show mcp.json wiring again"})
-        walk_opts.append({"id": "ui_only", "label": "Use UI only — skip voice for now"})
-        walk_opts.append({"id": "done", "label": "Looks fine — continue"})
 
     # Ensure one recommended mark
     if walk_opts and "(recommended)" not in walk_opts[0]["label"]:
@@ -585,16 +585,20 @@ def setup_guide(topic: str) -> dict[str, Any]:
     }
 
     sections["mcp"] = {
-        "title": "Register the MCP in Cursor (or compatible host)",
-        "summary": "Tier A: uv + Python ≥ 3.12 + uv sync, then mcp.json.",
+        "title": "Register the MCP (Cursor, Claude Desktop, other stdio hosts)",
+        "summary": (
+            "Tier A: uv + Python ≥ 3.12 + uv sync, then a stdio server block. "
+            "Use an absolute path to uv — GUI hosts often lack ~/.local/bin on PATH."
+        ),
         "steps": [
             "Install uv if needed: https://docs.astral.sh/uv/getting-started/installation/",
             "Clone: `git clone https://github.com/DynamicDevices/ask-question-mcp.git`",
             "In the clone: `uv sync` (installs mcp[cli] from uv.lock).",
-            "Edit MCP config (`mcp.json`) and add a stdio server:",
+            "Find uv: `command -v uv` (e.g. /home/YOU/.local/bin/uv).",
+            "Edit the host MCP config and add a stdio server (absolute uv + REPO_ROOT):",
             {
                 "ask-question": {
-                    "command": "uv",
+                    "command": "/home/YOU/.local/bin/uv",
                     "args": [
                         "run",
                         "--directory",
@@ -603,9 +607,10 @@ def setup_guide(topic: str) -> dict[str, Any]:
                     ],
                 }
             },
-            "Replace the directory with your absolute REPO_ROOT.",
-            "Reload the Cursor window / MCP servers.",
-            "Call check_setup; confirm ask_multiple_choice works.",
+            "Cursor: ~/.cursor/mcp.json → Reload Window. "
+            "Claude Desktop (Linux): ~/.config/Claude/claude_desktop_config.json → full quit/relaunch. "
+            "Other stdio hosts: same command/args/env shape; process must inherit DISPLAY.",
+            "Call check_setup; confirm ask_multiple_choice works (text-only is fine).",
         ],
         "install_commands": {"python_package": "uv sync"},
         "verify": "Agent can call ask_multiple_choice and a dialog appears.",

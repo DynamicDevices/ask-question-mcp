@@ -29,12 +29,38 @@ when the host IDE has no native AskQuestion UI (or the model lacks that tool).
 | **License** | [GPL-3.0-or-later](LICENSE) ([NOTICE](NOTICE)) — use at your own risk |
 | **Maintainers** | [MAINTAINERS.md](MAINTAINERS.md) |
 | **Platform** | Linux desktop only (`DISPLAY` + Gtk4/Adw; zenity fallback) — [tested matrix](#tested-platforms) |
-| **Transport** | MCP over **stdio** (Cursor / Claude Desktop–style `mcpServers`) |
+| **Transport** | MCP over **stdio** (local process — not GitHub Pages / not remote HTTP) |
 | **Voice** | Optional; off until TTS/STT URLs set — [docs/VOICE-BACKENDS.md](docs/VOICE-BACKENDS.md) |
 | **Self-check** | MCP `check_setup` / `setup_guide` · CLI `python -m ask_question_mcp.doctor` |
 | **Dependencies** | [DEPENDENCIES.md](DEPENDENCIES.md) (tiers A–D + apt one-liners) |
 | **Security** | [SECURITY.md](SECURITY.md) · CRA notes: [docs/CRA-COMPLIANCE.md](docs/CRA-COMPLIANCE.md) |
 | **Voice backends** | [docs/VOICE-BACKENDS.md](docs/VOICE-BACKENDS.md) · [SETUP.md](SETUP.md) |
+
+---
+
+## For humans (quick start)
+
+You need a **Linux desktop** (Gtk). The MCP host (Cursor today; Claude Desktop /
+other stdio clients later) starts a **local** process — cloning the repo is
+required; a website cannot show the dialog.
+
+1. Install packages + clone (Debian/Ubuntu):
+   ```bash
+   sudo apt install -y python3 python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 zenity
+   curl -LsSf https://astral.sh/uv/install.sh | sh
+   git clone https://github.com/DynamicDevices/ask-question-mcp.git
+   cd ask-question-mcp && uv sync
+   pwd   # ← this absolute path is REPO_ROOT
+   ```
+2. Register the server in your MCP host — see [MCP client configuration](#mcp-client-configuration).
+   Prefer an **absolute path to `uv`** (GUI apps often lack `~/.local/bin` on `PATH`).
+3. Reload the host (Cursor: Developer → Reload Window; Claude Desktop: full quit/relaunch).
+4. Ask the agent to call **`check_setup`**, then a smoke **`ask_multiple_choice`**.
+5. Voice is optional — leave TTS/STT unset for click/type only. If a local
+   Piper / `notify-voice.sh` is installed, questions may still speak; set
+   `ASK_QUESTION_SPEAK=0` for silence.
+
+Demo: [YouTube](https://www.youtube.com/watch?v=5wVKCIXAfi4). Risks: [disclaimer](#ask-question-mcp) above.
 
 ---
 
@@ -60,8 +86,9 @@ correctly**. Follow this checklist in order.
    Require: Linux desktop with `DISPLAY`, [uv](https://docs.astral.sh/uv/),
    Python ≥ 3.12, Gtk4 + libadwaita GI. Absolute path to the clone = `REPO_ROOT`.
 3. **Register MCP** in the client’s MCP config (Cursor: user/global
-   `mcp.json`). Use the JSON template in [MCP client configuration](#mcp-client-configuration).
-   Replace `REPO_ROOT` with the absolute path. Reload the IDE / MCP servers.
+   `mcp.json`; Claude Desktop / other stdio hosts: see
+   [MCP client configuration](#mcp-client-configuration)). Use an **absolute**
+   path to `uv` plus absolute `REPO_ROOT`. Reload the IDE / MCP servers.
 4. **Self-check (required):** call MCP tool **`check_setup`**.
    Inspect `dependencies.tiers` and `dependencies.install_commands`.
    - If `ok` is false or `ready.ui` / `ready.text_mcq` is false → present
@@ -81,9 +108,10 @@ correctly**. Follow this checklist in order.
 
 | Tool | Purpose |
 |------|---------|
-| `check_setup` | Diagnose DISPLAY / Gtk / TTS / STT; returns `ready`, `next_actions`, `offer_walkthrough` |
+| `check_setup` | Diagnose DISPLAY / Gtk / TTS / STT / platform; returns `ready`, `next_actions`, `offer_walkthrough` |
 | `setup_guide` | Step-by-step JSON walkthrough (`topic`: `ui`\|`mcp`\|`tts`\|`stt`\|`voice`\|`ui_only`\|`all`) |
 | `ask_multiple_choice` | Human decision dialog; on config errors includes a `setup` hint block |
+| `record_platform_feedback` | Persist works/broken/later/dont_ask after an unverified-platform nudge |
 
 **Agent pattern:** `check_setup` → (if needed) `ask_multiple_choice(offer_walkthrough)` →
 `setup_guide(topic)` → human applies steps → `check_setup` again → then normal MCQs.
@@ -92,11 +120,11 @@ correctly**. Follow this checklist in order.
 
 | Is | Is not |
 |----|--------|
-| A **local** stdio MCP that blocks until the human clicks/types/speaks | A cloud API or remote questionnaire service |
+| A **local** stdio MCP that blocks until the human clicks/types/speaks | A cloud API, GitHub Pages app, or remote MCP URL |
 | A Gtk dialog for **decision forks** (pick one / several / freeform) | A general chat UI or notification centre |
 | Useful **text-only** when TTS/STT unset (`audio_mode=text_only`, flagged) | Broken without voice backends |
 | Optional TTS/STT to **operator-run** HTTP services | Bundled GPU models or a hosted voice SaaS |
-| Linux desktop | Portable to Windows/macOS GUI as-is |
+| Linux desktop (Cursor **or** other stdio MCP hosts) | Portable to Windows/macOS GUI as-is |
 
 ### Non-negotiable agent behaviour
 
@@ -117,57 +145,65 @@ correctly**. Follow this checklist in order.
 
 ## MCP client configuration
 
-### Cursor (`mcp.json`)
+Same **stdio** launch everywhere: `command` + `args` (+ optional `env`).
+The process must inherit a working `DISPLAY`. Prefer an **absolute** `uv`
+binary — GUI-launched hosts (Cursor, desktop apps) often do not see
+`~/.local/bin`.
 
-Merge under `mcpServers` (path must be absolute):
+Find `uv` once: `command -v uv` → e.g. `/home/YOU/.local/bin/uv`.
+
+### Shared server block
 
 ```json
-{
-  "mcpServers": {
-    "ask-question": {
-      "command": "uv",
-      "args": [
-        "run",
-        "--directory",
-        "/absolute/path/to/ask-question-mcp",
-        "ask-question-mcp"
-      ]
-    }
-  }
+"ask-question": {
+  "command": "/home/YOU/.local/bin/uv",
+  "args": [
+    "run",
+    "--directory",
+    "/absolute/path/to/ask-question-mcp",
+    "ask-question-mcp"
+  ]
 }
 ```
 
-Minimal voice-enabled variant (use **your** hosts; leave out `env` for UI-only):
+Optional voice (omit `env` for text-only):
 
 ```json
-{
-  "mcpServers": {
-    "ask-question": {
-      "command": "uv",
-      "args": [
-        "run",
-        "--directory",
-        "/absolute/path/to/ask-question-mcp",
-        "ask-question-mcp"
-      ],
-      "env": {
-        "ASK_QUESTION_TTS_URL": "http://127.0.0.1:8200",
-        "ASK_QUESTION_STT_URL": "http://127.0.0.1:8201/transcribe"
-      }
-    }
-  }
+"env": {
+  "ASK_QUESTION_TTS_URL": "http://127.0.0.1:8200",
+  "ASK_QUESTION_STT_URL": "http://127.0.0.1:8201/transcribe"
 }
 ```
 
-After editing: reload the Cursor window (or restart MCP). The server name in
-MCP listings is typically **`ask-question`**; the tool name is
-**`ask_multiple_choice`**.
+### Cursor
 
-### Other MCP hosts
+| | |
+|--|--|
+| **Config** | User/global `mcp.json` (often `~/.cursor/mcp.json`) |
+| **Shape** | `{ "mcpServers": { "ask-question": { … } } }` |
+| **Reload** | Command Palette → **Developer: Reload Window**, or toggle the server in MCP settings |
 
-Any host that can start a **stdio** MCP with `command` + `args` works the same
-way. The process must inherit a working `DISPLAY` (and PipeWire if you use
-duck/speak). Do not run it inside a container without display forwarding.
+### Claude Desktop (and similar)
+
+| | |
+|--|--|
+| **Config (Linux)** | `~/.config/Claude/claude_desktop_config.json` |
+| **Config (macOS)** | `~/Library/Application Support/Claude/claude_desktop_config.json` |
+| **Shape** | Same `mcpServers` object as Cursor |
+| **Reload** | Fully quit and relaunch the app |
+| **Note** | Official Claude Desktop is strongest on macOS/Windows; Linux may be community builds. **Claude Code** CLI also speaks MCP — same stdio block. |
+
+### Other stdio hosts (future / adjacent)
+
+| Host | Typical config | Notes |
+|------|----------------|-------|
+| VS Code / Copilot MCP | workspace or user MCP JSON | Same `command`/`args`/`env` pattern when stdio is supported |
+| Continue / Windsurf / Zed | product MCP settings | Use absolute `uv` + `REPO_ROOT`; confirm DISPLAY inheritance |
+| Custom agents | spawn stdio themselves | Must not strip `DISPLAY`; do not wrap in headless Docker without a display |
+
+**Not supported as a way to *run* the dialog:** GitHub Pages, raw HTTPS “remote MCP”, or a server in the cloud. Those cannot open Gtk on the human’s seat. Pages/docs are fine for reading; execution stays local.
+
+After editing: reload the host. Listings usually show server **`ask-question`**; tools include **`ask_multiple_choice`**, **`check_setup`**, **`setup_guide`**, **`record_platform_feedback`**.
 
 ### Environment variables (summary)
 
@@ -420,12 +456,14 @@ Or register the MCP and invoke `ask_multiple_choice` from the agent.
 
 | Symptom | Likely fix |
 |---------|------------|
-| Tool missing in client | Check `mcp.json` path; `uv` on `PATH`; reload MCP; run `check_setup` |
-| Dialog never appears | `check_setup` → fix `display` / `gtk_*`; `echo $DISPLAY`; smoke test |
+| Tool missing / server fails to start | Use **absolute** `uv` path (not bare `uv`); check REPO_ROOT; reload host; `check_setup` |
+| Dialog never appears | `check_setup` → fix `display` / `gtk_*`; `echo $DISPLAY`; ensure host inherits display (not headless/SSH without X) |
 | Hang / timeout | Human must click; or raise `timeout_sec`; check for off-screen dialog |
-| No speech | Expected if TTS URL unset; `setup_guide` topic `tts`; or `ASK_QUESTION_SPEAK=0` |
+| Speaks without TTS URL | Local Piper / `notify-voice.sh` present — expected; mute with `ASK_QUESTION_SPEAK=0` |
+| No speech | TTS URL unset and no local speak path; `setup_guide` topic `tts`; or mute env |
 | Mic never listens | STT URL unset — `setup_guide` topic `stt`; or `ASK_QUESTION_VOICE_ANSWER=0` |
 | Import / Gtk errors | Install Gtk4/Adw GI bindings; see `check_setup` failing checks |
+| Works in terminal, not from IDE | IDE PATH thinner than shell — absolute `uv`; restart IDE after install |
 
 ---
 

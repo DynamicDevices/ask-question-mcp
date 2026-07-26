@@ -1,8 +1,8 @@
-# Setup: voice services + Cursor MCP
+# Setup: voice services + MCP hosts
 
 Deep dive for **optional** TTS/STT and prefs. For **install + MCP registration
 + self-check + how agents must call the tool**, start with [README.md](README.md)
-(AI-oriented integration brief).
+(human quick start + AI integration brief).
 
 **Voice backend detail (Qwen3-TTS + faster-whisper):** [docs/VOICE-BACKENDS.md](docs/VOICE-BACKENDS.md).
 
@@ -20,7 +20,7 @@ operate; this repo does **not** hardcode private lab addresses.
 ## Architecture
 
 ```text
-Laptop (Cursor + Gtk dialog + PipeWire)
+Laptop (MCP host + Gtk dialog + PipeWire)
     │  MCP stdio: ask-question-mcp (uv)
     │  optional speak/listen over HTTP
     ▼
@@ -41,11 +41,14 @@ export ASK_QUESTION_VOICE_ANSWER=0
 
 ---
 
-## 1. Cursor MCP registration
+## 1. MCP registration (any stdio host)
+
+Prefer an **absolute** path to `uv` (`command -v uv`). GUI-launched apps
+often do not see `~/.local/bin` on `PATH`.
 
 ```json
 "ask-question": {
-  "command": "uv",
+  "command": "/home/YOU/.local/bin/uv",
   "args": [
     "run",
     "--directory",
@@ -59,7 +62,18 @@ export ASK_QUESTION_VOICE_ANSWER=0
 }
 ```
 
-Reload the Cursor window after editing MCP config.
+Omit `env` for text-only (click/type). Local Piper / `notify-voice.sh` may
+still speak if installed — set `ASK_QUESTION_SPEAK=0` for silence.
+
+| Host | Config path (typical) | Reload |
+|------|----------------------|--------|
+| **Cursor** | `~/.cursor/mcp.json` | Developer → Reload Window |
+| **Claude Desktop** (Linux) | `~/.config/Claude/claude_desktop_config.json` | Full quit / relaunch |
+| **Claude Desktop** (macOS) | `~/Library/Application Support/Claude/claude_desktop_config.json` | Full quit / relaunch |
+| Other stdio MCP clients | Product MCP settings | Per product |
+
+Same `mcpServers` / `command`+`args`+`env` shape. Process must inherit
+`DISPLAY`. Not a remote/HTTP MCP — see README [MCP client configuration](README.md#mcp-client-configuration).
 
 ### Tokens (optional)
 

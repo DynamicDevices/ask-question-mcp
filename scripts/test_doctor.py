@@ -34,6 +34,9 @@ def main() -> None:
     assert r["ready"]["text_mcq"] is True, r["checks"]
     if os.environ.get("DISPLAY", "").strip():
         assert r["ready"]["ui"] is True
+        opt_ids_ok = [o["id"] for o in r["offer_walkthrough"]["options"]]
+        assert opt_ids_ok[0] == "ui_only", opt_ids_ok
+        assert r["offer_walkthrough"]["recommended_id"] == "ui_only"
     else:
         opt_ids = [o["id"] for o in r["offer_walkthrough"]["options"]]
         assert "ui" in opt_ids
