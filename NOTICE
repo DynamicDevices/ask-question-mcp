@@ -1,0 +1,12 @@
+ask-question-mcp
+Copyright (C) 2026 Dynamic Devices Ltd
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+Bundled acknowledgement WAV samples under
+`src/ask_question_mcp/assets/acks/` are synthetic TTS output (style
+`charlie-t`) generated for this project and redistributed under the same
+license as the rest of the package.

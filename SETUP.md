@@ -1,0 +1,110 @@
+# Setup: voice services + Cursor MCP
+
+How to register the MCP in Cursor and (optionally) run TTS/STT backends.
+
+Dialogs work with **speak/listen disabled**. Voice needs HTTP services you
+operate; this repo does **not** hardcode private lab addresses.
+
+## Architecture
+
+```text
+Laptop (Cursor + Gtk dialog + PipeWire)
+    │  MCP stdio: ask-question-mcp (uv)
+    │  optional speak/listen over HTTP
+    ▼
+Your TTS host   :8200   (example)  — POST /tts, /tts/stream
+Your STT host   :8201   (example)  — POST /transcribe, GET /health
+```
+
+Reference implementations used in Dynamic Devices labs (separate repos /
+trees): Qwen3-TTS and faster-whisper HTTP wrappers under systemd — not
+required to use the MCP UI alone.
+
+Mute / offline:
+
+```bash
+export ASK_QUESTION_SPEAK=0
+export ASK_QUESTION_VOICE_ANSWER=0
+```
+
+---
+
+## 1. Cursor MCP registration
+
+```json
+"ask-question": {
+  "command": "uv",
+  "args": [
+    "run",
+    "--directory",
+    "/absolute/path/to/ask-question-mcp",
+    "ask-question-mcp"
+  ],
+  "env": {
+    "ASK_QUESTION_TTS_URL": "http://127.0.0.1:8200",
+    "ASK_QUESTION_STT_URL": "http://127.0.0.1:8201/transcribe"
+  }
+}
+```
+
+Reload the Cursor window after editing MCP config.
+
+### Tokens (optional)
+
+| Variable / path | Role |
+|-----------------|------|
+| `ASK_QUESTION_TTS_TOKEN` | Bearer for TTS |
+| `ASK_QUESTION_STT_TOKEN` | Bearer for STT (else TTS token) |
+| `ALEX_VOICE_SVC` / `ALEX_VOICE_TOKEN` | Local aliases for TTS URL / token |
+| `~/.config/ask-question-mcp/token` | File fallback (mode `600`) |
+| `~/.config/alex-voice/token` | Legacy file fallback |
+
+**Never commit tokens.** Prefer Bitwarden / your secret store for operators.
+
+---
+
+## 2. Guest / server TTS (example sketch)
+
+Expose an HTTP service that accepts JSON `{"text","style","seed"}` and returns
+WAV audio (and optionally SSE `/tts/stream`). Style default used by this MCP:
+`charlie-t` (`NOTIFY_VOICE_STYLE`).
+
+Ensure the service is reachable only on trusted networks or behind auth.
+
+---
+
+## 3. Guest / server STT (example sketch)
+
+Expose `POST /transcribe` (multipart WAV) and `GET /health`. Point
+`ASK_QUESTION_STT_URL` at the full transcribe URL.
+
+---
+
+## 4. Prefs and cache
+
+| Path | Purpose |
+|------|---------|
+| `~/.config/ask-question-mcp/prefs.json` | Optional volume / always_listen overrides |
+| `~/.cache/ask-question-mcp/` | Session IPC, ack/question WAV cache, voice-debug |
+
+Copy `prefs.example.json` only when diverging from shipped defaults.
+
+Bundled ack WAVs seed `~/.cache/ask-question-mcp/charlize-acks/v2/` on first
+use — no live TTS required for those phrases.
+
+---
+
+## 5. Env cheat sheet
+
+| Env | Default | Notes |
+|-----|---------|--------|
+| `ASK_QUESTION_TTS_URL` | *(empty)* | Required for live TTS |
+| `ASK_QUESTION_STT_URL` | *(empty)* | Required for voice answers |
+| `ASK_QUESTION_SPEAK` | on | `0` to mute |
+| `ASK_QUESTION_VOICE_ANSWER` | on when STT set | `0` to disable mic path |
+| `ASK_QUESTION_DUCK` | on | `0` disables media duck |
+| `ASK_QUESTION_SPEAK_VOLUME` / `ASK_QUESTION_ACK_VOLUME` | 0.60 / 0.55 | Linear gain |
+| `ASK_QUESTION_ALWAYS_LISTEN` | on | `0` = Listen button only |
+| `ASK_QUESTION_VOICE_DEBUG_WAV` | off | Keep debug WAVs only when `1` |
+
+See [DEPENDENCIES.md](DEPENDENCIES.md) for packages and more knobs.

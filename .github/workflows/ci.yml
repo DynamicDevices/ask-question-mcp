@@ -1,0 +1,63 @@
+# Public OSS CI — GitHub-hosted (fork-safe; lab self-hosted intentionally not used).
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Sync + unit tests
+        run: |
+          uv sync
+          uv run python scripts/test_match_transcript.py
+      - name: Import package
+        run: uv run python -c "import ask_question_mcp; print('ok')"
+
+  secrets-hygiene:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Block lab IPs and home paths in tracked text
+        run: |
+          set -euo pipefail
+          bad=$(git grep -I -nE '192\.168\.68\.55|/home/ajlennon|CF-Access-Client-Secret|X-API-Key:' -- \
+            ':!*.wav' ':!uv.lock' || true)
+          if [ -n "$bad" ]; then
+            echo "$bad"
+            echo "::error::Forbidden private path/IP/secret pattern in tree"
+            exit 1
+          fi
+          echo "hygiene ok"
+
+  sbom:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Generate CycloneDX SBOM from lockfile
+        run: |
+          set -euo pipefail
+          uv sync
+          uv export --format requirements-txt --no-hashes -o requirements-export.txt
+          uvx --from cyclonedx-bom cyclonedx-py requirements requirements-export.txt \
+            -o sbom.cdx.json --of JSON
+          test -s sbom.cdx.json
+          python3 -c "import json; d=json.load(open('sbom.cdx.json')); print(d.get('bomFormat'), len(d.get('components') or []))"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sbom-cyclonedx
+          path: sbom.cdx.json

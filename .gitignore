@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+.python-version
+# Local / secrets (never commit)
+prefs.json
+.env
+.env.*
+*.token
+token
+.secrets/
+sbom.json
+sbom.cdx.json

@@ -1,0 +1,618 @@
+"""Present MCQs via Gtk4/Adw list (native look, no type-to-filter).
+
+Zenity 4 ``--list`` always attaches a GtkSearchBar with key-capture on the
+column view, so typing filters the list even when the search entry is
+CSS-hidden. List choices therefore use ``gtk4_list_ask.py`` (system
+PyGObject). Freeform ``Something else`` / ``opens_entry`` options use
+``gtk4_entry_ask.py`` (type + Listen / STT); zenity ``--entry`` is fallback.
+
+Recommended options are listed first and pre-selected. Dangerous decisions
+get a red in-dialog title (Pango) plus ⚠ marks. Window title includes the
+raising agent/lane. Ack speechs are cached WAVs played synchronously.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+from typing import Any
+
+from ask_question_mcp.voice_acks import (
+    followed_recommendation,
+    read_ack_allowed,
+    resolve_agent,
+    snapshot_ack_allowed_and_invalidate,
+    speak_ack,
+    speak_async,
+    stop_speak,
+    window_title,
+)
+
+OTHER_IDS = frozenset({"other", "something_else", "something-else"})
+OTHER_LABEL = "Something else…"
+
+# Standalone Gtk4 dialogs (must run under system python with gi/Adw).
+_GTK4_LIST_ASK = Path(__file__).resolve().with_name("gtk4_list_ask.py")
+_GTK4_ENTRY_ASK = Path(__file__).resolve().with_name("gtk4_entry_ask.py")
+def _resolve_gtk_python() -> str:
+    """System Python with gi/Adw — not the MCP uv venv."""
+    env = os.environ.get("ASK_QUESTION_GTK_PYTHON", "").strip()
+    candidates = [env, "/usr/bin/python3", shutil.which("python3") or ""]
+    for c in candidates:
+        if c and Path(c).is_file():
+            return c
+    raise RuntimeError(
+        "No Gtk-capable python3 found. Set ASK_QUESTION_GTK_PYTHON "
+        "or install python3 with PyGObject/Adw."
+    )
+
+
+_SYSTEM_PYTHON = "/usr/bin/python3"  # resolved at call time via _resolve_gtk_python
+
+
+class AskCancelled(Exception):
+    """User closed the dialog or pressed Cancel.
+
+    Optional ``voice`` carries STT attempts so the agent chat still sees what
+    was heard even when the dialog was cancelled.
+    """
+
+    def __init__(
+        self,
+        reason: str = "user cancelled",
+        *,
+        voice: dict[str, Any] | None = None,
+    ) -> None:
+        super().__init__(reason)
+        self.reason = reason
+        self.voice = voice or {}
+
+
+def _truthy_env(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _falsy_env(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in {"0", "false", "no", "off"}
+
+
+def _speak_script(*, question: str, dangerous: bool) -> str:
+    """Plain words for TTS / Piper — no emoji, no preachy preamble."""
+    del dangerous  # visual danger chrome only; don't lecture in the voice line
+    return " ".join(question.strip().split())
+
+
+def _entry_text(
+    *,
+    zenity: str,
+    display: str,
+    title: str,
+    prompt: str,
+    timeout_sec: int,
+    initial_text: str = "",
+    auto_listen: bool = False,
+    voice_enabled: bool = True,
+) -> tuple[str, dict[str, Any]]:
+    """Open freeform edit box; prefer Gtk (type + Listen), else zenity.
+
+    Returns ``(text, voice_meta)``.
+    """
+    env = {**os.environ, "DISPLAY": display}
+    if _GTK4_ENTRY_ASK.is_file():
+        try:
+            gtk_py = _resolve_gtk_python()
+        except RuntimeError:
+            gtk_py = ""
+    else:
+        gtk_py = ""
+    if gtk_py and _GTK4_ENTRY_ASK.is_file():
+        payload = {
+            "title": title,
+            "prompt": prompt,
+            "initial_text": initial_text or "",
+            "auto_listen": bool(auto_listen),
+            "timeout_sec": timeout_sec,
+            "voice_enabled": bool(voice_enabled),
+        }
+        try:
+            proc = subprocess.run(
+                [gtk_py, str(_GTK4_ENTRY_ASK)],
+                input=json.dumps(payload),
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=timeout_sec + 30 if timeout_sec > 0 else None,
+                env=env,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise AskCancelled("entry timed out") from exc
+        raw = (proc.stdout or "").strip()
+        if raw:
+            try:
+                data = json.loads(raw)
+            except json.JSONDecodeError as exc:
+                raise AskCancelled(f"bad gtk4 entry output: {raw!r}") from exc
+            voice_meta = (
+                data.get("voice") if isinstance(data.get("voice"), dict) else {}
+            )
+            if data.get("cancelled"):
+                raise AskCancelled(
+                    str(data.get("reason") or "entry cancelled"),
+                    voice=voice_meta,
+                )
+            text = str(data.get("text") or "").strip()
+            if not text:
+                raise AskCancelled("empty freeform entry", voice=voice_meta)
+            return text, voice_meta
+        # Fall through to zenity if gtk produced nothing.
+
+    cmd = [
+        zenity,
+        "--entry",
+        "--modal",
+        "--title",
+        title,
+        "--text",
+        prompt,
+        "--width",
+        "520",
+        "--ok-label",
+        "OK",
+        "--cancel-label",
+        "Cancel",
+    ]
+    if initial_text:
+        cmd.extend(["--entry-text", initial_text])
+    if timeout_sec > 0:
+        cmd.extend(["--timeout", str(timeout_sec)])
+    try:
+        proc = subprocess.run(
+            cmd,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=timeout_sec + 5 if timeout_sec > 0 else None,
+            env=env,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise AskCancelled("entry timed out") from exc
+    if proc.returncode != 0:
+        raise AskCancelled("entry cancelled")
+    text = (proc.stdout or "").strip()
+    if not text:
+        raise AskCancelled("empty freeform entry")
+    return text, {}
+
+
+def _ask_list(
+    *,
+    display: str,
+    question: str,
+    ids: list[str],
+    labels: dict[str, str],
+    preselect: set[str],
+    danger_ids: set[str],
+    dangerous: bool,
+    allow_multiple: bool,
+    allow_other: bool,
+    title: str,
+    timeout_sec: int,
+    speak_enabled: bool = False,
+    speak_text: str = "",
+) -> tuple[list[str], dict[str, Any], str | None]:
+    """Gtk4/Adw radiolist/checklist — no SearchBar, so typing does not filter.
+
+    Returns ``(chosen_ids, voice_meta, freeform_text_or_None)``. When the Gtk
+    dialog already confirmed a spoken freeform answer, ``freeform_text`` is set
+    and the zenity entry step is skipped.
+    """
+    if not _GTK4_LIST_ASK.is_file():
+        raise RuntimeError(f"missing gtk4 list dialog: {_GTK4_LIST_ASK}")
+    gtk_py = _resolve_gtk_python()
+
+    from ask_question_mcp.voice_answer import voice_answer_enabled
+
+    speak_on = bool(speak_enabled and speak_text.strip())
+    payload = {
+        "question": question.strip(),
+        "title": title,
+        "ids": ids,
+        "labels": labels,
+        "preselect": sorted(preselect),
+        "recommended_ids": sorted(preselect),
+        "danger_ids": sorted(danger_ids),
+        "dangerous": bool(dangerous or danger_ids),
+        "allow_multiple": allow_multiple,
+        "allow_other": bool(allow_other),
+        "timeout_sec": timeout_sec,
+        "speak_pgid_file": str(
+            __import__(
+                "ask_question_mcp.session_ipc", fromlist=["speak_pgid_path"]
+            ).speak_pgid_path()
+        ),
+        "speak_enabled": speak_on,
+        "speak_text": speak_text.strip(),
+        # MCP / uv venv python — gtk runs under system python without the package.
+        "speak_python": sys.executable if speak_on else "",
+        "voice_answer": bool(
+            speak_on
+            and not allow_multiple
+            and voice_answer_enabled(speak_enabled=True)
+        ),
+    }
+    env = {**os.environ, "DISPLAY": display}
+    try:
+        proc = subprocess.run(
+            [gtk_py, str(_GTK4_LIST_ASK)],
+            input=json.dumps(payload),
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=timeout_sec + 15 if timeout_sec > 0 else None,
+            env=env,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise AskCancelled("gtk4 list timed out") from exc
+
+    raw = (proc.stdout or "").strip()
+    if not raw:
+        err = (proc.stderr or "").strip()
+        raise AskCancelled(err or "gtk4 list produced no output")
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise AskCancelled(f"bad gtk4 list output: {raw!r}") from exc
+
+    voice_meta = data.get("voice") if isinstance(data.get("voice"), dict) else {}
+    freeform_text = data.get("freeform_text")
+    if isinstance(freeform_text, str):
+        freeform_text = freeform_text.strip() or None
+    else:
+        freeform_text = None
+
+    if data.get("cancelled"):
+        raise AskCancelled(
+            str(data.get("reason") or "user cancelled"),
+            voice=voice_meta,
+        )
+
+    chosen = [str(x) for x in (data.get("ids") or [])]
+    if not chosen:
+        raise AskCancelled("empty selection")
+    bad = [c for c in chosen if c not in labels]
+    if bad:
+        raise AskCancelled(f"unexpected ids: {bad!r}")
+    if not allow_multiple:
+        return chosen[:1], voice_meta, freeform_text
+    return chosen, voice_meta, freeform_text
+
+
+def _opt_truthy(value: Any) -> bool:
+    if value is True:
+        return True
+    if isinstance(value, str) and value.strip().lower() in {"1", "true", "yes", "on"}:
+        return True
+    return False
+
+
+def ask_zenity(
+    question: str,
+    options: list[dict[str, Any]],
+    *,
+    recommended_id: str | None = None,
+    recommended_ids: list[str] | None = None,
+    allow_multiple: bool = False,
+    allow_other: bool = True,
+    dangerous: bool = False,
+    speak: bool = True,
+    title: str = "Decide",
+    agent: str | None = None,
+    timeout_sec: int = 300,
+    entry_seed: str | None = None,
+) -> dict[str, Any]:
+    """Block until the user picks. Mark recommended only in option labels.
+
+    Options may include ``"dangerous": true`` to flag that row.
+    Options may include ``"opens_entry": true`` so that choice immediately
+    opens the type box (type + Listen) instead of returning the label alone;
+    pair with ``"auto_listen": true`` to start mic on open (e.g. Re-record).
+    ``entry_seed`` prefills the edit box (voice-turn transcript confirm).
+    Pass ``dangerous=True`` to flag the whole decision.
+    ``speak`` defaults True (local TTS). Pass ``speak=False`` or set env
+    ``ASK_QUESTION_SPEAK=0`` to mute.
+    ``agent`` (or LANE.id / ``ASK_QUESTION_AGENT``) is prefixed in the window
+    title so multi-agent sessions stay distinguishable.
+    """
+    if not question.strip():
+        raise ValueError("question must be non-empty")
+    if len(options) < 1 or len(options) > 8:
+        raise ValueError("options must have between 1 and 8 entries")
+
+    from ask_question_mcp.session_ipc import ensure_session, prune_stale_sessions
+
+    ensure_session()
+    prune_stale_sessions()
+
+    if _falsy_env("ASK_QUESTION_SPEAK"):
+        do_speak = False
+    elif _truthy_env("ASK_QUESTION_SPEAK"):
+        do_speak = True
+    else:
+        do_speak = bool(speak)
+
+    who = resolve_agent(agent)
+
+    ids: list[str] = []
+    labels: dict[str, str] = {}
+    danger_ids: set[str] = set()
+    opens_entry_ids: set[str] = set()
+    auto_listen_ids: set[str] = set()
+    for i, opt in enumerate(options):
+        oid = str(opt.get("id") or "").strip()
+        label = str(opt.get("label") or "").strip()
+        if not oid or not label:
+            raise ValueError(f"options[{i}] needs non-empty id and label")
+        if oid in labels:
+            raise ValueError(f"duplicate option id: {oid}")
+        ids.append(oid)
+        labels[oid] = label
+        flag = opt.get("dangerous")
+        if flag is True or (
+            isinstance(flag, str) and flag.strip().lower() in {"1", "true", "yes"}
+        ):
+            danger_ids.add(oid)
+        if _opt_truthy(opt.get("opens_entry")):
+            opens_entry_ids.add(oid)
+        if _opt_truthy(opt.get("auto_listen")):
+            auto_listen_ids.add(oid)
+            opens_entry_ids.add(oid)
+
+    if allow_other and not (OTHER_IDS & set(ids)):
+        if len(ids) >= 8:
+            raise ValueError("no room to append 'other' — pass fewer options")
+        ids.append("other")
+        labels["other"] = OTHER_LABEL
+
+    if len(ids) < 2:
+        raise ValueError("need at least 2 options (after allow_other)")
+
+    seed = (entry_seed or "").strip()
+    entry_ids = set(opens_entry_ids) | (OTHER_IDS & set(ids))
+
+    preselect: set[str] = set()
+    if recommended_ids:
+        for rid in recommended_ids:
+            if rid not in labels:
+                raise ValueError(f"recommended_ids entry {rid!r} not in options")
+            preselect.add(rid)
+    if recommended_id is not None:
+        if recommended_id not in labels:
+            raise ValueError(f"recommended_id {recommended_id!r} not in options")
+        preselect.add(recommended_id)
+
+    other_tail = [i for i in ids if i in OTHER_IDS]
+    core = [i for i in ids if i not in OTHER_IDS]
+    if preselect:
+        core = [i for i in core if i in preselect] + [
+            i for i in core if i not in preselect
+        ]
+    elif not allow_multiple and core:
+        preselect.add(core[0])
+    ids = core + other_tail
+
+    zenity = shutil.which("zenity")
+    if not zenity:
+        raise RuntimeError("zenity not found on PATH")
+
+    display = os.environ.get("DISPLAY")
+    if not display:
+        raise RuntimeError("DISPLAY unset — need a desktop session")
+
+    whole_danger = bool(dangerous) or bool(danger_ids)
+    win_title = window_title(agent=who, title=title, dangerous=whole_danger)
+    speak_line = _speak_script(question=question.strip(), dangerous=whole_danger)
+
+    # Hold duck for the whole MCQ: question → listen → ack. Stops Spotify
+    # blasting between speech finishing and the mic opening.
+    duck_mod = None
+    duck_held = False
+    try:
+        from ask_question_mcp import audio_duck as duck_mod
+    except ImportError:
+        duck_mod = None
+    if duck_mod is not None:
+        try:
+            duck_mod.acquire_duck_hold(ramp=True)
+            duck_held = True
+        except Exception:
+            duck_held = False
+
+    def _release_session_duck() -> None:
+        nonlocal duck_held
+        if duck_held and duck_mod is not None:
+            duck_held = False
+            try:
+                duck_mod.release_duck_hold(ramp=True, force=True)
+            except Exception:
+                pass
+        # Always gentle-flush A2DP in case a listen left HFP pending.
+        try:
+            from ask_question_mcp import voice_answer as _va
+
+            _va.flush_a2dp_restore(force=True)
+        except Exception:
+            try:
+                import voice_answer as _va  # type: ignore
+
+                _va.flush_a2dp_restore(force=True)
+            except Exception:
+                pass
+
+    if do_speak:
+        speak_async(speak_line)
+
+    try:
+        chosen_ids, voice_meta, voice_freeform = _ask_list(
+            display=display,
+            question=question.strip(),
+            ids=ids,
+            labels=labels,
+            preselect=preselect,
+            danger_ids=danger_ids,
+            dangerous=whole_danger,
+            allow_multiple=allow_multiple,
+            allow_other=allow_other,
+            title=win_title,
+            timeout_sec=timeout_sec,
+            speak_enabled=do_speak,
+            speak_text=speak_line,
+        )
+    except AskCancelled:
+        # Cancel / timeout / close — cut question audio immediately.
+        if read_ack_allowed() is None:
+            snapshot_ack_allowed_and_invalidate()
+        stop_speak()
+        _release_session_duck()
+        raise
+
+    # Answered: stop residual question playback before ack / freeform entry.
+    # Gtk already snapshotted speak.ack_ok at click time (generation bump).
+    allow_ack = read_ack_allowed()
+    if allow_ack is None:
+        allow_ack = snapshot_ack_allowed_and_invalidate()
+    stop_speak()
+
+    rec_kw = {
+        "recommended_id": recommended_id,
+        "recommended_ids": recommended_ids,
+    }
+
+    def _with_voice(payload: dict[str, Any]) -> dict[str, Any]:
+        meta = dict(voice_meta) if voice_meta else {}
+        if not meta:
+            # Fallback when gtk stdout lacked voice (or MCP process was stale).
+            try:
+                from ask_question_mcp.session_ipc import (
+                    voice_last_mirror_path,
+                    voice_last_path,
+                )
+
+                side = voice_last_path()
+                mirror = voice_last_mirror_path()
+                for path in (side, mirror):
+                    if path.is_file():
+                        meta = json.loads(path.read_text(encoding="utf-8"))
+                        break
+            except (OSError, json.JSONDecodeError):
+                meta = {}
+        if meta:
+            payload["voice"] = meta
+        return payload
+
+    def _open_entry(*, auto_listen: bool) -> str:
+        nonlocal voice_meta
+        text, entry_voice = _entry_text(
+            zenity=zenity,
+            display=display,
+            title=win_title,
+            prompt="Type or Listen your answer — Ctrl+Enter to OK:",
+            timeout_sec=timeout_sec,
+            initial_text=seed,
+            auto_listen=auto_listen,
+            voice_enabled=True,
+        )
+        if entry_voice:
+            voice_meta = {**(voice_meta or {}), **entry_voice}
+        return text
+
+    try:
+        if allow_multiple:
+            freeform_text: str | None = None
+            out_ids: list[str] = []
+            out_labels: list[str] = []
+            for cid in chosen_ids:
+                if cid in entry_ids:
+                    if voice_freeform:
+                        freeform_text = voice_freeform
+                    else:
+                        freeform_text = _open_entry(auto_listen=cid in auto_listen_ids)
+                    out_ids.append(cid)
+                    out_labels.append(freeform_text)
+                else:
+                    out_ids.append(cid)
+                    out_labels.append(labels[cid])
+            result: dict[str, Any] = {
+                "ids": out_ids,
+                "labels": out_labels,
+                "cancelled": False,
+                "allow_multiple": True,
+                "dangerous": whole_danger,
+                "agent": who,
+            }
+            if freeform_text is not None:
+                result["freeform"] = True
+                result["freeform_text"] = freeform_text
+            if do_speak and allow_ack:
+                speak_ack(
+                    followed_recommendation=followed_recommendation(
+                        out_ids, **rec_kw
+                    )
+                )
+            return _with_voice(result)
+
+        chosen_id = chosen_ids[0] if chosen_ids else ""
+        if chosen_id not in labels:
+            raise AskCancelled(f"unexpected selection: {chosen_id!r}")
+
+        if chosen_id in entry_ids:
+            # Prefer text already captured in the list dialog (inline entry or
+            # spoken freeform) — avoids a second window / extra clicks.
+            if voice_freeform:
+                freeform_text = voice_freeform
+            else:
+                freeform_text = _open_entry(auto_listen=chosen_id in auto_listen_ids)
+            if do_speak and allow_ack:
+                speak_ack(
+                    followed_recommendation=followed_recommendation(
+                        [chosen_id], **rec_kw
+                    )
+                )
+            return _with_voice(
+                {
+                    "id": chosen_id,
+                    "label": freeform_text,
+                    "cancelled": False,
+                    "allow_multiple": False,
+                    "freeform": True,
+                    "freeform_text": freeform_text,
+                    "dangerous": whole_danger,
+                    "agent": who,
+                }
+            )
+
+        if do_speak and allow_ack:
+            speak_ack(
+                followed_recommendation=followed_recommendation(
+                    [chosen_id], **rec_kw
+                )
+            )
+        return _with_voice(
+            {
+                "id": chosen_id,
+                "label": labels[chosen_id],
+                "cancelled": False,
+                "allow_multiple": False,
+                "dangerous": whole_danger,
+                "agent": who,
+            }
+        )
+    finally:
+        _release_session_duck()
+
+
+def result_json(payload: dict[str, Any]) -> str:
+    return json.dumps(payload, ensure_ascii=False)
