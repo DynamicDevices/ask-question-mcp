@@ -28,7 +28,7 @@ Linux uses Gtk4/Adw; Windows Phase 1 uses tkinter (text-only).
 |--|--|
 | **Demo** | [YouTube — ask-question-mcp in action](https://www.youtube.com/watch?v=5wVKCIXAfi4) |
 | **License** | [GPL-3.0-or-later](LICENSE) ([NOTICE](NOTICE)) — use at your own risk |
-| **Maintainers** | [MAINTAINERS.md](MAINTAINERS.md) |
+| **Maintainers** | Alex Lennon · Anthony · **Jack Ghafari** (Claude Code host) — [MAINTAINERS.md](MAINTAINERS.md) |
 | **Platform** | Linux (Gtk4/Adw) · **Windows Phase 1** (tkinter text-only) — [tested matrix](#tested-platforms) |
 | **Transport** | MCP over **stdio** (Cursor, Claude Code, Claude Desktop–style `mcpServers` — not GitHub Pages / not remote HTTP) |
 | **Voice** | Optional; off until TTS/STT URLs set — [docs/VOICE-BACKENDS.md](docs/VOICE-BACKENDS.md) |
@@ -218,6 +218,10 @@ Optional voice (omit `env` for text-only):
 | **Windows** | Use absolute `uv.exe` and Windows-style `--directory` path; see [Windows quick start](#windows-cursor--text-only-phase-1--for-anthony-and-other-win-users) |
 
 ### Claude Code
+
+**Owner:** [@jackghx](https://github.com/jackghx) (Jack Ghafari) — please keep this
+section accurate and help verify the Claude Code row in
+[Tested platforms](#tested-platforms).
 
 #### CLI (recommended)
 
@@ -485,7 +489,7 @@ this table). See [CONTRIBUTING.md](CONTRIBUTING.md).
 | Distro / desktop | Audio | MCP host | UI dialog | Speak / duck | Notes | Status |
 |------------------|-------|----------|-----------|--------------|-------|--------|
 | **Ubuntu 24.04** + GNOME (Classic) | PipeWire (+ pulse compat) | Cursor | Yes | Yes | x86_64; Gtk4 + Adw GI; maintainer daily driver | **Verified** (2026-07) |
-| Any Linux desktop (as above) | PipeWire | **Claude Code** | — | — | Stdio transport; same Gtk requirements as Cursor | **Not yet reported** |
+| Any Linux desktop (as above) | PipeWire | **Claude Code** | — | — | Stdio transport; same Gtk requirements as Cursor. Owner: [@jackghx](https://github.com/jackghx) | **Not yet reported** (Jack — please verify) |
 | Debian / Ubuntu (other) | PipeWire | — | — | — | Apt packages match [DEPENDENCIES.md](DEPENDENCIES.md); likely fine | **Not yet reported** |
 | Fedora | PipeWire | — | — | — | See DEPENDENCIES sketch (`python3-gobject`, `gtk4`, `libadwaita`) | **Not yet reported** |
 | Arch | PipeWire | — | — | — | See DEPENDENCIES sketch | **Not yet reported** |
