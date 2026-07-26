@@ -1,8 +1,10 @@
 """Duck other Pulse/PipeWire sink-inputs while MCQ speech plays.
 
-Ramps other streams (Spotify, Brave, etc.) down before question audio, then ramps
-back up after — both ends soft so the cut is not jarring. State is file-backed
-so a killed playback child still restores via ``stop_speak`` / Gtk kill path.
+Ramps *other* playing streams down before question audio, then ramps them
+back up after — both ends soft so the cut is not jarring. Selection is
+deny-list only (skip our ``pw-play`` / ``paplay`` / …); any other
+sink-input is ducked. State is file-backed so a killed playback child still
+restores via ``stop_speak`` / Gtk kill path.
 """
 
 from __future__ import annotations
@@ -112,7 +114,7 @@ def _list_sink_inputs() -> list[dict[str, Any]]:
             idx = int(block.splitlines()[0].strip().split()[0])
         except (ValueError, IndexError):
             continue
-        # Prefer Pulse volume integer (65536 = 100%). Spotify often uses aux0/aux1.
+        # Prefer Pulse volume integer (65536 = 100%). Some apps use aux0/aux1;
         # pw-play is typically mono.
         vols = re.findall(
             r"Volume:.*?(?:front-left|aux0):\s*(\d+).*?(?:front-right|aux1):\s*(\d+)",
@@ -287,7 +289,7 @@ def duck_other_audio(*, ramp: bool = True) -> bool:
                 "ducked_left": ducked_l,
                 "ducked_right": ducked_r,
                 # Identity for rematch when PipeWire recreates the sink-input
-                # (Brave/Spotify often get a new index mid-MCQ).
+                # (new index mid-MCQ is common).
                 "binary": entry.get("binary") or "",
                 "name": entry.get("name") or "",
             }
@@ -314,8 +316,8 @@ def duck_other_audio(*, ramp: bool = True) -> bool:
 def refresh_duck(*, ramp: bool = False) -> bool:
     """Duck any *new* media sink-inputs while a hold is already active.
 
-    Profile flips (A2DP→HFP) often recreate Spotify/Brave streams at full
-    volume on speakers; call this after parking/switching so the blip dies.
+    Profile flips (A2DP→HFP) often recreate app streams at full volume on
+    speakers; call this after parking/switching so the blip dies.
     """
     if not _ENABLED or _read_hold() <= 0:
         return False
@@ -416,7 +418,7 @@ def _resolve_restore_targets(
             e for e in by_id.get(key, []) if int(e["index"]) not in used_indexes
         ]
         if not candidates:
-            # Binary-only fallback (Brave name sometimes changes).
+            # Binary-only fallback (application.name can change).
             bin_only = key[0]
             if bin_only:
                 candidates = [
@@ -471,7 +473,7 @@ def _write_hold(n: int) -> None:
 def acquire_duck_hold(*, ramp: bool = True) -> bool:
     """Nestable duck: first hold ducks media; further holds just increment.
 
-    Use around listen windows so Spotify/Brave stay quiet after question audio
+    Use around listen windows so other apps stay quiet after question audio
     finishes and while the mic is open. Pair with ``release_duck_hold``.
     File-locked so parallel agents do not corrupt hold/state.
     """
@@ -510,8 +512,8 @@ def restore_other_audio(*, ramp: bool = True, force: bool = False) -> None:
     """Restore ducked streams; optional linear ramp over ASK_QUESTION_DUCK_RAMP_MS.
 
     Remembers application binary/name so restore still works if PipeWire
-    renumbers the sink-input (common for Brave). State is only cleared after
-    a restore attempt — leftover streams stay on disk for a retry.
+    renumbers the sink-input. State is only cleared after a restore attempt —
+    leftover streams stay on disk for a retry.
 
     If a listen/session ``acquire_duck_hold`` is active, restore is a no-op
     unless ``force=True`` (so media stays ducked while the mic is open).
@@ -528,7 +530,7 @@ def restore_other_audio(*, ramp: bool = True, force: bool = False) -> None:
     live = _list_sink_inputs()
     targets = _resolve_restore_targets(streams, live)
     if not targets:
-        # Nothing live to restore yet (e.g. Brave closed the stream). Keep
+        # Nothing live to restore yet (app closed the stream). Keep
         # state briefly so a quick retry / next speak stop can still unduck
         # if the app recreates the input — but drop after one empty pass so
         # we do not sticky-duck forever. Caller may invoke restore again.
@@ -726,7 +728,7 @@ def play_with_duck(play_fn) -> bool:
 
     If a session hold is already active (MCQ open), do **not** increment the
     hold counter — killed TTS children used to leave orphaned nest counts
-    (Spotify stuck quiet). Session owner restores at dialog end.
+    (other apps stuck quiet). Session owner restores at dialog end.
     """
     already = _read_hold() > 0
     if already:

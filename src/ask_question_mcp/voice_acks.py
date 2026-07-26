@@ -32,7 +32,7 @@ ACK_DELAY_S = 0.75
 
 # Playback gain under media duck — shipped defaults (prefs.example.json).
 # Env / prefs.json override. Prefer ``pw-play``; never ffplay (BT/level trouble).
-# Calibrate only with session duck held (Spotify restore ≠ speech gain).
+# Calibrate only with session duck held (media restore ≠ speech gain).
 _DEFAULT_SPEAK_VOLUME = 0.60
 _DEFAULT_ACK_VOLUME = 0.55
 

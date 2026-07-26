@@ -986,7 +986,12 @@ def _pick_a2dp_sink_name(card: str) -> str | None:
 
 
 def _move_media_to_sink(sink_name: str) -> int:
-    """Move Spotify / music sink-inputs onto ``sink_name``. Returns moves count."""
+    """Move other apps' sink-inputs onto ``sink_name``. Returns moves count.
+
+    Generic: every sink-input except our TTS/mic helpers (same deny-list idea
+    as ``audio_duck``). Do not special-case browser/music app names — desktops
+    differ (Firefox, Edge, mpv, Jellyfin, …).
+    """
     pactl = _pactl()
     if not pactl or not sink_name:
         return 0
@@ -1005,7 +1010,7 @@ def _move_media_to_sink(sink_name: str) -> int:
     blob = ""
     for line in (out.stdout or "").splitlines():
         if line.startswith("Sink Input #"):
-            if idx is not None and _sink_input_is_media(blob):
+            if idx is not None and _sink_input_is_other_media(blob):
                 try:
                     r = subprocess.run(
                         [pactl, "move-sink-input", idx, sink_name],
@@ -1022,7 +1027,7 @@ def _move_media_to_sink(sink_name: str) -> int:
             blob = ""
             continue
         blob += line + "\n"
-    if idx is not None and _sink_input_is_media(blob):
+    if idx is not None and _sink_input_is_other_media(blob):
         try:
             r = subprocess.run(
                 [pactl, "move-sink-input", idx, sink_name],
@@ -1038,7 +1043,11 @@ def _move_media_to_sink(sink_name: str) -> int:
     return moved
 
 
-def _sink_input_is_media(block: str) -> bool:
+def _sink_input_is_other_media(block: str) -> bool:
+    """True = move this stream with media (BT A2DP restore).
+
+    Deny-list only our players / speech helpers. Never allow-list app brands.
+    """
     b = block.casefold()
     if any(
         skip in b
@@ -1046,26 +1055,18 @@ def _sink_input_is_media(block: str) -> bool:
             'application.process.binary = "paplay"',
             'application.process.binary = "pw-play"',
             'application.process.binary = "ffplay"',
+            'application.process.binary = "aplay"',
             "speech-dispatcher",
             "notify-voice",
+            "ask-question-mcp",
+            "ask_question_mcp",
         )
     ):
         return False
-    return any(
-        tok in b
-        for tok in (
-            "spotify",
-            'media.role = "music"',
-            'media.category = "playback"',
-            "brave",
-            "firefox",
-            "chrome",
-            "chromium",
-            "vlc",
-            "mpv",
-            "rhythmbox",
-        )
-    )
+    # Skip muted / already-corked — nothing useful to move.
+    if re.search(r"^[\t ]*mute:\s*yes", b, flags=re.M):
+        return False
+    return True
 
 
 def _bt_soft_reconnect(card: str, *, settle_sec: float = 4.0) -> bool:
@@ -1123,7 +1124,7 @@ def flush_a2dp_restore(*, force: bool = False) -> dict[str, Any] | None:
 
 
 def restore_a2dp_playback(*, cards: list[str] | None = None) -> dict[str, Any]:
-    """Put BT cards back on A2DP and move Spotify/media onto that sink.
+    """Put BT cards back on A2DP and move other media onto that sink.
 
     Gentle by default: set A2DP profile + move streams. Does **not** set the
     card to ``off`` or soft-reconnect (those were breaking XM6 after the first
@@ -1308,7 +1309,7 @@ def ensure_bluetooth_capture_source(
     """Prefer a BT mic source; optionally flip A2DP → HFP briefly.
 
     Returns ``(node_name_or_None, restore_fn)``. ``restore_fn`` always tries to
-    put the headset back on A2DP and reattach Spotify/media (Block B).
+    put the headset back on A2DP and reattach media streams (Block B).
 
     If the HFP mic is present but silent (empty SCO transport / near-zero
     peak), fall back to the built-in laptop mic so listen still works.
@@ -1969,7 +1970,7 @@ def listen_transcribe_match(
         write_voice_debug(result, labels=labels)
         return result
 
-    # Keep Spotify/Brave ducked for the whole mic window (not only TTS).
+    # Keep other apps ducked for the whole mic window (not only TTS).
     duck_mod = None
     try:
         import audio_duck as duck_mod  # type: ignore

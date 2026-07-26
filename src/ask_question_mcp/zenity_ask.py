@@ -480,7 +480,7 @@ def ask_zenity(
     win_title = window_title(agent=who, title=title, dangerous=whole_danger)
     speak_line = _speak_script(question=question.strip(), dangerous=whole_danger)
 
-    # Hold duck for the whole MCQ: question → listen → ack. Stops Spotify
+    # Hold duck for the whole MCQ: question → listen → ack. Stops other apps
     # blasting between speech finishing and the mic opening.
     # Text-only: never duck — and heal any orphaned hold left by a killed TTS child.
     duck_mod = None

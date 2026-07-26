@@ -511,7 +511,7 @@ def main() -> int:
 
         def after_present() -> bool:
             def prep() -> None:
-                # Duck Spotify/Brave for prompt + whole listen window.
+                # Duck other apps for prompt + whole listen window.
                 _duck_acquire()
                 if speak_prompt and prompt:
                     GLib.idle_add(set_status, "idle", "Playing prompt…")

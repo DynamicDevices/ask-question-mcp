@@ -27,7 +27,7 @@ _PREFS_PATH = Path.home() / ".config" / "ask-question-mcp" / "prefs.json"
 
 # Packaged defaults for new installs / other users (no prefs.json required).
 # Tuned 2026-07-26 under session duck + pw-play + flat-volumes boost; do not
-# calibrate against unducked Spotify blips.
+# calibrate against unducked media blips.
 _DEFAULTS: dict[str, Any] = {
     "always_listen": True,
     "speak_volume": 0.60,

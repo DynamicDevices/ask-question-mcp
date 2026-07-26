@@ -63,7 +63,7 @@ def _stop_question_audio(pgid_file: str | None) -> None:
             except (OSError, ProcessLookupError):
                 pass
     # Do not force-unduck here: zenity holds duck across speak → listen → ack.
-    # Force restore mid-dialog was the Spotify volume blip between question
+    # Force restore mid-dialog was the media volume blip between question
     # end and mic start.
 
 
