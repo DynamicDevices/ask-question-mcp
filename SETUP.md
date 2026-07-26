@@ -83,8 +83,10 @@ Windows Phase 1 is text-only (tkinter); omit TTS/STT `env` entries.
 
 ```bash
 claude mcp add --transport stdio ask-question -- \
-  uv run --directory /absolute/path/to/ask-question-mcp ask-question-mcp
+  /absolute/path/to/uv run --directory /absolute/path/to/ask-question-mcp ask-question-mcp
 ```
+
+Use the absolute `uv` path (`command -v uv`) here as well.
 
 Or add to `.mcp.json` at your project root (same JSON as Cursor).
 Verify with `/mcp` inside Claude Code.
