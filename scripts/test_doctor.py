@@ -18,7 +18,11 @@ def main() -> None:
 
     r = doctor_report(want_voice=False)
     assert "audio_mode" in r and "capabilities" in r
-    assert r["ready"].get("text_mcq") is True or r["ready"]["ui"] is True
+    assert "text_mcq" in r["ready"]
+    # Headless CI has no DISPLAY — ui may be false; software readiness is enough.
+    assert r["ready"]["text_mcq"] is True, r["checks"]
+    if os.environ.get("DISPLAY", "").strip():
+        assert r["ready"]["ui"] is True
 
     caps = resolve_voice_capabilities(speak_requested=True)
     assert caps.tts_configured is False
@@ -26,7 +30,7 @@ def main() -> None:
     assert caps.listen_active is False
     joined = " ".join(caps.notes)
     assert "STT" in joined or "STT_URL" in joined
-    assert "TTS" in joined or caps.speak_active  # flagged or local speak
+    assert "TTS" in joined or caps.speak_active
 
     os.environ["ASK_QUESTION_SPEAK"] = "0"
     caps2 = resolve_voice_capabilities(speak_requested=False)

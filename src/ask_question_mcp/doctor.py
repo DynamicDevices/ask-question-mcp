@@ -298,10 +298,9 @@ def summarize(checks: list[Check]) -> dict[str, Any]:
     fails = [c for c in checks if c.severity == "fail"]
     warns = [c for c in checks if c.severity == "warn"]
     ok = not fails
-    ready_ui = not any(
-        c.id in {"display", "gtk_python", "gtk_script"} and c.severity == "fail"
-        for c in checks
-    )
+    soft_fail_ids = {c.id for c in checks if c.severity == "fail"}
+    ready_software = not soft_fail_ids.intersection({"gtk_python", "gtk_script"})
+    ready_ui = ready_software and "display" not in soft_fail_ids
     ready_tts = any(c.id == "tts_url" and c.severity == "ok" for c in checks)
     ready_stt = any(c.id == "stt_url" and c.severity == "ok" for c in checks)
 
@@ -316,8 +315,8 @@ def summarize(checks: list[Check]) -> dict[str, Any]:
     if caps.audio_mode == "text_only":
         next_actions.insert(
             0,
-            "Text-only MCQ is available now (click/type). Optional: setup_guide "
-            "topic tts/stt for voice.",
+            "Text-only MCQ is available when DISPLAY+Gtk are ready (click/type). "
+            "Optional: setup_guide topic tts/stt for voice.",
         )
 
     # Suggested MCQ for the agent to present to the human
@@ -353,7 +352,8 @@ def summarize(checks: list[Check]) -> dict[str, Any]:
             "tts": ready_tts,
             "stt": ready_stt,
             "voice": ready_tts and ready_stt,
-            "text_mcq": ready_ui,
+            # Package can do text MCQ once DISPLAY is set (software present).
+            "text_mcq": ready_software,
         },
         "audio_mode": caps.audio_mode,
         "capabilities": caps.as_dict(),
