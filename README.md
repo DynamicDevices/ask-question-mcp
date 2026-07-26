@@ -30,7 +30,7 @@ Linux uses Gtk4/Adw; Windows Phase 1 uses tkinter (text-only).
 | **License** | [GPL-3.0-or-later](LICENSE) ([NOTICE](NOTICE)) — use at your own risk |
 | **Maintainers** | [MAINTAINERS.md](MAINTAINERS.md) |
 | **Platform** | Linux (Gtk4/Adw) · **Windows Phase 1** (tkinter text-only) — [tested matrix](#tested-platforms) |
-| **Transport** | MCP over **stdio** (local process — not GitHub Pages / not remote HTTP) |
+| **Transport** | MCP over **stdio** (Cursor, Claude Code, Claude Desktop–style `mcpServers` — not GitHub Pages / not remote HTTP) |
 | **Voice** | Optional; off until TTS/STT URLs set — [docs/VOICE-BACKENDS.md](docs/VOICE-BACKENDS.md) |
 | **Self-check** | MCP `check_setup` / `setup_guide` · CLI `python -m ask_question_mcp.doctor` |
 | **Dependencies** | [DEPENDENCIES.md](DEPENDENCIES.md) (tiers A–D + apt one-liners) |
@@ -120,7 +120,8 @@ correctly**. Follow this checklist in order.
    On **Windows**: python.org Python 3.12+ with tcl/tk + `uv sync` (no Gtk).
    Absolute path to the clone = `REPO_ROOT`.
 3. **Register MCP** in the client’s MCP config (Cursor: user/global
-   `mcp.json`; Claude Desktop / other stdio hosts: see
+   `mcp.json`; Claude Code: `claude mcp add …` or project `.mcp.json`;
+   Claude Desktop / other stdio hosts: see
    [MCP client configuration](#mcp-client-configuration)). Use an **absolute**
    path to `uv` / `uv.exe` plus absolute `REPO_ROOT`. Reload the IDE / MCP servers.
 4. **Self-check (required):** call MCP tool **`check_setup`**.
@@ -152,7 +153,7 @@ correctly**. Follow this checklist in order.
 
 | Is | Is not |
 |----|--------|
-| A **local** stdio MCP that blocks until the human clicks/types/speaks | A cloud API, GitHub Pages app, or remote MCP URL |
+| A **local** stdio MCP for hosts like Cursor and Claude Code that blocks until the human clicks/types/speaks | A cloud API, GitHub Pages app, or remote MCP URL |
 | A Gtk dialog for **decision forks** (pick one / several / freeform) | A general chat UI or notification centre |
 | Useful **text-only** when TTS/STT unset (`audio_mode=text_only`, flagged) | Broken without voice backends |
 | Optional TTS/STT to **operator-run** HTTP services | Bundled GPU models or a hosted voice SaaS |
@@ -216,6 +217,45 @@ Optional voice (omit `env` for text-only):
 | **Reload** | Command Palette → **Developer: Reload Window**, or toggle the server in MCP settings |
 | **Windows** | Use absolute `uv.exe` and Windows-style `--directory` path; see [Windows quick start](#windows-cursor--text-only-phase-1--for-anthony-and-other-win-users) |
 
+### Claude Code
+
+#### CLI (recommended)
+
+```bash
+claude mcp add --transport stdio ask-question -- \
+  uv run --directory /absolute/path/to/ask-question-mcp ask-question-mcp
+```
+
+With voice env vars:
+
+```bash
+claude mcp add --transport stdio \
+  --env ASK_QUESTION_TTS_URL=http://127.0.0.1:8200 \
+  --env ASK_QUESTION_STT_URL=http://127.0.0.1:8201/transcribe \
+  ask-question -- \
+  uv run --directory /absolute/path/to/ask-question-mcp ask-question-mcp
+```
+
+#### Project `.mcp.json` (shared with team)
+
+```json
+{
+  "mcpServers": {
+    "ask-question": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--directory",
+        "/absolute/path/to/ask-question-mcp",
+        "ask-question-mcp"
+      ]
+    }
+  }
+}
+```
+
+Verify: run `/mcp` inside Claude Code to check the server is connected.
+
 ### Claude Desktop (and similar)
 
 | | |
@@ -224,7 +264,7 @@ Optional voice (omit `env` for text-only):
 | **Config (macOS)** | `~/Library/Application Support/Claude/claude_desktop_config.json` |
 | **Shape** | Same `mcpServers` object as Cursor |
 | **Reload** | Fully quit and relaunch the app |
-| **Note** | Official Claude Desktop is strongest on macOS/Windows; Linux may be community builds. **Claude Code** CLI also speaks MCP — same stdio block. |
+| **Note** | Official Claude Desktop is strongest on macOS/Windows; Linux may be community builds. |
 
 ### Other stdio hosts (future / adjacent)
 
@@ -445,6 +485,7 @@ this table). See [CONTRIBUTING.md](CONTRIBUTING.md).
 | Distro / desktop | Audio | MCP host | UI dialog | Speak / duck | Notes | Status |
 |------------------|-------|----------|-----------|--------------|-------|--------|
 | **Ubuntu 24.04** + GNOME (Classic) | PipeWire (+ pulse compat) | Cursor | Yes | Yes | x86_64; Gtk4 + Adw GI; maintainer daily driver | **Verified** (2026-07) |
+| Any Linux desktop (as above) | PipeWire | **Claude Code** | — | — | Stdio transport; same Gtk requirements as Cursor | **Not yet reported** |
 | Debian / Ubuntu (other) | PipeWire | — | — | — | Apt packages match [DEPENDENCIES.md](DEPENDENCIES.md); likely fine | **Not yet reported** |
 | Fedora | PipeWire | — | — | — | See DEPENDENCIES sketch (`python3-gobject`, `gtk4`, `libadwaita`) | **Not yet reported** |
 | Arch | PipeWire | — | — | — | See DEPENDENCIES sketch | **Not yet reported** |
@@ -456,7 +497,8 @@ this table). See [CONTRIBUTING.md](CONTRIBUTING.md).
 | macOS | — | — | No | No | No native UI backend yet | **Unsupported** |
 
 **How to add a row:** open a PR or issue with distro + version, desktop
-environment, audio stack (PipeWire / Pulse / other), MCP client (e.g. Cursor),
+environment, audio stack (PipeWire / Pulse / other), MCP client (e.g. Cursor,
+Claude Code),
 and what you checked (text-only MCQ / speak / duck / STT). Keep claims honest —
 “works for me” is enough; mark **Partial** if only UI works.
 

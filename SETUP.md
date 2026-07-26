@@ -20,7 +20,7 @@ operate; this repo does **not** hardcode private lab addresses.
 ## Architecture
 
 ```text
-Laptop (MCP host + Gtk dialog + PipeWire)
+Laptop (MCP host: Cursor / Claude Code / … + Gtk dialog + PipeWire)
     │  MCP stdio: ask-question-mcp (uv)
     │  optional speak/listen over HTTP
     ▼
@@ -78,6 +78,16 @@ On Windows use absolute `uv.exe` and a Windows `--directory` path. Same
 `DISPLAY`. Not a remote/HTTP MCP — see README [MCP client configuration](README.md#mcp-client-configuration).
 
 Windows Phase 1 is text-only (tkinter); omit TTS/STT `env` entries.
+
+**Claude Code** — CLI or project `.mcp.json`:
+
+```bash
+claude mcp add --transport stdio ask-question -- \
+  uv run --directory /absolute/path/to/ask-question-mcp ask-question-mcp
+```
+
+Or add to `.mcp.json` at your project root (same JSON as Cursor).
+Verify with `/mcp` inside Claude Code.
 
 ### Tokens (optional)
 
