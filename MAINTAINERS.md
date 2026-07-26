@@ -4,7 +4,7 @@
 |--------|--------|------|
 | Alex Lennon | [@ajlennon](https://github.com/ajlennon) | Primary maintainer (Dynamic Devices) |
 | Anthony | [@TheRealCheese](https://github.com/TheRealCheese) | Collaborator |
-| Jack Ghafari | [@jackghx](https://github.com/jackghx) | Collaborator |
+| Jack Ghafari | [@jackghx](https://github.com/jackghx) | Collaborator — **Claude Code** host support (docs, testing, regressions) |
 
 Organisation: [Dynamic Devices Ltd](https://github.com/DynamicDevices)
 
