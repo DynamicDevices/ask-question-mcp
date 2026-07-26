@@ -796,7 +796,8 @@ def setup_guide(topic: str) -> dict[str, Any]:
             "Windows Cursor: same file under %USERPROFILE%\\.cursor\\mcp.json — use absolute "
             "path to uv.exe (e.g. %USERPROFILE%\\.local\\bin\\uv.exe or where.exe uv). "
             "Claude Code: `claude mcp add --transport stdio ask-question -- "
-            "uv run --directory REPO_ROOT ask-question-mcp` or add the same JSON "
+            "/absolute/path/to/uv run --directory REPO_ROOT ask-question-mcp` "
+            "(find yours with `command -v uv`) or add the same JSON "
             "block to `.mcp.json` at your project root; verify with `/mcp`. "
             "Claude Desktop (Linux): ~/.config/Claude/claude_desktop_config.json → full quit/relaunch. "
             "Other stdio hosts: same command/args/env shape; Linux process must inherit DISPLAY.",
