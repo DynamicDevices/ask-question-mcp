@@ -416,35 +416,41 @@ def summarize(checks: list[Check]) -> dict[str, Any]:
             next_actions.append(f"{c.id}: {c.fix}")
     if not ready_host:
         next_actions.insert(0, f"Host tools: install uv + Python ≥ 3.12 — see {DOCS_DEPS}")
-    if not ready_software:
-        next_actions.insert(0, f"UI packages: `{apt_ui}` — see {DOCS_DEPS}")
-    if caps.audio_mode == "text_only":
+    if not ready_software or not ready_ui:
+        next_actions.insert(
+            0,
+            f"Fix UI first (DISPLAY + Gtk) before any audio/TTS/STT — `{apt_ui}` — see {DOCS_DEPS}",
+        )
+    elif caps.audio_mode == "text_only":
         next_actions.append(
-            "Text-only MCQ works once DISPLAY+Gtk are ready; optional voice via "
-            "setup_guide topic tts/stt."
+            "Text-only MCQ is ready; optional voice via setup_guide topic tts/stt "
+            "(only after ready.ui)."
         )
 
-    # Suggested MCQ for the agent to present to the human
+    # Suggested MCQ for the agent to present to the human.
+    # Display/UI must be fixed before offering audio (TTS/STT) topics.
     walk_opts: list[dict[str, str]] = []
     if not ready_ui:
         walk_opts.append(
             {"id": "ui", "label": "Fix Linux UI / Gtk first (recommended)"}
         )
-    if not ready_tts and not _falsy("ASK_QUESTION_SPEAK"):
-        walk_opts.append(
-            {
-                "id": "tts",
-                "label": "Set up Qwen3-TTS (spoken questions)"
-                + (" (recommended)" if ready_ui and not ready_tts else ""),
-            }
-        )
-    if not ready_stt and not _falsy("ASK_QUESTION_VOICE_ANSWER"):
-        walk_opts.append(
-            {"id": "stt", "label": "Set up faster-whisper STT (voice answers)"}
-        )
-    walk_opts.append({"id": "mcp", "label": "Show mcp.json wiring again"})
-    walk_opts.append({"id": "ui_only", "label": "Use UI only — skip voice for now"})
-    walk_opts.append({"id": "done", "label": "Looks fine — continue"})
+        walk_opts.append({"id": "mcp", "label": "Show mcp.json wiring again"})
+        walk_opts.append({"id": "done", "label": "Looks fine — continue"})
+    else:
+        if not ready_tts and not _falsy("ASK_QUESTION_SPEAK"):
+            walk_opts.append(
+                {
+                    "id": "tts",
+                    "label": "Set up Qwen3-TTS (spoken questions) (recommended)",
+                }
+            )
+        if not ready_stt and not _falsy("ASK_QUESTION_VOICE_ANSWER"):
+            walk_opts.append(
+                {"id": "stt", "label": "Set up faster-whisper STT (voice answers)"}
+            )
+        walk_opts.append({"id": "mcp", "label": "Show mcp.json wiring again"})
+        walk_opts.append({"id": "ui_only", "label": "Use UI only — skip voice for now"})
+        walk_opts.append({"id": "done", "label": "Looks fine — continue"})
 
     # Ensure one recommended mark
     if walk_opts and "(recommended)" not in walk_opts[0]["label"]:
@@ -480,9 +486,12 @@ def summarize(checks: list[Check]) -> dict[str, Any]:
             "repo": "https://github.com/DynamicDevices/ask-question-mcp",
         },
         "agent_instructions": (
-            "If ok is false or the human wants voice: call setup_guide with the "
-            "chosen topic, then present the steps. Prefer ask_multiple_choice to "
-            "ask which walkthrough they want (use offer_walkthrough). After they "
+            "If ready.ui is false: fix display/Gtk only (setup_guide topic=ui / mcp). "
+            "Do not offer TTS/STT or speak until ready.ui is true — display is "
+            "required before audio. "
+            "If ok is false or the human wants voice (and ready.ui): call setup_guide "
+            "with the chosen topic, then present the steps. Prefer ask_multiple_choice "
+            "to ask which walkthrough they want (use offer_walkthrough). After they "
             "change env/mcp.json, re-run check_setup. Do not invent lab IPs — use "
             "127.0.0.1 or URLs they provide."
         ),

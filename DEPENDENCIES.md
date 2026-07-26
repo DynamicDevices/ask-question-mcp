@@ -133,9 +133,10 @@ SBOM: CI uploads CycloneDX from the lockfile (`.github/workflows/ci.yml`).
 ## Agent checklist
 
 1. `check_setup` — inspect `checks[]` / `dependencies` / `next_actions`.
-2. If UI missing → `setup_guide` topic `ui` (apt one-liner above).
+2. If UI missing (`ready.ui` false) → `setup_guide` topic `ui` only.
+   **Do not configure TTS/STT until the dialog displays.** Display before audio.
 3. If MCP not registered → topic `mcp` (`uv sync` + `mcp.json`).
-4. Voice wanted → topics `tts` / `stt` (not apt; HTTP services).
+4. Voice wanted **and** `ready.ui` → topics `tts` / `stt` (not apt; HTTP services).
 5. Re-run `check_setup` until `ready.text_mcq` (and `ready.ui` when `DISPLAY` is set).
 
 Missing TTS/STT is **not** a hard failure — text-only MCQ still works

@@ -58,9 +58,11 @@ correctly**. Follow this checklist in order.
      for the chosen topic (`ui` / `mcp` / `tts` / `stt` / `voice` / `ui_only`).
    - Re-run `check_setup` after each change. CLI:
      `uv run python -m ask_question_mcp.doctor --json`
-5. **Optional voice:** only if the human wants spoken questions / mic answers.
-   Use `setup_guide` topic `tts` (Qwen3-TTS) and `stt` (faster-whisper).
-   Detail: [docs/VOICE-BACKENDS.md](docs/VOICE-BACKENDS.md). UI works without voice.
+5. **Optional voice:** only after `ready.ui` is true, and only if the human
+   wants spoken questions / mic answers. Use `setup_guide` topic `tts`
+   (Qwen3-TTS) and `stt` (faster-whisper). Detail:
+   [docs/VOICE-BACKENDS.md](docs/VOICE-BACKENDS.md). UI works without voice;
+   do not chase audio while the dialog still fails.
 6. **Teach the agent:** when making a decision fork, prefer this MCP tool
    over inventing markdown A/B/C in chat. Follow [How agents must call the tool](#how-agents-must-call-the-tool).
 

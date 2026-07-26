@@ -4,9 +4,11 @@
 from __future__ import annotations
 
 import os
+from unittest import mock
 
 from ask_question_mcp.capabilities import resolve_voice_capabilities
 from ask_question_mcp.doctor import doctor_report, setup_guide
+from ask_question_mcp.zenity_ask import _ensure_ui_ready
 
 
 def main() -> None:
@@ -32,6 +34,22 @@ def main() -> None:
     assert r["ready"]["text_mcq"] is True, r["checks"]
     if os.environ.get("DISPLAY", "").strip():
         assert r["ready"]["ui"] is True
+    else:
+        opt_ids = [o["id"] for o in r["offer_walkthrough"]["options"]]
+        assert "ui" in opt_ids
+        assert "tts" not in opt_ids
+        assert "stt" not in opt_ids
+
+    # Simulate no DISPLAY: walkthrough must not offer audio topics.
+    with mock.patch.dict(os.environ, {"DISPLAY": ""}, clear=False):
+        r2 = doctor_report(want_voice=False)
+        assert r2["ready"]["ui"] is False
+        ids2 = [o["id"] for o in r2["offer_walkthrough"]["options"]]
+        assert ids2[0] == "ui"
+        assert "tts" not in ids2
+        assert "stt" not in ids2
+        assert "ready.ui" in r2["agent_instructions"]
+        assert "before audio" in r2["agent_instructions"]
 
     caps = resolve_voice_capabilities(speak_requested=True)
     assert caps.tts_configured is False
@@ -54,7 +72,16 @@ def main() -> None:
     assert "gir1.2-adw-1" in ui["guide"]["install_commands"]["debian_ubuntu_ui"]
     assert setup_guide("nope")["ok"] is False
 
-    print("OK doctor + text-only / capability flags + dependencies")
+    # UI gate: no DISPLAY → fail before audio would start.
+    with mock.patch.dict(os.environ, {"DISPLAY": ""}, clear=False):
+        try:
+            _ensure_ui_ready()
+            raise AssertionError("expected RuntimeError without DISPLAY")
+        except RuntimeError as exc:
+            assert "DISPLAY" in str(exc)
+            assert "audio" in str(exc).lower() or "UI" in str(exc)
+
+    print("OK doctor + text-only / capability flags + dependencies + UI-before-audio")
 
 
 if __name__ == "__main__":

@@ -38,6 +38,59 @@ OTHER_LABEL = "Something else…"
 # Standalone Gtk4 dialogs (must run under system python with gi/Adw).
 _GTK4_LIST_ASK = Path(__file__).resolve().with_name("gtk4_list_ask.py")
 _GTK4_ENTRY_ASK = Path(__file__).resolve().with_name("gtk4_entry_ask.py")
+
+
+def _probe_gi_adw(py: str) -> tuple[bool, str]:
+    try:
+        r = subprocess.run(
+            [
+                py,
+                "-c",
+                "import gi; gi.require_version('Gtk','4.0'); "
+                "gi.require_version('Adw','1'); "
+                "from gi.repository import Gtk, Adw; print('ok')",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=8,
+            check=False,
+        )
+        if r.returncode == 0 and "ok" in (r.stdout or ""):
+            return True, py
+        err = (r.stderr or r.stdout or "").strip()[:200]
+        return False, err or f"exit {r.returncode}"
+    except Exception as exc:  # noqa: BLE001
+        return False, str(exc)
+
+
+def _ensure_ui_ready() -> str:
+    """Require DISPLAY + Gtk dialog stack before any speak / duck / STT.
+
+    Display is mandatory; audio must not start when the MCQ cannot be shown.
+    Returns the DISPLAY value.
+    """
+    display = os.environ.get("DISPLAY", "").strip()
+    if not display:
+        raise RuntimeError(
+            "DISPLAY unset — need a desktop session. "
+            "Fix UI first (check_setup / setup_guide topic=ui); do not configure audio yet."
+        )
+    if not _GTK4_LIST_ASK.is_file():
+        raise RuntimeError(
+            f"missing gtk4 list dialog: {_GTK4_LIST_ASK}. "
+            "Point mcp.json --directory at the ask-question-mcp checkout. "
+            "Fix UI/path before audio."
+        )
+    gtk_py = _resolve_gtk_python()
+    ok, detail = _probe_gi_adw(gtk_py)
+    if not ok:
+        raise RuntimeError(
+            f"Gtk4/Adw unavailable on {gtk_py}: {detail}. "
+            "Install UI packages (DEPENDENCIES.md tier B) before speak/STT."
+        )
+    return display
+
+
 def _resolve_gtk_python() -> str:
     """System Python with gi/Adw — not the MCP uv venv."""
     env = os.environ.get("ASK_QUESTION_GTK_PYTHON", "").strip()
@@ -420,9 +473,8 @@ def ask_zenity(
     # Zenity is only needed for freeform entry fallback when Gtk entry fails.
     # Primary list UI is Gtk4 — do not hard-fail when zenity is absent.
 
-    display = os.environ.get("DISPLAY")
-    if not display:
-        raise RuntimeError("DISPLAY unset — need a desktop session")
+    # UI first: never duck / speak / listen if the dialog cannot appear.
+    display = _ensure_ui_ready()
 
     whole_danger = bool(dangerous) or bool(danger_ids)
     win_title = window_title(agent=who, title=title, dangerous=whole_danger)
@@ -490,6 +542,11 @@ def ask_zenity(
         # Cancel / timeout / close — cut question audio immediately.
         if read_ack_allowed() is None:
             snapshot_ack_allowed_and_invalidate()
+        stop_speak()
+        _release_session_duck()
+        raise
+    except Exception:
+        # Dialog failed to launch / run — never leave audio running.
         stop_speak()
         _release_session_duck()
         raise
