@@ -305,10 +305,20 @@ def summarize(checks: list[Check]) -> dict[str, Any]:
     ready_tts = any(c.id == "tts_url" and c.severity == "ok" for c in checks)
     ready_stt = any(c.id == "stt_url" and c.severity == "ok" for c in checks)
 
+    from ask_question_mcp.capabilities import resolve_voice_capabilities
+
+    caps = resolve_voice_capabilities(speak_requested=True)
+
     next_actions: list[str] = []
     for c in fails + warns:
         if c.fix:
             next_actions.append(f"{c.id}: {c.fix}")
+    if caps.audio_mode == "text_only":
+        next_actions.insert(
+            0,
+            "Text-only MCQ is available now (click/type). Optional: setup_guide "
+            "topic tts/stt for voice.",
+        )
 
     # Suggested MCQ for the agent to present to the human
     walk_opts: list[dict[str, str]] = []
@@ -343,7 +353,10 @@ def summarize(checks: list[Check]) -> dict[str, Any]:
             "tts": ready_tts,
             "stt": ready_stt,
             "voice": ready_tts and ready_stt,
+            "text_mcq": ready_ui,
         },
+        "audio_mode": caps.audio_mode,
+        "capabilities": caps.as_dict(),
         "counts": {
             "fail": len(fails),
             "warn": len(warns),

@@ -203,6 +203,9 @@ def _ask_list(
     timeout_sec: int,
     speak_enabled: bool = False,
     speak_text: str = "",
+    voice_answer: bool = False,
+    audio_mode: str = "text_only",
+    capability_notes: list[str] | None = None,
 ) -> tuple[list[str], dict[str, Any], str | None]:
     """Gtk4/Adw radiolist/checklist — no SearchBar, so typing does not filter.
 
@@ -214,9 +217,8 @@ def _ask_list(
         raise RuntimeError(f"missing gtk4 list dialog: {_GTK4_LIST_ASK}")
     gtk_py = _resolve_gtk_python()
 
-    from ask_question_mcp.voice_answer import voice_answer_enabled
-
     speak_on = bool(speak_enabled and speak_text.strip())
+    listen_on = bool(voice_answer and speak_on and not allow_multiple)
     payload = {
         "question": question.strip(),
         "title": title,
@@ -238,11 +240,9 @@ def _ask_list(
         "speak_text": speak_text.strip(),
         # MCP / uv venv python — gtk runs under system python without the package.
         "speak_python": sys.executable if speak_on else "",
-        "voice_answer": bool(
-            speak_on
-            and not allow_multiple
-            and voice_answer_enabled(speak_enabled=True)
-        ),
+        "voice_answer": listen_on,
+        "audio_mode": audio_mode,
+        "capability_notes": list(capability_notes or []),
     }
     env = {**os.environ, "DISPLAY": display}
     try:
@@ -344,6 +344,12 @@ def ask_zenity(
     else:
         do_speak = bool(speak)
 
+    from ask_question_mcp.capabilities import resolve_voice_capabilities
+
+    caps = resolve_voice_capabilities(speak_requested=do_speak)
+    do_speak = caps.speak_active
+    do_listen = caps.listen_active
+
     who = resolve_agent(agent)
 
     ids: list[str] = []
@@ -424,7 +430,7 @@ def ask_zenity(
         from ask_question_mcp import audio_duck as duck_mod
     except ImportError:
         duck_mod = None
-    if duck_mod is not None:
+    if duck_mod is not None and do_speak:
         try:
             duck_mod.acquire_duck_hold(ramp=True)
             duck_held = True
@@ -470,6 +476,9 @@ def ask_zenity(
             timeout_sec=timeout_sec,
             speak_enabled=do_speak,
             speak_text=speak_line,
+            voice_answer=do_listen,
+            audio_mode=caps.audio_mode,
+            capability_notes=caps.notes,
         )
     except AskCancelled:
         # Cancel / timeout / close — cut question audio immediately.
@@ -511,6 +520,8 @@ def ask_zenity(
                 meta = {}
         if meta:
             payload["voice"] = meta
+        payload["audio_mode"] = caps.audio_mode
+        payload["capabilities"] = caps.as_dict()
         return payload
 
     def _open_entry(*, auto_listen: bool) -> str:
@@ -522,8 +533,8 @@ def ask_zenity(
             prompt="Type or Listen your answer — Ctrl+Enter to OK:",
             timeout_sec=timeout_sec,
             initial_text=seed,
-            auto_listen=auto_listen,
-            voice_enabled=True,
+            auto_listen=auto_listen and do_listen,
+            voice_enabled=do_listen,
         )
         if entry_voice:
             voice_meta = {**(voice_meta or {}), **entry_voice}

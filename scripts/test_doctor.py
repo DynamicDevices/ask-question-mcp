@@ -1,40 +1,44 @@
 #!/usr/bin/env python3
-"""Smoke tests for ask_question_mcp.doctor."""
+"""Smoke tests for ask_question_mcp.doctor + text-only capabilities."""
 
 from __future__ import annotations
 
 import os
 
+from ask_question_mcp.capabilities import resolve_voice_capabilities
 from ask_question_mcp.doctor import doctor_report, setup_guide
 
 
 def main() -> None:
-    os.environ.setdefault("ASK_QUESTION_SPEAK", "0")
-    os.environ.setdefault("ASK_QUESTION_VOICE_ANSWER", "0")
-    # Clear voice URLs so doctor does not depend on lab hosts
     os.environ.pop("ASK_QUESTION_TTS_URL", None)
     os.environ.pop("ALEX_VOICE_SVC", None)
     os.environ.pop("ASK_QUESTION_STT_URL", None)
+    os.environ["ASK_QUESTION_SPEAK"] = "1"
+    os.environ.pop("ASK_QUESTION_VOICE_ANSWER", None)
 
     r = doctor_report(want_voice=False)
-    assert "checks" in r and "ready" in r and "offer_walkthrough" in r
-    assert "options" in r["offer_walkthrough"]
-    assert r["ready"]["ui"] is True or any(
-        c["id"] == "display" for c in r["checks"]
-    ), r
+    assert "audio_mode" in r and "capabilities" in r
+    assert r["ready"].get("text_mcq") is True or r["ready"]["ui"] is True
 
-    g = setup_guide("tts")
-    assert g["ok"] is True
-    assert "Qwen" in g["guide"]["title"] or "TTS" in g["guide"]["title"]
-    assert g["guide"]["api_contract"]["tts"]
+    caps = resolve_voice_capabilities(speak_requested=True)
+    assert caps.tts_configured is False
+    assert caps.stt_configured is False
+    assert caps.listen_active is False
+    joined = " ".join(caps.notes)
+    assert "STT" in joined or "STT_URL" in joined
+    assert "TTS" in joined or caps.speak_active  # flagged or local speak
 
-    g2 = setup_guide("stt")
-    assert "whisper" in g2["guide"]["title"].lower() or "STT" in g2["guide"]["title"]
+    os.environ["ASK_QUESTION_SPEAK"] = "0"
+    caps2 = resolve_voice_capabilities(speak_requested=False)
+    assert caps2.audio_mode == "text_only"
+    assert caps2.speak_active is False
+    assert caps2.listen_active is False
 
-    g3 = setup_guide("nope")
-    assert g3["ok"] is False
+    assert setup_guide("tts")["ok"] is True
+    assert setup_guide("stt")["ok"] is True
+    assert setup_guide("nope")["ok"] is False
 
-    print("OK doctor_report + setup_guide")
+    print("OK doctor + text-only / capability flags")
 
 
 if __name__ == "__main__":

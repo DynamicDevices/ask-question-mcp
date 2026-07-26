@@ -246,10 +246,12 @@ def _falsy_env(name: str) -> bool:
 
 
 def voice_answer_enabled(*, speak_enabled: bool) -> bool:
-    """Default on for speak-enabled dialogs; ``ASK_QUESTION_VOICE_ANSWER=0`` disables."""
+    """Mic/STT path — off when speak off, env muted, or STT URL unset."""
     if not speak_enabled:
         return False
     if _falsy_env("ASK_QUESTION_VOICE_ANSWER"):
+        return False
+    if not stt_url():
         return False
     if _truthy_env("ASK_QUESTION_VOICE_ANSWER"):
         return True

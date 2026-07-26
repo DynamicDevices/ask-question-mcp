@@ -228,6 +228,12 @@ def _main() -> int:
         speak_enabled = False
     recommended_ids = [str(x) for x in (payload.get("recommended_ids") or [])]
     allow_other = bool(payload.get("allow_other", True))
+    audio_mode = str(payload.get("audio_mode") or "").strip() or (
+        "full" if speak_enabled else "text_only"
+    )
+    capability_notes = [
+        str(x) for x in (payload.get("capability_notes") or []) if str(x).strip()
+    ]
     voice_answer_on = bool(payload.get("voice_answer")) and speak_enabled and (
         _voice_answer is not None
     )
@@ -291,6 +297,14 @@ def _main() -> int:
             label.ask-q-status-idle {
               color: alpha(currentColor, 0.65);
               font-weight: 400;
+            }
+            label.ask-q-text-only {
+              color: #37474f;
+              font-weight: 600;
+              background-color: #eceff1;
+              border: 1px solid #b0bec5;
+              padding: 8px 10px;
+              border-radius: 6px;
             }
             label.ask-q-status-speaking {
               color: #6a1b9a;
@@ -444,6 +458,16 @@ def _main() -> int:
 
         if voice_answer_on:
             set_status("speaking", "● Waiting for question audio…")
+        elif audio_mode == "text_only" or not speak_enabled:
+            note = (
+                capability_notes[0]
+                if capability_notes
+                else "Text only — click or type an option (voice not configured)."
+            )
+            status_lbl.add_css_class("ask-q-text-only")
+            set_status("idle", f"● {note}")
+        elif speak_enabled and not voice_answer_on:
+            set_status("idle", "● Speak on — use click / type to answer (no STT).")
 
         def on_replay(*_args: object) -> None:
             voice_retries["n"] = 0

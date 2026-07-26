@@ -1101,37 +1101,45 @@ def stop_speak() -> None:
 
 
 def speak_cached_or_generate(text: str, generation: int | None = None) -> None:
-    """Blocking: cache hit → play; miss → stream speak (+cache); else Piper."""
+    """Blocking: cache hit → play; miss → stream speak (+cache); else Piper.
+
+    Always marks the speak generation completed (even on total failure) so the
+    Gtk dialog never waits forever in text-only / no-TTS environments.
+    """
     text = normalize_speak_text(text)
-    if not text:
-        return
     gen = _read_speak_gen() if generation is None else int(generation)
-    path = question_wav_path(text)
-    if _wav_ok(path) and play_wav_sync(path):
+    if not text:
         mark_question_speak_completed(gen)
+        clear_speak_phase()
         return
-    # Live miss: sentence-stream for early audio; fill cache from full take.
-    if _TTS_STREAM and _stream_speak_charlize(text, cache_dest=path):
+    try:
+        path = question_wav_path(text)
+        if _wav_ok(path) and play_wav_sync(path):
+            return
+        # Live miss: sentence-stream for early audio; fill cache from full take.
+        if _TTS_STREAM and _stream_speak_charlize(text, cache_dest=path):
+            return
+        if ensure_question_wav(text) is not None and play_wav_sync(path):
+            return
+        spoken = speakable_text(text)
+        if _play_piper(spoken):
+            return
+        script = shutil.which("notify-voice.sh") or str(_NOTIFY_VOICE)
+        if Path(script).is_file():
+            proc = subprocess.run(
+                [script, spoken],
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=int(_TTS_TOTAL_TIMEOUT) + 20,
+            )
+            if proc.returncode == 0:
+                return
+    finally:
+        # Success paths return early after play; still need a done mark.
+        # Failure / no-TTS: unblock Listen / status waiters.
         mark_question_speak_completed(gen)
-        return
-    if ensure_question_wav(text) is not None and play_wav_sync(path):
-        mark_question_speak_completed(gen)
-        return
-    spoken = speakable_text(text)
-    if _play_piper(spoken):
-        mark_question_speak_completed(gen)
-        return
-    script = shutil.which("notify-voice.sh") or str(_NOTIFY_VOICE)
-    if Path(script).is_file():
-        proc = subprocess.run(
-            [script, spoken],
-            check=False,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            timeout=int(_TTS_TOTAL_TIMEOUT) + 20,
-        )
-        if proc.returncode == 0:
-            mark_question_speak_completed(gen)
+        clear_speak_phase()
 
 
 def speak_async(text: str) -> subprocess.Popen[Any] | None:

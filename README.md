@@ -67,8 +67,9 @@ correctly**. Follow this checklist in order.
 
 | Is | Is not |
 |----|--------|
-| A **local** stdio MCP that blocks until the human clicks/speaks | A cloud API or remote questionnaire service |
+| A **local** stdio MCP that blocks until the human clicks/types/speaks | A cloud API or remote questionnaire service |
 | A Gtk dialog for **decision forks** (pick one / several / freeform) | A general chat UI or notification centre |
+| Useful **text-only** when TTS/STT unset (`audio_mode=text_only`, flagged) | Broken without voice backends |
 | Optional TTS/STT to **operator-run** HTTP services | Bundled GPU models or a hosted voice SaaS |
 | Linux desktop | Portable to Windows/macOS GUI as-is |
 
@@ -245,6 +246,24 @@ The tool returns a **JSON string**. Parse it before branching.
 { "cancelled": true, "reason": "…" }
 ```
 
+**Capabilities (always present on success):**
+
+```json
+{
+  "audio_mode": "text_only",
+  "capabilities": {
+    "tts_configured": false,
+    "stt_configured": false,
+    "speak_active": false,
+    "listen_active": false,
+    "notes": ["No TTS configured … — text-only MCQ (click / type)."]
+  }
+}
+```
+
+`audio_mode` is `text_only` | `speak` | `full`. Missing voice is never a hard
+error — call `setup_guide` if the human wants speech later.
+
 **Voice diagnostics (optional):** a `voice` object may include `transcript`,
 `matched_option_id`, `attempts`, etc. Useful for debugging; the chosen `id` /
 `freeform_text` remains authoritative.
@@ -255,9 +274,11 @@ The tool returns a **JSON string**. Parse it before branching.
 
 - Gtk4/Adw radiolist / checklist; recommended option first + pre-selected
 - Danger chrome for high-risk decisions
-- Inline Something else (type or Speak→STT)
+- Inline Something else (type or Speak→STT when configured)
+- **Text-only fallback** when TTS/STT are unset — dialog still works; response
+  includes `audio_mode` + `capabilities.notes` so agents can offer `setup_guide`
 - Optional TTS + bundled multi-take ack WAVs; optional STT phrase matching
-- Media duck under PipeWire while speaking / listening
+- Media duck under PipeWire only while speaking
 - Per-dialog session IPC so parallel agents do not share speak gates
 
 ---
