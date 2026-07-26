@@ -148,6 +148,35 @@ def test_doctor_script_still_importable() -> None:
     assert ask_question_mcp.__name__
 
 
+def test_danger_arm_ms() -> None:
+    from ask_question_mcp.danger_arm import (
+        DEFAULT_DANGER_ARM_MS,
+        arm_label_secs,
+        danger_arm_ms,
+    )
+
+    with mock.patch.dict(os.environ, {"ASK_QUESTION_DANGER_ARM_MS": ""}, clear=False):
+        assert danger_arm_ms(dangerous=False) == 0
+        assert danger_arm_ms(dangerous=True) == DEFAULT_DANGER_ARM_MS
+
+    with mock.patch.dict(os.environ, {"ASK_QUESTION_DANGER_ARM_MS": "0"}, clear=False):
+        assert danger_arm_ms(dangerous=True) == 0
+
+    with mock.patch.dict(os.environ, {"ASK_QUESTION_DANGER_ARM_MS": "3500"}, clear=False):
+        assert danger_arm_ms(dangerous=True) == 3500
+
+    with mock.patch.dict(os.environ, {"ASK_QUESTION_DANGER_ARM_MS": "999999"}, clear=False):
+        assert danger_arm_ms(dangerous=True) == 60_000
+
+    with mock.patch.dict(os.environ, {"ASK_QUESTION_DANGER_ARM_MS": "nope"}, clear=False):
+        assert danger_arm_ms(dangerous=True) == DEFAULT_DANGER_ARM_MS
+
+    assert arm_label_secs(0) == 0
+    assert arm_label_secs(1) == 1
+    assert arm_label_secs(4000) == 4
+    assert arm_label_secs(4001) == 5
+
+
 def main() -> int:
     failures = 0
     for fn in (
@@ -156,6 +185,7 @@ def main() -> int:
         test_setup_guide_mcp_host_agnostic,
         test_readme_absolute_uv_gate,
         test_doctor_script_still_importable,
+        test_danger_arm_ms,
     ):
         try:
             fn()

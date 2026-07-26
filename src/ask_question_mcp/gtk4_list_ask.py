@@ -34,6 +34,10 @@ try:
     import session_ipc as _session_ipc
 except ImportError:  # pragma: no cover
     _session_ipc = None  # type: ignore[assignment]
+try:
+    import danger_arm as _danger_arm
+except ImportError:  # pragma: no cover
+    _danger_arm = None  # type: ignore[assignment]
 
 
 
@@ -764,8 +768,47 @@ def _main() -> int:
         root.append(btn_row)
 
         win.set_content(root)
-        # Enter activates OK; Space must not (only Return / KP_Enter).
-        win.set_default_widget(ok_btn)
+        # Dangerous dialogs arm for a few seconds so a stray Return cannot OK.
+        if _danger_arm is not None:
+            arm_ms = int(_danger_arm.danger_arm_ms(dangerous=dangerous))
+        else:
+            arm_ms = 4000 if dangerous else 0
+        armed = {"v": arm_ms <= 0}
+
+        def _arm_confirm() -> None:
+            if armed["v"] or closed["v"]:
+                return
+            armed["v"] = True
+            ok_btn.set_sensitive(True)
+            ok_btn.set_label("OK")
+            # Enter activates OK only after arm; Space must not.
+            win.set_default_widget(ok_btn)
+
+        if arm_ms > 0:
+            ok_btn.set_sensitive(False)
+            deadline_us = GLib.get_monotonic_time() + arm_ms * 1000
+
+            def _arm_tick() -> bool:
+                if closed["v"] or armed["v"]:
+                    return GLib.SOURCE_REMOVE
+                left_us = deadline_us - GLib.get_monotonic_time()
+                left_ms = max(0, (left_us + 999) // 1000)
+                if left_ms <= 0:
+                    _arm_confirm()
+                    return GLib.SOURCE_REMOVE
+                secs = (
+                    _danger_arm.arm_label_secs(left_ms)
+                    if _danger_arm is not None
+                    else max(1, (left_ms + 999) // 1000)
+                )
+                ok_btn.set_label(f"OK ({secs}s)")
+                return GLib.SOURCE_CONTINUE
+
+            _arm_tick()
+            GLib.timeout_add(200, _arm_tick)
+        else:
+            # Enter activates OK; Space must not (only Return / KP_Enter).
+            win.set_default_widget(ok_btn)
 
         def quit_app() -> None:
             closed["v"] = True
@@ -784,7 +827,7 @@ def _main() -> int:
 
         def finish_ok(*_args: object) -> None:
             nonlocal result
-            if closed["v"]:
+            if closed["v"] or not armed["v"]:
                 return
             selected = [oid for oid, btn in checks.items() if btn.get_active()]
             typed = ""
@@ -853,6 +896,8 @@ def _main() -> int:
         def finish_voice_freeform(text: str) -> None:
             """Accept unmatched transcript as Something-else freeform (no typing)."""
             nonlocal result
+            if not armed["v"]:
+                return
             cleaned = " ".join((text or "").split()).strip()
             if not cleaned:
                 return
@@ -1362,6 +1407,10 @@ def _main() -> int:
                 finish_cancel()
                 return True
             if keyval in (Gdk.KEY_Return, Gdk.KEY_KP_Enter):
+                # Swallow Enter while the danger arm is active so a stray
+                # Return from the previous keystroke cannot confirm.
+                if not armed["v"]:
+                    return True
                 # When typing in Something else, Entry "activate" also fires —
                 # finish_ok is idempotent via closed[]. Always OK on Enter.
                 finish_ok()

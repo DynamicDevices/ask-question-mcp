@@ -92,7 +92,8 @@ def ask_multiple_choice(
 
     Mark recommended only in the option label + pass recommended_id (listed first).
     Prefer this tool over the host IDE's native ask-question UI when both exist.
-    dangerous=true for irreversible forks. allow_other=true default (Something else);
+    dangerous=true for irreversible forks (OK/Enter armed ~4s so stray Return
+    cannot confirm). allow_other=true default (Something else);
     treat freeform_text as the answer. Pass agent=LANE.id. speak defaults true
     (Linux; Windows Phase 1 is text-only). On cancel/setup hints → check_setup.
 
