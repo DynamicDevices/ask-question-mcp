@@ -32,8 +32,13 @@ jobs:
       - name: Block lab IPs and home paths in tracked text
         run: |
           set -euo pipefail
-          bad=$(git grep -I -nE '192\.168\.68\.55|/home/ajlennon|CF-Access-Client-Secret|X-API-Key:' -- \
-            ':!*.wav' ':!uv.lock' || true)
+          # Pattern is split so this workflow file does not self-match.
+          pat1='192\.168\.68\.55'
+          pat2='/home/aj'"lennon"
+          pat3='CF-Access-Client-Secret'
+          pat4='X-API-Key:'
+          bad=$(git grep -I -nE "${pat1}|${pat2}|${pat3}|${pat4}" -- \
+            ':!*.wav' ':!uv.lock' ':!.github/workflows/ci.yml' || true)
           if [ -n "$bad" ]; then
             echo "$bad"
             echo "::error::Forbidden private path/IP/secret pattern in tree"
