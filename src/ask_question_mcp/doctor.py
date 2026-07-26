@@ -117,7 +117,7 @@ def run_checks(*, want_voice: bool | None = None) -> list[Check]:
                 "fail",
                 "uv not on PATH — mcp.json typically runs `uv run …`.",
                 fix="Install uv: https://docs.astral.sh/uv/getting-started/installation/ "
-                "then re-open the shell / Cursor.",
+                "then re-open the shell / IDE.",
                 docs=[DOCS_DEPS],
             )
         )
@@ -770,7 +770,7 @@ def setup_guide(topic: str) -> dict[str, Any]:
     }
 
     sections["mcp"] = {
-        "title": "Register the MCP (Cursor, Claude Desktop, other stdio hosts)",
+        "title": "Register the MCP (Cursor, Claude Code, Claude Desktop, other stdio hosts)",
         "summary": (
             "Tier A: uv + Python ≥ 3.12 + uv sync, then a stdio server block. "
             "Use an absolute path to uv — GUI hosts often lack ~/.local/bin on PATH."
@@ -795,6 +795,9 @@ def setup_guide(topic: str) -> dict[str, Any]:
             "Cursor: ~/.cursor/mcp.json → Reload Window. "
             "Windows Cursor: same file under %USERPROFILE%\\.cursor\\mcp.json — use absolute "
             "path to uv.exe (e.g. %USERPROFILE%\\.local\\bin\\uv.exe or where.exe uv). "
+            "Claude Code: `claude mcp add --transport stdio ask-question -- "
+            "uv run --directory REPO_ROOT ask-question-mcp` or add the same JSON "
+            "block to `.mcp.json` at your project root; verify with `/mcp`. "
             "Claude Desktop (Linux): ~/.config/Claude/claude_desktop_config.json → full quit/relaunch. "
             "Other stdio hosts: same command/args/env shape; Linux process must inherit DISPLAY.",
             "Call check_setup; confirm ask_multiple_choice works (text-only is fine).",

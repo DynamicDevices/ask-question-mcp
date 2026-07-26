@@ -45,8 +45,13 @@ def notify_voice_available() -> bool:
     script = shutil.which("notify-voice.sh")
     if script:
         return True
-    home = Path.home() / ".cursor" / "scripts" / "notify-voice.sh"
-    return home.is_file()
+    for candidate in (
+        Path.home() / ".cursor" / "scripts" / "notify-voice.sh",
+        Path.home() / ".config" / "ask-question-mcp" / "notify-voice.sh",
+    ):
+        if candidate.is_file():
+            return True
+    return False
 
 
 @dataclass

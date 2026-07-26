@@ -218,7 +218,15 @@ def resolve_agent(explicit: str | None = None) -> str:
         if directory == Path.home() or len(directory.parts) <= 2:
             break
     ws = os.environ.get("CURSOR_WORKSPACE_LABEL", "").strip()
-    return ws or "agent"
+    if ws:
+        return ws
+    # Claude Code exports the project root; its basename is a decent lane label.
+    project = os.environ.get("CLAUDE_PROJECT_DIR", "").strip()
+    if project:
+        name = Path(project).name
+        if name:
+            return name
+    return "agent"
 
 
 def window_title(*, agent: str, title: str, dangerous: bool) -> str:
@@ -233,9 +241,13 @@ def normalize_speak_text(text: str) -> str:
 
 def _pronounce_mod():
     """Load shared tts-pronounce tool (stdlib module beside this repo)."""
-    path = Path.home() / ".cursor" / "tools" / "tts-pronounce"
-    if path.is_dir() and str(path) not in sys.path:
-        sys.path.insert(0, str(path))
+    for candidate in (
+        Path.home() / ".cursor" / "tools" / "tts-pronounce",
+        Path.home() / ".config" / "ask-question-mcp" / "tts-pronounce",
+    ):
+        if candidate.is_dir() and str(candidate) not in sys.path:
+            sys.path.insert(0, str(candidate))
+            break
     import tts_pronounce  # type: ignore
 
     return tts_pronounce
