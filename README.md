@@ -3,125 +3,313 @@
 [![ci](https://github.com/DynamicDevices/ask-question-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/DynamicDevices/ask-question-mcp/actions/workflows/ci.yml)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPLv3+-blue.svg)](LICENSE)
 
-Local MCP fallback for Cursor’s native `AskQuestion` cards (and similar agent UIs).
+**Stdio MCP server** that shows a **Linux desktop multiple-choice dialog**
+(`ask_multiple_choice`) so coding agents can ask the human a real decision
+when the host IDE has no native AskQuestion UI (or the model lacks that tool).
 
-Cheap / auto-routed models often lack a native AskQuestion tool; this server
-exposes **`ask_multiple_choice`** as a Gtk4/Adw dialog with optional spoken
-questions, media ducking, and local STT phrase matching.
+| | |
+|--|--|
+| **License** | [GPL-3.0-or-later](LICENSE) ([NOTICE](NOTICE)) |
+| **Platform** | Linux desktop only (`DISPLAY` + Gtk4/Adw; zenity fallback) |
+| **Transport** | MCP over **stdio** (Cursor / Claude Desktop–style `mcpServers`) |
+| **Voice** | Optional; off by default until you set TTS/STT URLs |
+| **Security** | [SECURITY.md](SECURITY.md) · CRA notes: [docs/CRA-COMPLIANCE.md](docs/CRA-COMPLIANCE.md) |
+| **Voice backends** | [SETUP.md](SETUP.md) · packages: [DEPENDENCIES.md](DEPENDENCIES.md) |
 
-**License:** [GNU GPLv3 or later](LICENSE) — see also [NOTICE](NOTICE).  
-**Security:** [SECURITY.md](SECURITY.md) · **CRA notes:** [docs/CRA-COMPLIANCE.md](docs/CRA-COMPLIANCE.md)  
-**Setup:** [SETUP.md](SETUP.md) · **Deps:** [DEPENDENCIES.md](DEPENDENCIES.md)
+---
 
-## Features
+## For AI assistants (read this first)
 
-- Gtk4/Adw radiolist / checklist (recommended option first + pre-selected)
-- `dangerous=true` → warning chrome; confirm before high-risk choices
-- Optional TTS speak + multi-take ack pools (bundled WAVs under `assets/acks/`)
-- Optional voice answers via operator-run STT (`ASK_QUESTION_STT_URL`)
-- Inline “Something else” freeform; session-isolated speak IPC for parallel agents
-- Media duck (PipeWire) while speaking / listening
+If a human pointed you at this README, your job is usually: **install the
+repo, register the MCP in their client, then call `ask_multiple_choice`
+correctly**. Follow this checklist in order.
 
-UI and speak work **without** TTS/STT configured. Voice features stay off until
-you set URLs (secure-by-default — no lab IPs baked in).
+### Integration checklist
 
-## Quick start
+1. **Confirm platform:** Linux GUI session with `DISPLAY` set. Do **not**
+   install this on headless CI, Windows, or macOS expecting the Gtk UI to work.
+2. **Install:**
+   ```bash
+   git clone https://github.com/DynamicDevices/ask-question-mcp.git
+   cd ask-question-mcp
+   uv sync
+   ```
+   Require: [uv](https://docs.astral.sh/uv/), Python ≥ 3.12, Gtk4 + libadwaita
+   (and optionally `zenity`). Absolute path to the clone = `REPO_ROOT`.
+3. **Register MCP** in the client’s MCP config (Cursor: user/global
+   `mcp.json`). Use the JSON template in [MCP client configuration](#mcp-client-configuration).
+   Replace `REPO_ROOT` with the absolute path. Reload the IDE / MCP servers.
+4. **Verify:** call tool `ask_multiple_choice` with a 2-option smoke question
+   (or run the [smoke test](#smoke-test) from a terminal with `DISPLAY`).
+5. **Optional voice:** only if the human wants spoken questions / mic answers.
+   Set `ASK_QUESTION_TTS_URL` and/or `ASK_QUESTION_STT_URL` (see [SETUP.md](SETUP.md)).
+   UI works without voice.
+6. **Teach the agent:** when making a decision fork, prefer this MCP tool
+   over inventing markdown A/B/C in chat. Follow [How agents must call the tool](#how-agents-must-call-the-tool).
 
-```bash
-git clone https://github.com/DynamicDevices/ask-question-mcp.git
-cd ask-question-mcp
-uv sync
-```
+### What this MCP is / is not
 
-Cursor `mcp.json` fragment (adjust the directory path):
+| Is | Is not |
+|----|--------|
+| A **local** stdio MCP that blocks until the human clicks/speaks | A cloud API or remote questionnaire service |
+| A Gtk dialog for **decision forks** (pick one / several / freeform) | A general chat UI or notification centre |
+| Optional TTS/STT to **operator-run** HTTP services | Bundled GPU models or a hosted voice SaaS |
+| Linux desktop | Portable to Windows/macOS GUI as-is |
+
+### Non-negotiable agent behaviour
+
+- Pass **`agent=`** (chat name / lane id) so the window title shows `[agent] …`.
+- Write **`question`** as one short sentence a colleague would say. No “please
+  choose carefully”, no meta about dialogs or voice.
+- Put “recommended” **only in the option label** (`Foo (recommended)`), and
+  pass **`recommended_id`** (or `recommended_ids`). Never add a
+  `Recommended: …` line inside `question`.
+- Prefer **`allow_other=true`** (default) so the human can type Something else.
+- Set **`dangerous=true`** (and/or per-option `dangerous`) for irreversible /
+  high-risk forks (send email, destroy data, force-push main, etc.).
+- One decision per turn: call the tool, wait for the JSON result, then continue.
+- On `cancelled: true`, stop that action; do not invent a choice.
+- On freeform answers, treat **`freeform_text`** as the answer (not only `id`).
+
+---
+
+## MCP client configuration
+
+### Cursor (`mcp.json`)
+
+Merge under `mcpServers` (path must be absolute):
 
 ```json
-"ask-question": {
-  "command": "uv",
-  "args": [
-    "run",
-    "--directory",
-    "/absolute/path/to/ask-question-mcp",
-    "ask-question-mcp"
+{
+  "mcpServers": {
+    "ask-question": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--directory",
+        "/absolute/path/to/ask-question-mcp",
+        "ask-question-mcp"
+      ]
+    }
+  }
+}
+```
+
+Minimal voice-enabled variant (use **your** hosts; leave out `env` for UI-only):
+
+```json
+{
+  "mcpServers": {
+    "ask-question": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--directory",
+        "/absolute/path/to/ask-question-mcp",
+        "ask-question-mcp"
+      ],
+      "env": {
+        "ASK_QUESTION_TTS_URL": "http://127.0.0.1:8200",
+        "ASK_QUESTION_STT_URL": "http://127.0.0.1:8201/transcribe"
+      }
+    }
+  }
+}
+```
+
+After editing: reload the Cursor window (or restart MCP). The server name in
+MCP listings is typically **`ask-question`**; the tool name is
+**`ask_multiple_choice`**.
+
+### Other MCP hosts
+
+Any host that can start a **stdio** MCP with `command` + `args` works the same
+way. The process must inherit a working `DISPLAY` (and PipeWire if you use
+duck/speak). Do not run it inside a container without display forwarding.
+
+### Environment variables (summary)
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `ASK_QUESTION_TTS_URL` | empty | TTS HTTP base (`/tts`, `/tts/stream`). Empty = no live TTS |
+| `ASK_QUESTION_STT_URL` | empty | Full STT URL ending in `/transcribe`. Empty = no voice answers |
+| `ASK_QUESTION_TTS_TOKEN` / `ASK_QUESTION_STT_TOKEN` | empty | Optional Bearer tokens |
+| `ASK_QUESTION_SPEAK` | on | `0` / `false` = mute question speech |
+| `ASK_QUESTION_VOICE_ANSWER` | on | `0` = never open mic path |
+| `ASK_QUESTION_DUCK` | on | `0` = do not duck other audio |
+| `ASK_QUESTION_SPEAK_VOLUME` / `ASK_QUESTION_ACK_VOLUME` | `0.60` / `0.55` | Linear playback gain |
+| `ASK_QUESTION_ALWAYS_LISTEN` | on | `0` = Listen button only |
+| `ASK_QUESTION_AGENT` / `LANE_ID` | unset | Fallback for `agent=` if omitted |
+
+Full knobs + prefs paths: [SETUP.md](SETUP.md), [DEPENDENCIES.md](DEPENDENCIES.md).
+
+**Never commit tokens.** Optional file: `~/.config/ask-question-mcp/token` (mode `600`).
+
+---
+
+## How agents must call the tool
+
+### Tool name
+
+`ask_multiple_choice`
+
+### Arguments
+
+| Arg | Type | Required | Notes |
+|-----|------|----------|--------|
+| `question` | string | yes | Decision prompt only |
+| `options` | array of objects | yes | 2–8 items: `{ "id", "label" }` plus optional `dangerous`, `opens_entry`, `auto_listen` |
+| `recommended_id` | string \| null | no | Single-select preferred id (listed first + pre-selected) |
+| `recommended_ids` | string[] \| null | no | Multi-select preferred ids |
+| `allow_multiple` | bool | no | default `false` (radio); `true` = checklist |
+| `allow_other` | bool | no | default `true` — appends Something else |
+| `dangerous` | bool | no | Whole-dialog danger chrome |
+| `speak` | bool | no | default `true` (honours mute env / missing TTS) |
+| `title` | string | no | default `"Decide"` — short noun phrase |
+| `agent` | string \| null | **strongly yes** | Window title prefix `[agent]` |
+| `timeout_sec` | int | no | default `300`; `0` = no timeout |
+| `entry_seed` | string \| null | no | Prefill Something else / entry |
+
+### Example call (single choice)
+
+```json
+{
+  "question": "Ship the Drive mirror now?",
+  "title": "Drive mirror",
+  "agent": "docs-agent",
+  "recommended_id": "ship",
+  "options": [
+    { "id": "ship", "label": "Ship it (recommended)" },
+    { "id": "wait", "label": "Wait for answers" },
+    { "id": "git_only", "label": "Git only" }
   ]
 }
 ```
 
-Optional voice (example — use **your** hosts):
+### Example call (dangerous)
 
-```bash
-export ASK_QUESTION_TTS_URL="http://127.0.0.1:8200"
-export ASK_QUESTION_STT_URL="http://127.0.0.1:8201/transcribe"
-# optional Bearer: ASK_QUESTION_TTS_TOKEN / ASK_QUESTION_STT_TOKEN
-# or ~/.config/ask-question-mcp/token
+```json
+{
+  "question": "Force-push main to rewrite history?",
+  "title": "Force push",
+  "agent": "release-agent",
+  "dangerous": true,
+  "recommended_id": "abort",
+  "options": [
+    { "id": "abort", "label": "Abort (recommended)" },
+    { "id": "force", "label": "Force-push main", "dangerous": true }
+  ]
+}
 ```
 
-Mute voice: `ASK_QUESTION_SPEAK=0` and/or `ASK_QUESTION_VOICE_ANSWER=0`.
+### Return value (JSON string)
 
-## Tool: `ask_multiple_choice`
+The tool returns a **JSON string**. Parse it before branching.
 
-| Arg | Type | Notes |
-|-----|------|--------|
-| `question` | string | Prompt only — no “Recommended:” line in the text |
-| `options` | list of `{id, label, dangerous?, opens_entry?, auto_listen?}` | 2–8; mark preferred in label: `Foo (recommended)` |
-| `recommended_id` | string? | Pre-select + move to top (single) |
-| `recommended_ids` | string[]? | Pre-check + move to top (multi) |
-| `allow_multiple` | bool | `false` = radio; `true` = checklist |
-| `allow_other` | bool | default `true` — Something else → inline type box |
-| `dangerous` | bool | Whole-decision ⚠ banner |
-| `speak` | bool | Read question aloud (default **true** when TTS reachable) |
-| `title` | string? | Window title (default: `Decide`) |
-| `agent` | string? | Shown as `[agent]` in the window title |
-| `timeout_sec` | int | Dialog timeout seconds (default `300`; `0` = none) |
-| `entry_seed` | string? | Prefill edit box |
+**Single select:**
 
-Returns JSON with selected id(s)/label(s), optional `freeform_text`, and
-optional `voice` diagnostics when STT ran.
+```json
+{
+  "id": "ship",
+  "label": "Ship it (recommended)",
+  "cancelled": false,
+  "allow_multiple": false,
+  "agent": "docs-agent"
+}
+```
 
-## Defaults
+**Multi select:** `ids` + `labels` arrays instead of `id` / `label`.
 
-No `prefs.json` required. Shipped defaults (`prefs.example.json`):
+**Freeform (Something else):** same shape plus `"freeform": true` and
+`"freeform_text": "…"`. Use `freeform_text` as the human’s answer.
 
-| Key | Default | Notes |
-|-----|---------|--------|
-| `speak_volume` | `0.60` | Question speech gain under media duck |
-| `ack_volume` | `0.55` | Ack speech gain |
-| `always_listen` | `true` | Auto-start mic after question |
+**Cancelled:**
 
-Override order: **env → `~/.config/ask-question-mcp/prefs.json` → shipped defaults**.
+```json
+{ "cancelled": true, "reason": "…" }
+```
 
-Ack WAVs ship under `src/ask_question_mcp/assets/acks/v2/`. On first ack they
-are copied into `~/.cache/ask-question-mcp/charlize-acks/v2/` (legacy cache
-dir name; live TTS fills gaps when configured).
+**Voice diagnostics (optional):** a `voice` object may include `transcript`,
+`matched_option_id`, `attempts`, etc. Useful for debugging; the chosen `id` /
+`freeform_text` remains authoritative.
+
+---
+
+## Features (human overview)
+
+- Gtk4/Adw radiolist / checklist; recommended option first + pre-selected
+- Danger chrome for high-risk decisions
+- Inline Something else (type or Speak→STT)
+- Optional TTS + bundled multi-take ack WAVs; optional STT phrase matching
+- Media duck under PipeWire while speaking / listening
+- Per-dialog session IPC so parallel agents do not share speak gates
+
+---
 
 ## Requirements
 
-### Minimal
+### Minimal (UI)
 
-- Linux desktop with Gtk4/Adw (and `zenity` as fallback)
-- `DISPLAY` set
-- Python ≥ 3.12 via [`uv`](https://github.com/astral-sh/uv)
+- Linux desktop, `DISPLAY` set
+- Gtk 4 + libadwaita (primary UI); `zenity` useful as fallback
+- Python ≥ 3.12 and [`uv`](https://docs.astral.sh/uv/)
 
-### Optional voice
+### Optional (voice)
 
 - PipeWire + `pw-play`
-- Operator-run TTS (`POST /tts`, `/tts/stream`) and STT (`POST /transcribe`)
-  — see [SETUP.md](SETUP.md)
+- Your own TTS/STT HTTP services — [SETUP.md](SETUP.md)
 
-## Manual smoke test
+### Prefs
+
+No prefs file required. Optional `~/.config/ask-question-mcp/prefs.json`
+(see `prefs.example.json`). Override order: **env → prefs.json → shipped defaults**.
+
+| Key | Default |
+|-----|---------|
+| `speak_volume` | `0.60` |
+| `ack_volume` | `0.55` |
+| `always_listen` | `true` |
+
+---
+
+## Smoke test
+
+With a GUI session:
 
 ```bash
-cd /path/to/ask-question-mcp
+cd /absolute/path/to/ask-question-mcp
 uv run python -c "
 from ask_question_mcp.zenity_ask import ask_zenity
-print(ask_zenity('Smoke?', [{'id':'a','label':'OK (recommended)'},{'id':'b','label':'Other'}], recommended_id='a'))
+print(ask_zenity(
+    'Smoke?',
+    [{'id':'a','label':'OK (recommended)'},{'id':'b','label':'Other'}],
+    recommended_id='a',
+    agent='smoke',
+))
 "
 ```
+
+Or register the MCP and invoke `ask_multiple_choice` from the agent.
+
+---
+
+## Troubleshooting (for agents)
+
+| Symptom | Likely fix |
+|---------|------------|
+| Tool missing in client | Check `mcp.json` path; `uv` on `PATH`; reload MCP |
+| Dialog never appears | `echo $DISPLAY`; run smoke test in same desktop session |
+| Hang / timeout | Human must click; or raise `timeout_sec`; check for off-screen dialog |
+| No speech | Expected if TTS URL unset; or set `ASK_QUESTION_SPEAK=0` intentionally |
+| Mic never listens | STT URL unset, or `ASK_QUESTION_VOICE_ANSWER=0` |
+| Import / Gtk errors | Install Gtk4/Adw GI bindings for system Python used by the dialog helper |
+
+---
 
 ## Contributing / compliance
 
 - [CONTRIBUTING.md](CONTRIBUTING.md)
-- [SECURITY.md](SECURITY.md)
-- [docs/CRA-COMPLIANCE.md](docs/CRA-COMPLIANCE.md) — engineering baseline; not a CE DoC
+- [SECURITY.md](SECURITY.md) — report vulns to `security@dynamicdevices.co.uk`
+- [docs/CRA-COMPLIANCE.md](docs/CRA-COMPLIANCE.md) — engineering baseline; not a CE Declaration of Conformity
 
 Copyright © 2026 Dynamic Devices Ltd.

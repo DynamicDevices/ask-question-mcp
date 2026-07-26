@@ -1,6 +1,8 @@
 # Setup: voice services + Cursor MCP
 
-How to register the MCP in Cursor and (optionally) run TTS/STT backends.
+Deep dive for **optional** TTS/STT and prefs. For **install + MCP registration
++ how agents must call the tool**, start with [README.md](README.md)
+(AI-oriented integration brief).
 
 Dialogs work with **speak/listen disabled**. Voice needs HTTP services you
 operate; this repo does **not** hardcode private lab addresses.
