@@ -21,14 +21,26 @@ jobs:
       - name: Install Gtk4 / Adw GI (dialog stack)
         run: |
           set -euo pipefail
-          if command -v apt-get >/dev/null 2>&1; then
-            sudo apt-get update -qq
-            sudo apt-get install -y -qq \
-              python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 zenity
-          else
-            echo "apt-get missing — assuming GI packages already on self-hosted image"
-            python3 -c "import gi; gi.require_version('Gtk','4.0'); gi.require_version('Adw','1')"
+          # Prefer packages already on the image (self-hosted often has no sudo).
+          if python3 -c "import gi; gi.require_version('Gtk','4.0'); gi.require_version('Adw','1')" 2>/dev/null; then
+            echo "Gtk4/Adw GI already available"
+            command -v zenity >/dev/null && echo "zenity ok" || echo "zenity missing (optional)"
+            exit 0
           fi
+          if ! command -v apt-get >/dev/null 2>&1; then
+            echo "::error::Gtk4/Adw GI missing and no apt-get"
+            exit 1
+          fi
+          if command -v sudo >/dev/null 2>&1; then
+            SUDO=sudo
+          elif [ "$(id -u)" -eq 0 ]; then
+            SUDO=
+          else
+            echo "::error::Need sudo or root to apt-install Gtk GI"
+            exit 1
+          fi
+          $SUDO apt-get update -qq
+          $SUDO apt-get install -y -qq python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 zenity
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
