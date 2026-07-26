@@ -547,11 +547,29 @@ def _main() -> int:
                     group_leader = btn
                 else:
                     btn.set_group(group_leader)
-            if oid in preselect:
-                btn.set_active(True)
             checks[oid] = btn
             row.set_child(btn)
             list_box.append(row)
+
+        def _apply_preselect() -> None:
+            """Re-apply after the radio group is fully built.
+
+            Setting active while later buttons join the group can clear the
+            selection — OK then saw no active row and silently no-op'd.
+            """
+            want = [oid for oid in ids if oid in preselect]
+            if not want and ids:
+                want = [ids[0]]
+            if allow_multiple:
+                for oid, btn in checks.items():
+                    btn.set_active(oid in want)
+            else:
+                # Exactly one active in a radio group.
+                pick = want[0]
+                for oid, btn in checks.items():
+                    btn.set_active(oid == pick)
+
+        _apply_preselect()
 
         def on_row_activated(_lb: Gtk.ListBox, activated: Gtk.ListBoxRow) -> None:
             child = activated.get_child()
@@ -782,6 +800,23 @@ def _main() -> int:
                 for oid, btn in checks.items():
                     btn.set_active(oid == other_id)
                 selected = [other_id]
+            if not selected:
+                # OK with no visible selection (preselect lost / never clicked):
+                # accept recommended / first option instead of a silent no-op.
+                fallback = [oid for oid in ids if oid in preselect]
+                if not fallback and recommended_ids:
+                    fallback = [oid for oid in recommended_ids if oid in checks]
+                if not fallback and ids:
+                    fallback = [ids[0]]
+                if fallback:
+                    if allow_multiple:
+                        for oid, btn in checks.items():
+                            btn.set_active(oid in fallback)
+                    else:
+                        pick = fallback[0]
+                        for oid, btn in checks.items():
+                            btn.set_active(oid == pick)
+                    selected = [oid for oid, btn in checks.items() if btn.get_active()]
             if not selected:
                 return
             if not allow_multiple:
@@ -1362,8 +1397,18 @@ def _main() -> int:
 
         win.present()
         # Focus an option row — never OK — so Space toggles/selects, Return confirms.
+        # Prefer focusing the ListBoxRow (not the CheckButton): grab_focus on the
+        # button can clear radio active state on some Gtk 4 builds.
         focus_id = next((oid for oid in ids if oid in preselect), ids[0])
-        checks[focus_id].grab_focus()
+        focus_btn = checks.get(focus_id)
+        if focus_btn is not None:
+            row = focus_btn.get_parent()
+            if isinstance(row, Gtk.ListBoxRow):
+                row.grab_focus()
+            else:
+                focus_btn.grab_focus()
+        # Ensure recommended stays selected after present/focus.
+        _apply_preselect()
         if voice_answer_on and not allow_multiple:
             # Poll speak.phase so status moves Waiting → Speaking even when
             # Always listen is off (listen thread not yet started).
