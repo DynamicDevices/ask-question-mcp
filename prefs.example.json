@@ -1,4 +1,7 @@
 {
+  "audio_enabled": true,
+  "duck_enabled": true,
+  "ack_enabled": true,
   "always_listen": true,
   "speak_volume": 0.6,
   "ack_volume": 0.55

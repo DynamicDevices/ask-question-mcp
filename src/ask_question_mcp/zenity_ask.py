@@ -25,7 +25,6 @@ from pathlib import Path
 from typing import Any
 
 from ask_question_mcp.voice_acks import (
-    followed_recommendation,
     read_ack_allowed,
     resolve_agent,
     snapshot_ack_allowed_and_invalidate,
@@ -44,6 +43,92 @@ _GTK4_ENTRY_ASK = Path(__file__).resolve().with_name("gtk4_entry_ask.py")
 # Windows tkinter dialogs (may run under uv venv python if tkinter works).
 _WIN_LIST_ASK = Path(__file__).resolve().with_name("win_list_ask.py")
 _WIN_ENTRY_ASK = Path(__file__).resolve().with_name("win_entry_ask.py")
+
+
+def _truthy_env(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _voice_meta_useful(meta: dict[str, Any] | None) -> bool:
+    """True when voice block carries signal beyond idle defaults."""
+    if not meta:
+        return False
+    if meta.get("used") or meta.get("freeform_voice"):
+        return True
+    if str(meta.get("transcript") or "").strip():
+        return True
+    if meta.get("error"):
+        return True
+    if meta.get("matched_option_id"):
+        return True
+    attempts = meta.get("attempts")
+    if isinstance(attempts, list):
+        for a in attempts:
+            if not isinstance(a, dict):
+                continue
+            if a.get("transcript") or a.get("error") or a.get("option_id"):
+                return True
+    return False
+
+
+def _slim_voice_meta(meta: dict[str, Any]) -> dict[str, Any]:
+    """Drop null/empty noise from a useful voice block."""
+    out: dict[str, Any] = {}
+    for key in (
+        "enabled",
+        "used",
+        "freeform_voice",
+        "transcript",
+        "error",
+        "source",
+        "peak_rms",
+        "matched_option_id",
+        "attempts",
+    ):
+        if key not in meta:
+            continue
+        val = meta[key]
+        if val is None or val == "" or val == []:
+            continue
+        if key in {"used", "freeform_voice", "enabled"} and val is False:
+            # Keep enabled=false only when other signal present; skip unused flags.
+            if key != "enabled":
+                continue
+        out[key] = val
+    return out
+
+
+def _lean_mcq_result(
+    payload: dict[str, Any],
+    *,
+    voice_meta: dict[str, Any] | None,
+    caps: Any,
+) -> dict[str, Any]:
+    """Omit idle voice/capabilities echo (~100+ tok/call) unless useful.
+
+    Set ``ASK_QUESTION_RESULT_VERBOSE=1`` to restore full voice + capabilities.
+    """
+    out = dict(payload)
+    verbose = _truthy_env("ASK_QUESTION_RESULT_VERBOSE")
+    if verbose:
+        if voice_meta:
+            out["voice"] = voice_meta
+        out["audio_mode"] = getattr(caps, "audio_mode", "text_only")
+        as_dict = getattr(caps, "as_dict", None)
+        out["capabilities"] = as_dict() if callable(as_dict) else caps
+        return out
+
+    if _voice_meta_useful(voice_meta):
+        slim = _slim_voice_meta(dict(voice_meta or {}))
+        if slim:
+            out["voice"] = slim
+
+    notes = [str(n) for n in (getattr(caps, "notes", None) or []) if str(n).strip()]
+    if notes:
+        mode = str(getattr(caps, "audio_mode", "") or "text_only")
+        out["audio_mode"] = mode
+        out["capabilities"] = {"notes": notes, "audio_mode": mode}
+    return out
 
 
 def _is_windows() -> bool:
@@ -541,7 +626,8 @@ def ask_zenity(
     pair with ``"auto_listen": true`` to start mic on open (e.g. Re-record).
     ``entry_seed`` prefills the edit box (voice-turn transcript confirm).
     Pass ``dangerous=True`` to flag the whole decision.
-    ``speak`` defaults True (local TTS). Pass ``speak=False`` or set env
+    ``speak`` defaults True (local TTS). Pass ``speak=False``, uncheck dialog
+    **Audio** (prefs ``audio_enabled``), or set ``ASK_QUESTION_AUDIO=0`` /
     ``ASK_QUESTION_SPEAK=0`` to mute.
     ``agent`` (or LANE.id / ``ASK_QUESTION_AGENT``) is prefixed in the window
     title so multi-agent sessions stay distinguishable.
@@ -642,16 +728,17 @@ def ask_zenity(
 
     # Hold duck for the whole MCQ: question → listen → ack. Stops other apps
     # blasting between speech finishing and the mic opening.
-    # Text-only: never duck — and heal any orphaned hold left by a killed TTS child.
+    # Text-only / Audio off: never duck — heal any orphaned hold.
     duck_mod = None
     duck_held = False
     try:
         from ask_question_mcp import audio_duck as duck_mod
     except ImportError:
         duck_mod = None
+    should_duck = bool(do_speak)  # False when audio_enabled off / no TTS path
     if duck_mod is not None:
         try:
-            if not do_speak:
+            if not should_duck:
                 if duck_mod.duck_hold_count() > 0:
                     duck_mod.release_duck_hold(ramp=True, force=True)
             else:
@@ -672,7 +759,7 @@ def ask_zenity(
                     duck_mod.release_duck_hold(ramp=True, force=True)
                 except Exception:
                     pass
-            elif not do_speak:
+            elif not should_duck:
                 # Belt-and-braces: text-only must never leave media ducked.
                 try:
                     if duck_mod.duck_hold_count() > 0:
@@ -734,10 +821,23 @@ def ask_zenity(
         allow_ack = snapshot_ack_allowed_and_invalidate()
     stop_speak()
 
-    rec_kw = {
-        "recommended_id": recommended_id,
-        "recommended_ids": recommended_ids,
-    }
+    def _play_ack(
+        *,
+        out_ids: list[str],
+        out_labels: list[str] | None = None,
+        freeform: bool = False,
+        dangerous_pick: bool = False,
+    ) -> None:
+        if not (do_speak and allow_ack):
+            return
+        speak_ack(
+            chosen_ids=out_ids,
+            recommended_id=recommended_id,
+            recommended_ids=recommended_ids,
+            dangerous=bool(dangerous_pick or whole_danger),
+            freeform=freeform,
+            labels=out_labels,
+        )
 
     def _with_voice(payload: dict[str, Any]) -> dict[str, Any]:
         meta = dict(voice_meta) if voice_meta else {}
@@ -757,10 +857,7 @@ def ask_zenity(
                         break
             except (OSError, json.JSONDecodeError):
                 meta = {}
-        if meta:
-            payload["voice"] = meta
-        payload["audio_mode"] = caps.audio_mode
-        payload["capabilities"] = caps.as_dict()
+        lean = _lean_mcq_result(payload, voice_meta=meta, caps=caps)
         # One-shot nudge when host is not on the README verified matrix.
         try:
             from ask_question_mcp.platform_info import (
@@ -774,18 +871,18 @@ def ask_zenity(
             if (
                 classification.get("ask_feedback")
                 and session_nudge_pending()
-                and not payload.get("cancelled")
+                and not lean.get("cancelled")
             ):
-                payload["platform"] = {
+                lean["platform"] = {
                     "status": classification["status"],
                     "verified": False,
                     "summary": classification["summary"],
                     "host": classification["host"],
                 }
-                payload["platform_feedback"] = offer_platform_feedback(
+                lean["platform_feedback"] = offer_platform_feedback(
                     classification["host"]
                 )
-                payload["agent_note"] = (
+                lean["agent_note"] = (
                     "Unverified platform — present platform_feedback via "
                     "ask_multiple_choice (once). On works/broken use "
                     "github_issue_draft_* and help open a GitHub issue or "
@@ -794,7 +891,7 @@ def ask_zenity(
                 mark_session_nudged()
         except Exception:
             pass
-        return payload
+        return lean
 
     def _open_entry(*, auto_listen: bool) -> str:
         nonlocal voice_meta
@@ -843,12 +940,12 @@ def ask_zenity(
             if freeform_text is not None:
                 result["freeform"] = True
                 result["freeform_text"] = freeform_text
-            if do_speak and allow_ack:
-                speak_ack(
-                    followed_recommendation=followed_recommendation(
-                        out_ids, **rec_kw
-                    )
-                )
+            _play_ack(
+                out_ids=out_ids,
+                out_labels=out_labels,
+                freeform=freeform_text is not None,
+                dangerous_pick=any(i in danger_ids for i in out_ids),
+            )
             return _with_voice(result)
 
         chosen_id = chosen_ids[0] if chosen_ids else ""
@@ -862,12 +959,12 @@ def ask_zenity(
                 freeform_text = voice_freeform
             else:
                 freeform_text = _open_entry(auto_listen=chosen_id in auto_listen_ids)
-            if do_speak and allow_ack:
-                speak_ack(
-                    followed_recommendation=followed_recommendation(
-                        [chosen_id], **rec_kw
-                    )
-                )
+            _play_ack(
+                out_ids=[chosen_id],
+                out_labels=[freeform_text],
+                freeform=True,
+                dangerous_pick=chosen_id in danger_ids,
+            )
             return _with_voice(
                 {
                     "id": chosen_id,
@@ -881,12 +978,12 @@ def ask_zenity(
                 }
             )
 
-        if do_speak and allow_ack:
-            speak_ack(
-                followed_recommendation=followed_recommendation(
-                    [chosen_id], **rec_kw
-                )
-            )
+        _play_ack(
+            out_ids=[chosen_id],
+            out_labels=[labels[chosen_id]],
+            freeform=False,
+            dangerous_pick=chosen_id in danger_ids,
+        )
         return _with_voice(
             {
                 "id": chosen_id,

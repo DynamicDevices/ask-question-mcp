@@ -58,12 +58,46 @@ elif os.environ.get("ASK_QUESTION_DUCK_RAMP_MS") is not None:
 else:
     _RAMP_DOWN_MS = 900
 _RAMP_STEPS = max(3, int(os.environ.get("ASK_QUESTION_DUCK_RAMP_STEPS", "8")))
-_ENABLED = os.environ.get("ASK_QUESTION_DUCK", "1").strip() not in (
-    "0",
-    "false",
-    "no",
-    "off",
-)
+
+
+def _audio_features_enabled() -> bool:
+    """Master Audio mute (prefs / ASK_QUESTION_AUDIO) — never duck when off."""
+    try:
+        from ask_question_mcp.prefs import get_audio_enabled
+
+        return bool(get_audio_enabled())
+    except Exception:
+        try:
+            import prefs as _prefs  # type: ignore
+
+            return bool(_prefs.get_audio_enabled())
+        except Exception:
+            raw = os.environ.get("ASK_QUESTION_AUDIO", "").strip().lower()
+            if raw in {"0", "false", "no", "off"}:
+                return False
+            return True
+
+
+def _duck_pref_enabled() -> bool:
+    """Whether media ducking is configured on (env → prefs → default True)."""
+    try:
+        from ask_question_mcp.prefs import get_duck_enabled
+
+        return bool(get_duck_enabled())
+    except Exception:
+        try:
+            import prefs as _prefs  # type: ignore
+
+            return bool(_prefs.get_duck_enabled())
+        except Exception:
+            raw = os.environ.get("ASK_QUESTION_DUCK", "1").strip().lower()
+            return raw not in {"0", "false", "no", "off"}
+
+
+def _duck_allowed() -> bool:
+    """Duck only when Audio is on and duck_enabled (prefs/env) is on."""
+    return _audio_features_enabled() and _duck_pref_enabled()
+
 
 # Do not duck our own players (or streams that appear after we duck).
 _SKIP_BINARIES = frozenset(
@@ -97,7 +131,7 @@ def _pactl(*args: str) -> subprocess.CompletedProcess[str]:
 
 
 def _list_sink_inputs() -> list[dict[str, Any]]:
-    if not _ENABLED:
+    if not _duck_allowed():
         return []
     try:
         proc = _pactl("list", "sink-inputs")
@@ -266,7 +300,7 @@ def duck_other_audio(*, ramp: bool = True) -> bool:
     Ramps down over ``ASK_QUESTION_DUCK_DOWN_MS`` (default 900 ms) unless
     ``ramp=False``.
     """
-    if not _ENABLED:
+    if not _duck_allowed():
         return False
     existing = _read_state()
     if existing and existing.get("streams"):
@@ -319,7 +353,7 @@ def refresh_duck(*, ramp: bool = False) -> bool:
     Profile flips (A2DP→HFP) often recreate app streams at full volume on
     speakers; call this after parking/switching so the blip dies.
     """
-    if not _ENABLED or _read_hold() <= 0:
+    if not _duck_allowed() or _read_hold() <= 0:
         return False
     state = _read_state() or {}
     saved: list[dict[str, Any]] = list(state.get("streams") or [])
@@ -477,7 +511,7 @@ def acquire_duck_hold(*, ramp: bool = True) -> bool:
     finishes and while the mic is open. Pair with ``release_duck_hold``.
     File-locked so parallel agents do not corrupt hold/state.
     """
-    if not _ENABLED:
+    if not _duck_allowed():
         return False
     with _duck_lock():
         n = _read_hold()
@@ -729,7 +763,13 @@ def play_with_duck(play_fn) -> bool:
     If a session hold is already active (MCQ open), do **not** increment the
     hold counter — killed TTS children used to leave orphaned nest counts
     (other apps stuck quiet). Session owner restores at dialog end.
+    When Audio or duck_enabled is off, play without ducking.
     """
+    if not _duck_allowed():
+        try:
+            return bool(play_fn())
+        except Exception:
+            return False
     already = _read_hold() > 0
     if already:
         try:

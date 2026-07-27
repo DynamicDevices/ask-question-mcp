@@ -15,6 +15,7 @@ def main() -> None:
     os.environ.pop("ASK_QUESTION_TTS_URL", None)
     os.environ.pop("ALEX_VOICE_SVC", None)
     os.environ.pop("ASK_QUESTION_STT_URL", None)
+    os.environ.pop("ASK_QUESTION_AUDIO", None)
     os.environ["ASK_QUESTION_SPEAK"] = "1"
     os.environ.pop("ASK_QUESTION_VOICE_ANSWER", None)
 
@@ -67,6 +68,32 @@ def main() -> None:
     assert caps2.audio_mode == "text_only"
     assert caps2.speak_active is False
     assert caps2.listen_active is False
+
+    # Master audio kill switch (TTS+STT) even when SPEAK requested.
+    os.environ["ASK_QUESTION_SPEAK"] = "1"
+    os.environ["ASK_QUESTION_AUDIO"] = "0"
+    os.environ["ASK_QUESTION_TTS_URL"] = "http://127.0.0.1:8200"
+    os.environ["ASK_QUESTION_STT_URL"] = "http://127.0.0.1:8201/transcribe"
+    caps3 = resolve_voice_capabilities(speak_requested=True)
+    assert caps3.audio_mode == "text_only"
+    assert caps3.speak_active is False
+    assert caps3.listen_active is False
+    assert any("Audio disabled" in n for n in caps3.notes)
+    os.environ.pop("ASK_QUESTION_AUDIO", None)
+    os.environ.pop("ASK_QUESTION_TTS_URL", None)
+    os.environ.pop("ASK_QUESTION_STT_URL", None)
+    os.environ["ASK_QUESTION_SPEAK"] = "0"
+
+    from ask_question_mcp.prefs import get_duck_enabled
+    from ask_question_mcp import audio_duck as duck
+
+    os.environ.pop("ASK_QUESTION_DUCK", None)
+    assert get_duck_enabled() is True  # shipped default
+    os.environ["ASK_QUESTION_DUCK"] = "0"
+    assert get_duck_enabled() is False
+    assert duck._duck_allowed() is False
+    assert duck.acquire_duck_hold(ramp=False) is False
+    os.environ.pop("ASK_QUESTION_DUCK", None)
 
     assert setup_guide("tts")["ok"] is True
     assert setup_guide("stt")["ok"] is True

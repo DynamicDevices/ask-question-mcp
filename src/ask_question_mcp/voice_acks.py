@@ -75,17 +75,21 @@ def ack_playback_volume() -> float:
         except Exception:
             return _env_volume("ASK_QUESTION_ACK_VOLUME", _DEFAULT_ACK_VOLUME)
 
-# Short spoken acks after a successful pick (spoken). Grow via
-# ``scripts/review_acks.py``.
+# Short spoken acks after a successful OK (cancel stays silent). Grow / rate
+# takes via ``scripts/review_acks.py``. Override packs in
+# ``~/.config/ask-question-mcp/acks.json`` (see ``acks.example.json``).
 #
-# Agree = followed the recommended option(s). Pushback = picked something else
-# (Do not use agree-pool phrases when the user disagreed).
+# Outcomes:
+#   agree    — followed recommended option(s)
+#   diverge  — picked a different listed option
+#   neutral  — no recommendation was set
+#   freeform — Something else / typed answer
+#   danger   — confirmed a dangerous dialog or dangerous option
 ACK_AGREE = (
     "Sounds good.",
     "Absolutely.",
     "Cool.",
     "Makes sense.",
-    "Yup.",
     "Sure.",
     "Alright.",
     "Will do.",
@@ -96,7 +100,7 @@ ACK_AGREE = (
     "OK.",
     "Got it.",
 )
-ACK_PUSHBACK = (
+ACK_DIVERGE = (
     "Got it.",
     "Noted.",
     "Fair enough.",
@@ -104,10 +108,64 @@ ACK_PUSHBACK = (
     "Right.",
     "Thanks.",
 )
-ACK_PHRASES = tuple(dict.fromkeys((*ACK_AGREE, *ACK_PUSHBACK)))
+# Back-compat alias (older call sites / docs).
+ACK_PUSHBACK = ACK_DIVERGE
+ACK_NEUTRAL = (
+    "OK.",
+    "Got it.",
+    "Thanks.",
+    "Right.",
+    "Alright.",
+)
+ACK_FREEFORM = (
+    "Got it.",
+    "Noted.",
+    "Thanks.",
+    "Alright.",
+    "OK.",
+)
+ACK_DANGER = (
+    "Understood.",
+    "OK.",
+    "Noted.",
+    "Got it.",
+    "Right.",
+)
+ACK_PACKS_DEFAULT: dict[str, tuple[str, ...]] = {
+    "agree": ACK_AGREE,
+    "diverge": ACK_DIVERGE,
+    "neutral": ACK_NEUTRAL,
+    "freeform": ACK_FREEFORM,
+    "danger": ACK_DANGER,
+}
+ACK_PHRASES = tuple(
+    dict.fromkeys(
+        p for pack in ACK_PACKS_DEFAULT.values() for p in pack
+    )
+)
+
+# Prefer these when the chosen label looks like an action to execute.
+_ACK_ACTION = ("On it.", "Will do.", "Done.", "Copy that.", "No problem.")
+_ACK_SOFT_AGREE = (
+    "Sounds good.",
+    "Makes sense.",
+    "Cool.",
+    "Absolutely.",
+    "Sure.",
+    "Alright.",
+)
+_ACTION_LABEL_RE = re.compile(
+    r"\b("
+    r"commit|push|deploy|delete|remove|send|reboot|reset|install|run|apply|"
+    r"merge|publish|release|kill|wipe|format|enable|disable|reload|restart"
+    r")\b",
+    re.I,
+)
 
 # Keep reviewed takes with score >= this in the per-phrase pool (keep score >= 4).
 ACK_KEEP_MIN_SCORE = 4
+
+_ACKS_CONFIG_PATH = Path.home() / ".config" / "ask-question-mcp" / "acks.json"
 
 _NOTIFY_VOICE = Path.home() / ".local/bin/notify-voice.sh"
 _CACHE_ROOT = Path.home() / ".cache" / "ask-question-mcp"
@@ -304,15 +362,21 @@ def pick_ack_wav(
     phrase: str | None = None,
     *,
     phrases: tuple[str, ...] | list[str] | None = None,
+    preserve_order: bool = False,
 ) -> tuple[str, Path] | None:
-    """Pick a random phrase (or the given one) and a random approved take."""
+    """Pick a phrase and a random approved take.
+
+    When ``preserve_order`` is True (ranked candidates), try phrases in order
+    and pick a random take for the first phrase that has WAVs. Otherwise shuffle.
+    """
     if phrase is not None:
         takes = list_ack_wavs(phrase)
         if not takes:
             return None
         return phrase, random.choice(takes)
-    order = list(phrases) if phrases is not None else list(ACK_PHRASES)
-    random.shuffle(order)
+    order = list(phrases) if phrases is not None else list(all_ack_phrases())
+    if not preserve_order:
+        random.shuffle(order)
     for p in order:
         takes = list_ack_wavs(p)
         if takes:
@@ -339,6 +403,136 @@ def followed_recommendation(
     if chosen & {"other", "something_else", "something-else"}:
         return False
     return chosen <= rec
+
+
+def load_ack_packs() -> dict[str, tuple[str, ...]]:
+    """Shipped packs merged with optional ``~/.config/ask-question-mcp/acks.json``."""
+    packs: dict[str, tuple[str, ...]] = {
+        k: tuple(v) for k, v in ACK_PACKS_DEFAULT.items()
+    }
+    try:
+        if _ACKS_CONFIG_PATH.is_file():
+            raw = json.loads(_ACKS_CONFIG_PATH.read_text(encoding="utf-8"))
+            user = raw.get("packs") if isinstance(raw, dict) else None
+            if isinstance(user, dict):
+                for key, phrases in user.items():
+                    if not isinstance(phrases, list):
+                        continue
+                    cleaned = tuple(
+                        str(p).strip()
+                        for p in phrases
+                        if str(p).strip()
+                    )
+                    if cleaned:
+                        packs[str(key)] = cleaned
+    except (OSError, json.JSONDecodeError, TypeError):
+        pass
+    return packs
+
+
+def all_ack_phrases() -> tuple[str, ...]:
+    """Deduped phrases across configured packs (for cache bootstrap)."""
+    seen: dict[str, None] = {}
+    for phrases in load_ack_packs().values():
+        for p in phrases:
+            seen.setdefault(p, None)
+    return tuple(seen.keys()) or ACK_PHRASES
+
+
+def classify_ack_outcome(
+    chosen_ids: list[str] | set[str],
+    *,
+    recommended_id: str | None = None,
+    recommended_ids: list[str] | None = None,
+    dangerous: bool = False,
+    freeform: bool = False,
+) -> str:
+    """Map an answered MCQ to an ack pack name.
+
+    Priority: freeform → danger → agree / diverge / neutral.
+    Cancel never reaches this (no ack).
+    """
+    chosen = {str(c) for c in chosen_ids if c}
+    if freeform or chosen & {"other", "something_else", "something-else"}:
+        return "freeform"
+    if dangerous:
+        return "danger"
+    followed = followed_recommendation(
+        chosen,
+        recommended_id=recommended_id,
+        recommended_ids=recommended_ids,
+    )
+    if followed is True:
+        return "agree"
+    if followed is False:
+        return "diverge"
+    return "neutral"
+
+
+def _labels_look_actionish(labels: list[str] | None) -> bool:
+    if not labels:
+        return False
+    blob = " ".join(str(x) for x in labels)
+    return bool(_ACTION_LABEL_RE.search(blob))
+
+
+def rank_ack_phrases(
+    outcome: str,
+    phrases: tuple[str, ...] | list[str],
+    *,
+    labels: list[str] | None = None,
+) -> list[str]:
+    """Order candidates so a random pick among the top tier feels sensible."""
+    pool = [p for p in phrases if p]
+    if not pool:
+        return []
+    if outcome == "agree" and _labels_look_actionish(labels):
+        preferred = [p for p in _ACK_ACTION if p in pool]
+        rest = [p for p in pool if p not in preferred]
+        random.shuffle(preferred)
+        random.shuffle(rest)
+        return preferred + rest
+    if outcome == "agree":
+        preferred = [p for p in _ACK_SOFT_AGREE if p in pool]
+        rest = [p for p in pool if p not in preferred]
+        random.shuffle(preferred)
+        random.shuffle(rest)
+        return preferred + rest
+    # diverge / freeform / danger / neutral: avoid "Will do" / "On it" tone
+    avoid = set(_ACK_ACTION)
+    preferred = [p for p in pool if p not in avoid]
+    demoted = [p for p in pool if p in avoid]
+    random.shuffle(preferred)
+    random.shuffle(demoted)
+    return preferred + demoted
+
+
+def candidates_for_outcome(
+    outcome: str,
+    *,
+    labels: list[str] | None = None,
+) -> tuple[str, ...]:
+    packs = load_ack_packs()
+    phrases = packs.get(outcome) or packs.get("neutral") or ACK_NEUTRAL
+    ranked = rank_ack_phrases(outcome, phrases, labels=labels)
+    return tuple(ranked)
+
+
+def ack_enabled() -> bool:
+    try:
+        from ask_question_mcp.prefs import get_ack_enabled
+
+        return bool(get_ack_enabled())
+    except Exception:
+        try:
+            import prefs as _prefs  # type: ignore
+
+            return bool(_prefs.get_ack_enabled())
+        except Exception:
+            raw = os.environ.get("ASK_QUESTION_ACK", "").strip().lower()
+            if raw in {"0", "false", "no", "off"}:
+                return False
+            return True
 
 
 def install_ack_take(phrase: str, src: Path, seed: int) -> Path | None:
@@ -515,7 +709,7 @@ def ensure_ack_cache(*, min_takes: int | None = None) -> list[str]:
     _ACK_CACHE_DIR.mkdir(parents=True, exist_ok=True)
     missing: list[str] = []
     seeds = _ack_bootstrap_seeds()
-    for phrase in ACK_PHRASES:
+    for phrase in all_ack_phrases():
         if not list_ack_wavs(phrase):
             seed_ack_from_bundled(phrase)
         have = list_ack_wavs(phrase)
@@ -1207,30 +1401,64 @@ def speak_async(text: str) -> subprocess.Popen[Any] | None:
         return None
 
 
-def speak_ack(*, followed_recommendation: bool | None = None) -> None:
+def speak_ack(
+    *,
+    followed_recommendation: bool | None = None,
+    outcome: str | None = None,
+    chosen_ids: list[str] | set[str] | None = None,
+    recommended_id: str | None = None,
+    recommended_ids: list[str] | None = None,
+    dangerous: bool = False,
+    freeform: bool = False,
+    labels: list[str] | None = None,
+) -> None:
     """Pause, then play a tone-matched Ack speech (question already stopped).
 
     Call only when click-time ``snapshot_ack_allowed_and_invalidate()`` /
     ``read_ack_allowed()`` said the question finished before the answer.
 
-    ``followed_recommendation``: True → agree pool (Sounds good / …);
-    False → pushback pool (Got it / Noted / Fair enough); None → any phrase.
+    Prefer passing answer context (``chosen_ids`` / ``dangerous`` / ``freeform``)
+    so the pack matches the response. Legacy: ``followed_recommendation``
+    True/False/None maps to agree/diverge/neutral.
     """
+    if not ack_enabled():
+        return
     stop_speak()
     ensure_ack_cache()
     time.sleep(ACK_DELAY_S)
-    if followed_recommendation is False:
-        candidates: tuple[str, ...] = ACK_PUSHBACK
-    elif followed_recommendation is True:
-        candidates = ACK_AGREE
-    else:
-        candidates = ACK_PHRASES
-    picked = pick_ack_wav(phrases=candidates)
+
+    if outcome is None and chosen_ids is not None:
+        outcome = classify_ack_outcome(
+            chosen_ids,
+            recommended_id=recommended_id,
+            recommended_ids=recommended_ids,
+            dangerous=dangerous,
+            freeform=freeform,
+        )
+    elif outcome is None:
+        if followed_recommendation is False:
+            outcome = "diverge"
+        elif followed_recommendation is True:
+            outcome = "agree"
+        else:
+            outcome = "neutral"
+
+    candidates = candidates_for_outcome(outcome, labels=labels)
+    if not candidates:
+        candidates = ACK_NEUTRAL
+
+    # Prefer top-ranked phrases that already have WAVs; fall through the list.
+    top = list(candidates[: max(3, min(5, len(candidates)))])
+    random.shuffle(top)
+    rest = [p for p in candidates if p not in top]
+    ordered = tuple(top + rest)
+
+    picked = pick_ack_wav(phrases=ordered, preserve_order=True)
     if picked is not None:
         _phrase, path = picked
         if play_wav_sync(path, volume=ack_playback_volume()):
             return
-    phrase = random.choice(candidates)
+    phrase = ordered[0]
     # Play ack without bumping question-speak generation gates.
     path = ensure_question_wav(phrase)
     if path is not None:

@@ -1,0 +1,49 @@
+{
+  "_comment": "Optional. Copy to ~/.config/ask-question-mcp/acks.json to override shipped packs. Phrases should stay short; generate missing WAVs via scripts/review_acks.py or live TTS.",
+  "packs": {
+    "agree": [
+      "Sounds good.",
+      "Absolutely.",
+      "Cool.",
+      "Makes sense.",
+      "Sure.",
+      "Alright.",
+      "Will do.",
+      "On it.",
+      "Done.",
+      "No problem.",
+      "Copy that.",
+      "OK.",
+      "Got it."
+    ],
+    "diverge": [
+      "Got it.",
+      "Noted.",
+      "Fair enough.",
+      "OK.",
+      "Right.",
+      "Thanks."
+    ],
+    "neutral": [
+      "OK.",
+      "Got it.",
+      "Thanks.",
+      "Right.",
+      "Alright."
+    ],
+    "freeform": [
+      "Got it.",
+      "Noted.",
+      "Thanks.",
+      "Alright.",
+      "OK."
+    ],
+    "danger": [
+      "Understood.",
+      "OK.",
+      "Noted.",
+      "Got it.",
+      "Right."
+    ]
+  }
+}

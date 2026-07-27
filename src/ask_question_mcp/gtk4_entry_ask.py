@@ -33,6 +33,22 @@ try:
     import prefs as _prefs
 except ImportError:  # pragma: no cover
     _prefs = None  # type: ignore[assignment]
+try:
+    import audio_duck as _audio_duck
+except ImportError:  # pragma: no cover
+    _audio_duck = None  # type: ignore[assignment]
+
+
+def _force_unduck_media() -> None:
+    if _audio_duck is None:
+        return
+    try:
+        if _audio_duck.duck_hold_count() > 0:
+            _audio_duck.release_duck_hold(ramp=True, force=True)
+        else:
+            _audio_duck.restore_other_audio(ramp=True, force=True)
+    except Exception:
+        pass
 
 
 def main() -> int:
@@ -52,7 +68,12 @@ def main() -> int:
     prompt = str(payload.get("prompt") or "Edit or speak your answer:").strip()
     initial = str(payload.get("initial_text") or "")
     auto_listen = bool(payload.get("auto_listen"))
-    if not auto_listen and _prefs is not None and _prefs.get_always_listen():
+    if (
+        not auto_listen
+        and _prefs is not None
+        and _prefs.get_always_listen()
+        and _prefs.get_audio_enabled()
+    ):
         auto_listen = True
     timeout_sec = int(payload.get("timeout_sec") or 0)
     voice_wanted = bool(payload.get("voice_enabled", True))
@@ -254,8 +275,25 @@ def main() -> int:
             buf.place_cursor(end)
 
         btn_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        btn_row.set_halign(Gtk.Align.END)
+        btn_row.set_halign(Gtk.Align.FILL)
         btn_row.set_hexpand(True)
+
+        if _prefs is not None:
+            audio_chk = Gtk.CheckButton(label="Audio")
+            audio_chk.set_tooltip_text(
+                "Speak and listen (saved). Off = text-only until turned back on."
+            )
+            audio_chk.set_active(_prefs.get_audio_enabled())
+
+            def on_audio_toggled(btn: Gtk.CheckButton) -> None:
+                _prefs.set_audio_enabled(bool(btn.get_active()))
+                if not btn.get_active():
+                    _force_unduck_media()
+                    if not closed["v"]:
+                        set_status("idle", "Audio off — type your answer (saved)")
+
+            audio_chk.connect("toggled", on_audio_toggled)
+            btn_row.append(audio_chk)
 
         speak_btn: Gtk.Button | None = None
         if voice_on:
@@ -274,11 +312,19 @@ def main() -> int:
             def on_always_listen_toggled(btn: Gtk.CheckButton) -> None:
                 if _prefs is not None:
                     _prefs.set_always_listen(btn.get_active())
-                if btn.get_active() and not closed["v"]:
+                if (
+                    btn.get_active()
+                    and not closed["v"]
+                    and (_prefs is None or _prefs.get_audio_enabled())
+                ):
                     start_listen()
 
             always_listen_chk.connect("toggled", on_always_listen_toggled)
             btn_row.append(always_listen_chk)
+
+        spacer = Gtk.Box()
+        spacer.set_hexpand(True)
+        btn_row.append(spacer)
 
         cancel_btn = Gtk.Button(label="Cancel")
         ok_btn = Gtk.Button(label="OK")
@@ -333,6 +379,9 @@ def main() -> int:
 
         def start_listen() -> None:
             if not voice_on or _voice_answer is None or closed["v"]:
+                return
+            if _prefs is not None and not _prefs.get_audio_enabled():
+                set_status("idle", "Audio off — enable Audio to listen")
                 return
             listen_gen["n"] += 1
             gen = listen_gen["n"]

@@ -41,6 +41,8 @@ except ImportError:  # pragma: no cover
 def _duck_acquire() -> None:
     if _audio_duck is None:
         return
+    if _prefs is not None and not _prefs.get_audio_enabled():
+        return
     try:
         _audio_duck.acquire_duck_hold(ramp=True)
     except Exception:  # noqa: BLE001
@@ -247,7 +249,21 @@ def main() -> int:
                 _prefs.set_always_listen(btn.get_active())
 
         always_listen_chk.connect("toggled", on_always_listen_toggled)
-        # Keep action buttons grouped; pref toggle sits left of Cancel cluster.
+        # Keep action buttons grouped; pref toggles sit left of Cancel cluster.
+        if _prefs is not None:
+            audio_chk = Gtk.CheckButton(label="Audio")
+            audio_chk.set_tooltip_text(
+                "Speak and listen (saved). Off = text-only until turned back on."
+            )
+            audio_chk.set_active(_prefs.get_audio_enabled())
+
+            def on_audio_toggled(btn: Gtk.CheckButton) -> None:
+                _prefs.set_audio_enabled(bool(btn.get_active()))
+                if not btn.get_active():
+                    _duck_release(force=True)
+
+            audio_chk.connect("toggled", on_audio_toggled)
+            btn_row.prepend(audio_chk)
         btn_row.prepend(always_listen_chk)
 
         footer.append(btn_row)

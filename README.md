@@ -146,8 +146,42 @@ correctly**. Follow this checklist in order.
 | `ask_multiple_choice` | Human decision dialog; on config errors includes a `setup` hint block |
 | `record_platform_feedback` | Persist works/broken/later/dont_ask after an unverified-platform nudge |
 
-**Agent pattern:** `check_setup` → (if needed) `ask_multiple_choice(offer_walkthrough)` →
-`setup_guide(topic)` → human applies steps → `check_setup` again → then normal MCQs.
+**Agent pattern:** On **first enable / dialog failure / before voice only:**
+`check_setup` → (if needed) walkthrough → `setup_guide` → re-check once.
+Do **not** call `check_setup` before routine MCQs — go straight to
+`ask_multiple_choice`.
+
+### Token / catalog cost (structural)
+
+Hosts inject **tool descriptions + server instructions every model turn** while
+this MCP is enabled. That is the dominant cost of enabling ask-question — not
+the click itself. Figures below are **structural** (chars ÷ 4 ≈ tokens), not
+billing CSVs. Measured **2026-07-27** on the maintainer Cursor stack after the
+lean-result / short-docstring pass.
+
+| Surface | Size | ≈ tokens | Notes |
+|---------|-----:|---------:|-------|
+| Server instructions | 347 chars | ~90 | Prefer MCQ; `check_setup` only when needed |
+| All tool descriptions (4 tools) | 457 chars | ~110 | Soft CI budgets: instructions ≤600, each desc ≤400 |
+| On-disk Cursor MCP descriptors (`user-ask-question`) | ~4.9k chars | ~1.2k | This package’s share of a lean core catalog |
+| Idle successful MCQ result (default) | ~57 chars | ~14 | `id` / `label` / `cancelled` only |
+| Same result with full voice + capabilities echo | ~485 chars | ~120 | Avoided unless useful; `ASK_QUESTION_RESULT_VERBOSE=1` forces it |
+| Saved per idle MCQ (lean vs fat echo) | — | **~100** | Do not call `check_setup` before routine picks |
+
+**Host context (not this package):** Cursor also loads builtins
+(`cursor-app-control`, `cursor-ide-browser`) and any other enabled servers
+(e.g. MemPalace). A lean core catalog on this host was ≈ **15k tok** MCP disk
+total with ask-question ≈ **1.2k** of that. Marketplace plugins can add tens
+of thousands of tokens per turn if left enabled — keep optional plugins off
+unless the workspace needs them.
+
+**Agent habits that keep cost low:**
+
+1. Call **`ask_multiple_choice`** directly for routine forks.
+2. Call **`check_setup`** only on first enable, dialog failure, or before voice.
+3. Leave **`ASK_QUESTION_RESULT_VERBOSE`** unset unless debugging voice/setup.
+
+See also [SETUP.md](SETUP.md#5-env-cheat-sheet) (`ASK_QUESTION_RESULT_VERBOSE`).
 
 ### What this MCP is / is not
 
@@ -292,13 +326,17 @@ After editing: reload the host. Listings usually show server **`ask-question`**;
 | `ASK_QUESTION_TTS_URL` | empty | TTS HTTP base (`/tts`, `/tts/stream`). Empty = no live TTS |
 | `ASK_QUESTION_STT_URL` | empty | Full STT URL ending in `/transcribe`. Empty = no voice answers |
 | `ASK_QUESTION_TTS_TOKEN` / `ASK_QUESTION_STT_TOKEN` | empty | Optional Bearer tokens |
-| `ASK_QUESTION_SPEAK` | on | `0` / `false` = mute question speech |
+| `ASK_QUESTION_AUDIO` | on | `0` / `false` = **master mute** (TTS + STT); overrides dialog Audio checkbox via env |
+| `ASK_QUESTION_SPEAK` | on | `0` / `false` = mute question speech only |
 | `ASK_QUESTION_VOICE_ANSWER` | on | `0` = never open mic path |
-| `ASK_QUESTION_DUCK` | on | `0` = do not duck other audio |
+| `ASK_QUESTION_DUCK` | on | `0` = do not duck other audio (prefs `duck_enabled`) |
+| `ASK_QUESTION_ACK` | on | `0` = mute spoken acks only (prefs `ack_enabled`; cancel never acks) |
+| `ASK_QUESTION_RESULT_VERBOSE` | off | `1` = always attach full `voice` + `capabilities` on MCQ results |
 | `ASK_QUESTION_SPEAK_VOLUME` / `ASK_QUESTION_ACK_VOLUME` | `0.60` / `0.55` | Linear playback gain |
 | `ASK_QUESTION_ALWAYS_LISTEN` | on | `0` = Listen button only |
 | `ASK_QUESTION_AGENT` / `LANE_ID` | unset | Fallback for `agent=` if omitted |
-| `ASK_QUESTION_DANGER_ARM_MS` | `4000` | Dangerous dialogs: block OK/Enter this many ms after open (`0` = off) |
+| `ASK_QUESTION_ARM_MS` | `1000` | All MCQs: block OK/Enter this many ms after open (`0` = off) |
+| `ASK_QUESTION_DANGER_ARM_MS` | `4000` | Dangerous dialogs: longer arm (`0` = off for danger path) |
 
 Full knobs + prefs paths: [SETUP.md](SETUP.md), [DEPENDENCIES.md](DEPENDENCIES.md).
 
@@ -322,7 +360,7 @@ Full knobs + prefs paths: [SETUP.md](SETUP.md), [DEPENDENCIES.md](DEPENDENCIES.m
 | `recommended_ids` | string[] \| null | no | Multi-select preferred ids |
 | `allow_multiple` | bool | no | default `false` (radio); `true` = checklist |
 | `allow_other` | bool | no | default `true` — appends Something else |
-| `dangerous` | bool | no | Whole-dialog danger chrome; OK/Enter armed ~4s (`ASK_QUESTION_DANGER_ARM_MS`) |
+| `dangerous` | bool | no | Whole-dialog danger chrome; OK/Enter armed ~4s (`ASK_QUESTION_DANGER_ARM_MS`). Normal MCQs arm ~1s (`ASK_QUESTION_ARM_MS`). |
 | `speak` | bool | no | default `true` (honours mute env / missing TTS) |
 | `title` | string | no | default `"Decide"` — short noun phrase |
 | `agent` | string \| null | **strongly yes** | Window title prefix `[agent]` |
@@ -361,9 +399,10 @@ Full knobs + prefs paths: [SETUP.md](SETUP.md), [DEPENDENCIES.md](DEPENDENCIES.m
 }
 ```
 
-While `dangerous` is set, OK and Enter stay locked for ~4 seconds (countdown on the
-OK button) so a stray Return cannot confirm. Override with `ASK_QUESTION_DANGER_ARM_MS`
-(`0` disables). Cancel / Escape still work immediately.
+OK and Enter stay locked briefly after open (countdown on the OK button) so a
+stray Return cannot confirm: **~1s** on normal MCQs (`ASK_QUESTION_ARM_MS`),
+**~4s** when `dangerous` is set (`ASK_QUESTION_DANGER_ARM_MS`). Set either env
+to `0` to disable that path. Cancel / Escape still work immediately.
 
 ### Return value (JSON string)
 
@@ -392,17 +431,16 @@ The tool returns a **JSON string**. Parse it before branching.
 { "cancelled": true, "reason": "…" }
 ```
 
-**Capabilities (always present on success):**
+**Capabilities (only when useful):** omitted on a normal successful pick when
+voice is healthy. Included when `capabilities.notes` has setup hints (e.g.
+TTS unset). Full dump: `ASK_QUESTION_RESULT_VERBOSE=1`.
 
 ```json
 {
   "audio_mode": "text_only",
   "capabilities": {
-    "tts_configured": false,
-    "stt_configured": false,
-    "speak_active": false,
-    "listen_active": false,
-    "notes": ["No TTS configured … — text-only MCQ (click / type)."]
+    "notes": ["No TTS configured … — text-only MCQ (click / type)."],
+    "audio_mode": "text_only"
   }
 }
 ```
@@ -410,9 +448,9 @@ The tool returns a **JSON string**. Parse it before branching.
 `audio_mode` is `text_only` | `speak` | `full`. Missing voice is never a hard
 error — call `setup_guide` if the human wants speech later.
 
-**Voice diagnostics (optional):** a `voice` object may include `transcript`,
-`matched_option_id`, `attempts`, etc. Useful for debugging; the chosen `id` /
-`freeform_text` remains authoritative.
+**Voice diagnostics:** `voice` is included only when speech was used or failed
+(transcript / match / error). Idle empty voice blobs are omitted. The chosen
+`id` / `freeform_text` remains authoritative.
 
 ---
 
@@ -422,7 +460,9 @@ error — call `setup_guide` if the human wants speech later.
 - Danger chrome for high-risk decisions
 - Inline Something else (type or Speak→STT when configured)
 - **Text-only fallback** when TTS/STT are unset — dialog still works; response
-  includes `audio_mode` + `capabilities.notes` so agents can offer `setup_guide`
+  includes `capabilities.notes` when setup hints apply (lean otherwise)
+- Lean idle MCQ JSON (omit empty `voice` / `capabilities`); see
+  [Token / catalog cost](#token--catalog-cost-structural)
 - Optional TTS + bundled multi-take ack WAVs; optional STT phrase matching
 - Media duck under PipeWire only while speaking
 - Per-dialog session IPC so parallel agents do not share speak gates
@@ -451,9 +491,21 @@ No prefs file required. Optional `~/.config/ask-question-mcp/prefs.json`
 
 | Key | Default |
 |-----|---------|
+| `audio_enabled` | `true` — master TTS+STT; dialog **Audio** checkbox; env `ASK_QUESTION_AUDIO` |
+| `duck_enabled` | `true` — lower other apps while speaking/listening; env `ASK_QUESTION_DUCK` |
+| `ack_enabled` | `true` — spoken ack after OK; env `ASK_QUESTION_ACK` |
 | `speak_volume` | `0.60` |
 | `ack_volume` | `0.55` |
 | `always_listen` | `true` |
+
+### Ack packs
+
+Spoken acks after OK are chosen by **outcome** (agree / diverge / neutral /
+freeform / danger). Cancel stays silent. Phrase lists ship in code; optional
+override: copy [`acks.example.json`](acks.example.json) →
+`~/.config/ask-question-mcp/acks.json`. WAV cache:
+`~/.cache/ask-question-mcp/charlize-acks/v2/`. Grow takes with
+`scripts/review_acks.py`.
 
 ---
 
@@ -481,7 +533,9 @@ mic helpers are optional and layered on top.
 - **Pure ALSA** (no Pulse/PipeWire session): UI still works; WAV playback may
   work via `aplay` as a last resort; **media duck and BT mic helpers will not**.
   Prefer PipeWire/Pulse on the desktop for voice features.
-- Mute speak entirely with `ASK_QUESTION_SPEAK=0` or leave TTS unset (text-only).
+- Mute speak + listen with the dialog **Audio** checkbox (saves
+  `prefs.json` `audio_enabled`), or `ASK_QUESTION_AUDIO=0`, or leave TTS unset
+  (text-only). Finer: `ASK_QUESTION_SPEAK=0` / `ASK_QUESTION_VOICE_ANSWER=0`.
 
 Detail / packages: [DEPENDENCIES.md](DEPENDENCIES.md) tier C.
 
@@ -549,7 +603,7 @@ Or register the MCP and invoke `ask_multiple_choice` from the agent.
 | Tool missing / server fails to start | Use **absolute** `uv` path (not bare `uv`); check REPO_ROOT; reload host; `check_setup` |
 | Dialog never appears | `check_setup` → fix `display` / `gtk_*`; `echo $DISPLAY`; ensure host inherits display (not headless/SSH without X) |
 | Hang / timeout | Human must click; or raise `timeout_sec`; check for off-screen dialog |
-| Speaks without TTS URL | Local Piper / `notify-voice.sh` present — expected; mute with `ASK_QUESTION_SPEAK=0` |
+| Speaks without TTS URL | Local Piper / `notify-voice.sh` present — expected; mute with Audio checkbox / `ASK_QUESTION_AUDIO=0` / `ASK_QUESTION_SPEAK=0` |
 | No speech | TTS URL unset and no local speak path; `setup_guide` topic `tts`; or mute env |
 | Mic never listens | STT URL unset — `setup_guide` topic `stt`; or `ASK_QUESTION_VOICE_ANSWER=0` |
 | Import / Gtk errors | Install Gtk4/Adw GI bindings; see `check_setup` failing checks |

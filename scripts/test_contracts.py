@@ -29,8 +29,8 @@ REQUIRED_TOOLS = {
 }
 
 # Soft budget: FastMCP instructions + tool descs burn every host turn.
-MAX_INSTRUCTIONS_CHARS = 12_000
-MAX_TOOL_DESC_CHARS = 4_000
+MAX_INSTRUCTIONS_CHARS = 600
+MAX_TOOL_DESC_CHARS = 400
 
 
 def _clear_agent_env() -> dict[str, str]:
@@ -108,11 +108,16 @@ def test_mcp_tool_surface() -> None:
     assert len(instructions) <= MAX_INSTRUCTIONS_CHARS, (
         f"FastMCP instructions {len(instructions)} > {MAX_INSTRUCTIONS_CHARS}"
     )
+    assert "never before routine" in instructions.lower() or (
+        "not before routine" in instructions.lower()
+    ), "instructions must discourage check_setup spam"
     for name, tool in tm._tools.items():
         desc = getattr(tool, "description", None) or ""
         assert len(desc) <= MAX_TOOL_DESC_CHARS, (
             f"tool {name} description {len(desc)} > {MAX_TOOL_DESC_CHARS}"
         )
+        if name == "check_setup":
+            assert "not before every" in desc.lower() or "routine" in desc.lower()
 
 
 def test_setup_guide_mcp_host_agnostic() -> None:
@@ -151,16 +156,27 @@ def test_doctor_script_still_importable() -> None:
 def test_danger_arm_ms() -> None:
     from ask_question_mcp.danger_arm import (
         DEFAULT_DANGER_ARM_MS,
+        DEFAULT_SAFE_ARM_MS,
         arm_label_secs,
         danger_arm_ms,
     )
 
-    with mock.patch.dict(os.environ, {"ASK_QUESTION_DANGER_ARM_MS": ""}, clear=False):
-        assert danger_arm_ms(dangerous=False) == 0
+    with mock.patch.dict(
+        os.environ,
+        {"ASK_QUESTION_ARM_MS": "", "ASK_QUESTION_DANGER_ARM_MS": ""},
+        clear=False,
+    ):
+        assert danger_arm_ms(dangerous=False) == DEFAULT_SAFE_ARM_MS
         assert danger_arm_ms(dangerous=True) == DEFAULT_DANGER_ARM_MS
+
+    with mock.patch.dict(os.environ, {"ASK_QUESTION_ARM_MS": "0"}, clear=False):
+        assert danger_arm_ms(dangerous=False) == 0
 
     with mock.patch.dict(os.environ, {"ASK_QUESTION_DANGER_ARM_MS": "0"}, clear=False):
         assert danger_arm_ms(dangerous=True) == 0
+
+    with mock.patch.dict(os.environ, {"ASK_QUESTION_ARM_MS": "1500"}, clear=False):
+        assert danger_arm_ms(dangerous=False) == 1500
 
     with mock.patch.dict(os.environ, {"ASK_QUESTION_DANGER_ARM_MS": "3500"}, clear=False):
         assert danger_arm_ms(dangerous=True) == 3500
@@ -173,6 +189,8 @@ def test_danger_arm_ms() -> None:
 
     assert arm_label_secs(0) == 0
     assert arm_label_secs(1) == 1
+    assert arm_label_secs(1000) == 1
+    assert arm_label_secs(1001) == 2
     assert arm_label_secs(4000) == 4
     assert arm_label_secs(4001) == 5
 
