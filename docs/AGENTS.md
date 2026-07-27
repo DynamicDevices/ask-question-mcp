@@ -1,0 +1,188 @@
+# Agent integration guide
+
+Canonical detail for coding agents and MCP hosts. Humans usually start at the
+[README](../README.md); this page is the full call contract.
+
+## Tools
+
+| Tool | When to use |
+|------|-------------|
+| `ask_multiple_choice` | Every decision fork (prefer over host AskQuestion / markdown A/B/C) |
+| `check_setup` | **First enable**, dialog failure, or **before enabling voice** — not before routine MCQs |
+| `setup_guide` | After `check_setup` / walkthrough (`ui` \| `mcp` \| `tts` \| `stt` \| `voice` \| `ui_only` \| `all`) |
+| `record_platform_feedback` | After an unverified-platform nudge (`works` \| `broken` \| `later` \| `dont_ask`) |
+
+**Pattern:** first enable / error / voice → `check_setup` → (optional) walkthrough
+→ `setup_guide` → re-check **once**. Routine forks → `ask_multiple_choice` only.
+
+CLI: `uv run python -m ask_question_mcp.doctor --json` /
+`--guide tts|stt|…`.
+
+## Integration checklist
+
+1. **Platform:** Linux GUI (`DISPLAY` + Gtk) or Windows desktop (tkinter Phase 1
+   text-only). Not headless CI / macOS GUI yet.
+2. **Install** — [DEPENDENCIES.md](../DEPENDENCIES.md); clone; `uv sync`; note
+   absolute `REPO_ROOT`.
+3. **Register** stdio MCP with absolute `uv` / `uv.exe` + `REPO_ROOT` — see
+   [README — Configuration](../README.md#configuration).
+   Reload the host.
+4. **Self-check once:** `check_setup`. If UI not ready → walkthrough →
+   `setup_guide` → re-check.
+5. **Voice (Linux, optional):** only after `ready.ui`, and only if the human
+   wants it (`setup_guide` topic `tts` / `stt`).
+6. Call **`ask_multiple_choice`** for decisions — see below.
+
+## Non-negotiable behaviour
+
+- Pass **`agent=`** (chat / lane id) so the window title shows `[agent] …`.
+- **`question`:** one short sentence a colleague would say — no meta about
+  dialogs or voice.
+- Mark recommended **only** in the option label (`Foo (recommended)`) **and**
+  pass **`recommended_id`** / `recommended_ids`. Never put “Recommended: …”
+  inside `question`.
+- Prefer **`allow_other=true`** (default).
+- Set **`dangerous=true`** (and/or per-option `dangerous`) for irreversible /
+  high-risk forks.
+- One decision per turn; wait for the JSON result.
+- On `cancelled: true`, stop — do not invent a choice.
+- On freeform, treat **`freeform_text`** as the answer.
+
+## `ask_multiple_choice` arguments
+
+| Arg | Type | Required | Notes |
+|-----|------|----------|--------|
+| `question` | string | yes | Decision prompt only |
+| `options` | array of objects | yes | 2–8 items: `{ "id", "label" }` plus optional `dangerous`, `opens_entry`, `auto_listen` |
+| `recommended_id` | string \| null | no | Single-select preferred id (listed first + pre-selected) |
+| `recommended_ids` | string[] \| null | no | Multi-select preferred ids |
+| `allow_multiple` | bool | no | default `false` (radio); `true` = checklist |
+| `allow_other` | bool | no | default `true` — appends Something else |
+| `dangerous` | bool | no | Danger chrome; OK/Enter armed ~4s (`ASK_QUESTION_DANGER_ARM_MS`). Normal MCQs arm ~1s (`ASK_QUESTION_ARM_MS`). |
+| `speak` | bool | no | default `true` (honours mute env / missing TTS) |
+| `title` | string | no | default `"Decide"` — short noun phrase |
+| `agent` | string \| null | **strongly yes** | Window title prefix `[agent]` |
+| `timeout_sec` | int | no | default `300`; `0` = no timeout |
+| `entry_seed` | string \| null | no | Prefill Something else / entry |
+
+### Example (single choice)
+
+```json
+{
+  "question": "Ship the Drive mirror now?",
+  "title": "Drive mirror",
+  "agent": "docs-agent",
+  "recommended_id": "ship",
+  "options": [
+    { "id": "ship", "label": "Ship it (recommended)" },
+    { "id": "wait", "label": "Wait for answers" },
+    { "id": "git_only", "label": "Git only" }
+  ]
+}
+```
+
+### Example (dangerous)
+
+```json
+{
+  "question": "Force-push main to rewrite history?",
+  "title": "Force push",
+  "agent": "release-agent",
+  "dangerous": true,
+  "recommended_id": "abort",
+  "options": [
+    { "id": "abort", "label": "Abort (recommended)" },
+    { "id": "force", "label": "Force-push main", "dangerous": true }
+  ]
+}
+```
+
+OK and Enter stay locked briefly after open (countdown on OK): **~1s** normal
+(`ASK_QUESTION_ARM_MS`), **~4s** when `dangerous` (`ASK_QUESTION_DANGER_ARM_MS`).
+Set either env to `0` to disable. Cancel / Escape always work immediately.
+
+## Return value (JSON string)
+
+Parse the string before branching.
+
+**Single select:**
+
+```json
+{
+  "id": "ship",
+  "label": "Ship it (recommended)",
+  "cancelled": false,
+  "allow_multiple": false,
+  "agent": "docs-agent"
+}
+```
+
+**Multi select:** `ids` + `labels` instead of `id` / `label`.
+
+**Freeform:** same shape plus `"freeform": true` and `"freeform_text": "…"`.
+
+**Cancelled:**
+
+```json
+{ "cancelled": true, "reason": "…" }
+```
+
+**Lean by default:** idle successful picks omit empty `voice` / `capabilities`
+(~57 chars). Setup hints appear only when useful (`capabilities.notes`). Force
+a full dump with `ASK_QUESTION_RESULT_VERBOSE=1`.
+
+When setup hints apply:
+
+```json
+{
+  "audio_mode": "text_only",
+  "capabilities": {
+    "notes": ["No TTS configured … — text-only MCQ (click / type)."],
+    "audio_mode": "text_only"
+  }
+}
+```
+
+`audio_mode` is `text_only` | `speak` | `full`. Missing voice is never a hard
+error — offer `setup_guide` if the human wants speech later.
+
+**Voice diagnostics:** `voice` only when speech was used or failed. The chosen
+`id` / `freeform_text` remains authoritative.
+
+## Token / catalog cost (structural)
+
+Hosts inject **tool descriptions + server instructions every model turn** while
+this MCP is enabled — that dominates cost, not the click. Figures are
+**structural** (chars ÷ 4 ≈ tokens), not billing CSVs. Measured **2026-07-27**
+after the lean-result / short-docstring pass.
+
+| Surface | Size | ≈ tokens | Notes |
+|---------|-----:|---------:|-------|
+| Server instructions | 347 chars | ~90 | Prefer MCQ; `check_setup` only when needed |
+| All tool descriptions (4 tools) | 457 chars | ~110 | CI soft budgets: instructions ≤600, each desc ≤400 |
+| On-disk Cursor descriptors (`user-ask-question`) | ~4.9k chars | ~1.2k | This package’s share of a lean core catalog |
+| Idle successful MCQ result (default) | ~57 chars | ~14 | `id` / `label` / `cancelled` only |
+| Same result with full voice + capabilities echo | ~485 chars | ~120 | `ASK_QUESTION_RESULT_VERBOSE=1` |
+| Saved per idle MCQ (lean vs fat) | — | **~100** | Avoid `check_setup` spam |
+
+**Host context:** Cursor also loads builtins and any other enabled servers
+(e.g. MemPalace). A lean core catalog on the maintainer host was ≈ **15k tok**
+MCP disk total; ask-question ≈ **1.2k** of that. Marketplace plugins can add
+tens of thousands of tokens/turn — keep them off unless the workspace needs them.
+
+**Keep cost low:** routine forks → `ask_multiple_choice` only; `check_setup`
+only on first enable / errors / before voice; leave `ASK_QUESTION_RESULT_VERBOSE`
+unset unless debugging.
+
+Env cheat sheet: [SETUP.md](../SETUP.md#5-env-cheat-sheet).
+
+## Troubleshooting
+
+| Symptom | Likely fix |
+|---------|------------|
+| Tool missing / won’t start | Absolute `uv` path; check `REPO_ROOT`; reload; `check_setup` |
+| No dialog | `check_setup` → `display` / `gtk_*`; host must inherit `DISPLAY` |
+| Hang / timeout | Human must click; raise `timeout_sec`; off-screen window? |
+| Speaks without TTS URL | Local Piper / notify path — mute with Audio / `ASK_QUESTION_AUDIO=0` |
+| No speech / no mic | `setup_guide` topic `tts` / `stt`, or mute env |
+| Works in terminal, not IDE | Absolute `uv`; restart IDE after install |

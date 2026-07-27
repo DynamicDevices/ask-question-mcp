@@ -3,8 +3,8 @@
 Target user: **Anthony** ([@TheRealCheese](https://github.com/TheRealCheese)).
 Goal: text-only `ask_multiple_choice` on **Cursor for Windows** without WSL.
 
-Canonical install steps also live in the
-[README Windows quick start](../README.md#windows-cursor--text-only-phase-1--for-anthony-and-other-win-users).
+Canonical install steps: this file (and a one-line pointer from the
+[README](../README.md#quick-start-linux)).
 
 ## Checklist for Anthony
 

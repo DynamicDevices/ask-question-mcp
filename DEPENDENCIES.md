@@ -44,7 +44,7 @@ for model weights.
 2. Install [uv](https://docs.astral.sh/uv/) (`winget install astral-sh.uv`).
 3. Clone + `uv sync` in the repo.
 4. Wire absolute `uv.exe` + repo path into Cursor `%USERPROFILE%\.cursor\mcp.json`
-   (see [README — Windows quick start](README.md#windows-cursor--text-only-phase-1--for-anthony-and-other-win-users)).
+   (see [docs/WINDOWS.md](docs/WINDOWS.md)).
 
 No Gtk, zenity, or PipeWire required. Speak / STT are **not** supported on
 Windows in Phase 1.
@@ -111,7 +111,7 @@ python -c "import tkinter; print('ok')"
 
 We do **not** require classic PulseAudio specifically. We use the Pulse
 compatibility API. Pure ALSA desktops: text MCQ works; duck/BT features do not.
-See [README — Audio stack](README.md#audio-stack).
+Audio stack notes and packages: this file (tier C) and [SETUP.md](SETUP.md).
 
 Without C: uncheck **Audio** / set `ASK_QUESTION_AUDIO=0` / `ASK_QUESTION_SPEAK=0`
 or leave TTS unset — MCQ stays click/type.
