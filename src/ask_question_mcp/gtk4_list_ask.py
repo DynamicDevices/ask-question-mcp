@@ -295,7 +295,7 @@ def _main() -> int:
 
         win = Adw.ApplicationWindow(application=application)
         win.set_title(title)
-        win.set_default_size(520, 560)
+        win.set_default_size(520, 480)
         win.set_modal(True)
 
         css = Gtk.CssProvider()
@@ -324,6 +324,10 @@ def _main() -> int:
             label.ask-q-status-idle {
               color: alpha(currentColor, 0.65);
               font-weight: 400;
+            }
+            /* Pinned action bar - padding (not margin) so Adw cannot clip it. */
+            box.ask-q-footer {
+              padding: 10px 16px 16px 16px;
             }
             label.ask-q-text-only {
               color: #37474f;
@@ -386,9 +390,9 @@ def _main() -> int:
         if dangerous:
             win.add_css_class("ask-q-danger")
 
-        # ToolbarView: content may scroll/shrink; bottom bar (status+OK/Cancel)
-        # stays pinned so a tall danger banner cannot push buttons off-screen.
-        toolbar = Adw.ToolbarView()
+        # Plain vertical pack: header | scroll(body) | footer.
+        # Keep footer outside the scroll so Cancel/OK cannot be covered or clipped.
+        root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         listen_gen = {"n": 0}
         voice_retries = {"n": 0}
         closed = {"v": False}
@@ -527,47 +531,52 @@ def _main() -> int:
             header_replay.add_css_class("flat")
             header_replay.connect("clicked", on_replay)
             header.pack_end(header_replay)
-        toolbar.add_top_bar(header)
+        root.append(header)
 
-        body = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
-        body.set_margin_top(12)
-        body.set_margin_bottom(8)
-        body.set_margin_start(16)
-        body.set_margin_end(16)
-
+        # Banner stays above the scroll so a long danger question cannot crush
+        # the option list (which previously made the status chip look like a row).
         banner = Gtk.Label()
         banner.set_wrap(True)
         banner.set_xalign(0.0)
         banner.set_use_markup(True)
         banner.set_vexpand(False)
+        banner.set_margin_top(12)
+        banner.set_margin_start(16)
+        banner.set_margin_end(16)
+        banner.set_margin_bottom(8)
         banner.set_tooltip_text(question)
         if dangerous:
-            esc_t = GLib.markup_escape_text(title)
             esc_q = GLib.markup_escape_text(question)
             banner.set_markup(
-                f'<span foreground="#b71c1c" size="x-large">'
-                f"<b>⚠ {esc_t}</b></span>\n\n"
-                f"{esc_q}"
+                f'<span foreground="#b71c1c"><b>⚠ Confirm</b></span>\n\n{esc_q}'
             )
             banner.add_css_class("ask-q-banner")
+            banner.set_lines(6)
+            banner.set_ellipsize(Pango.EllipsizeMode.END)
         else:
             banner.set_text(question)
-        body.append(banner)
+            banner.set_lines(4)
+            banner.set_ellipsize(Pango.EllipsizeMode.END)
+        root.append(banner)
 
-        # One scroll for banner + options + freeform so a tall danger question
-        # never eats the pinned bottom bar.
         scroll = Gtk.ScrolledWindow()
         scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         scroll.set_vexpand(True)
         scroll.set_hexpand(True)
         scroll.set_propagate_natural_height(False)
+        try:
+            scroll.set_min_content_height(140)
+        except AttributeError:
+            pass
+        scroll.set_margin_start(16)
+        scroll.set_margin_end(16)
 
         list_box = Gtk.ListBox()
         list_box.set_selection_mode(Gtk.SelectionMode.NONE)
         list_box.add_css_class("boxed-list")
-        body.append(list_box)
-        scroll.set_child(body)
-        toolbar.set_content(scroll)
+        list_box.set_valign(Gtk.Align.START)
+        scroll.set_child(list_box)
+        root.append(scroll)
 
         checks: dict[str, Gtk.CheckButton] = {}
         group_leader: Gtk.CheckButton | None = None
@@ -631,6 +640,7 @@ def _main() -> int:
         if allow_other and other_id is not None and not allow_multiple:
             freeform_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
             freeform_box.set_margin_top(4)
+            freeform_box.set_margin_bottom(12)
             freeform_lbl = Gtk.Label(label="Or type something else:")
             freeform_lbl.set_xalign(0.0)
             freeform_lbl.add_css_class("dim-label")
@@ -639,7 +649,9 @@ def _main() -> int:
             freeform_entry.set_hexpand(True)
             freeform_box.append(freeform_lbl)
             freeform_box.append(freeform_entry)
-            body.append(freeform_box)
+            freeform_box.set_margin_start(16)
+            freeform_box.set_margin_end(16)
+            root.append(freeform_box)
 
             # When typing selects Something else, do NOT grab_focus again —
             # that steals the first character mid-keystroke (2026-07-26).
@@ -677,10 +689,9 @@ def _main() -> int:
         repeat_btn: Gtk.Button | None = None
         use_freeform_btn: Gtk.Button | None = None
         footer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        footer.set_margin_top(8)
-        footer.set_margin_bottom(20)
-        footer.set_margin_start(16)
-        footer.set_margin_end(16)
+        footer.add_css_class("ask-q-footer")
+        footer.set_vexpand(False)
+        footer.set_hexpand(True)
         footer.append(status_lbl)
         if voice_answer_on:
             # Vertical: label above, footer-height actions below (no tall stretch).
@@ -831,9 +842,14 @@ def _main() -> int:
         btn_row.append(cancel_btn)
         btn_row.append(ok_btn)
         footer.append(btn_row)
-        toolbar.add_bottom_bar(footer)
+        # Explicit air under Cancel/OK — CSS padding alone is easy to clip.
+        foot_pad = Gtk.Box()
+        foot_pad.set_size_request(1, 16)
+        foot_pad.set_vexpand(False)
+        footer.append(foot_pad)
+        root.append(footer)
 
-        win.set_content(toolbar)
+        win.set_content(root)
         # Dangerous dialogs arm for a few seconds so a stray Return cannot OK.
         if _danger_arm is not None:
             arm_ms = int(_danger_arm.danger_arm_ms(dangerous=dangerous))

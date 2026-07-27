@@ -147,6 +147,9 @@ def main() -> int:
               background-color: #fff3e0;
               border: 1px solid #ffcc80;
             }
+            box.ask-q-footer {
+              padding: 10px 16px 24px 16px;
+            }
             """
         )
         Gtk.StyleContext.add_provider_for_display(
@@ -197,6 +200,8 @@ def main() -> int:
         # ToolbarView: content scrolls; bottom bar (status+buttons) never
         # leaves the window when the transcript is long.
         toolbar = Adw.ToolbarView()
+        toolbar.set_extend_content_to_bottom_edge(False)
+        toolbar.set_extend_content_to_top_edge(False)
 
         header = Adw.HeaderBar()
         header.set_title_widget(Gtk.Label(label=title))
@@ -235,10 +240,12 @@ def main() -> int:
         toolbar.set_content(body)
 
         footer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        footer.set_margin_top(8)
-        footer.set_margin_bottom(20)
-        footer.set_margin_start(16)
-        footer.set_margin_end(16)
+        footer.add_css_class("ask-q-footer")
+        # Match list dialog: CSS padding on .ask-q-footer (set below via provider).
+        footer.set_margin_top(0)
+        footer.set_margin_bottom(0)
+        footer.set_margin_start(0)
+        footer.set_margin_end(0)
 
         status = Gtk.Label(label="")
         status.set_wrap(False)
@@ -334,6 +341,10 @@ def main() -> int:
         btn_row.append(ok_btn)
         footer.append(btn_row)
         toolbar.add_bottom_bar(footer)
+        try:
+            toolbar.set_bottom_bar_style(Adw.ToolbarStyle.RAISED)
+        except (AttributeError, TypeError):
+            pass
 
         win.set_content(toolbar)
 
