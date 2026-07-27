@@ -7,7 +7,7 @@ Canonical detail for coding agents and MCP hosts. Humans usually start at the
 
 | Tool | When to use |
 |------|-------------|
-| `ask_multiple_choice` | Every decision fork (prefer over host AskQuestion / markdown A/B/C) |
+| `ask_multiple_choice` | Every decision fork (prefer over markdown A/B/C / host AskQuestion) |
 | `check_setup` | **First enable**, dialog failure, or **before enabling voice** — not before routine MCQs |
 | `setup_guide` | After `check_setup` / walkthrough (`ui` \| `mcp` \| `tts` \| `stt` \| `voice` \| `ui_only` \| `all`) |
 | `record_platform_feedback` | After an unverified-platform nudge (`works` \| `broken` \| `later` \| `dont_ask`) |

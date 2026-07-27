@@ -1,8 +1,8 @@
-# Setup: voice services + MCP hosts
+# Setup: MCP hosts + optional voice
 
-Deep dive for **optional** TTS/STT and prefs. For **install + MCP registration
-+ self-check + how agents must call the tool**, start with [README.md](README.md)
-(human quick start + AI integration brief).
+Deep dive for **MCP registration**, prefs, and **optional** TTS/STT. Dialogs
+work with no audio configured. For install + quick start, see
+[README.md](README.md). Agent call contract: [docs/AGENTS.md](docs/AGENTS.md).
 
 **Voice backend detail (Qwen3-TTS + faster-whisper):** [docs/VOICE-BACKENDS.md](docs/VOICE-BACKENDS.md).
 
@@ -20,8 +20,8 @@ operate; this repo does **not** hardcode private lab addresses.
 ## Architecture
 
 ```text
-Laptop (MCP host: Cursor / Claude Code / … + Gtk dialog + PipeWire)
-    │  MCP stdio: ask-question-mcp (uv)
+Laptop (any stdio MCP host + Gtk/tk dialog; PipeWire only if you want duck/voice)
+    │  MCP stdio: ask-question-mcp (uv)  — text-only by default
     │  optional speak/listen over HTTP
     ▼
 Your TTS host   :8200   (example)  — POST /tts, /tts/stream
@@ -29,8 +29,8 @@ Your STT host   :8201   (example)  — POST /transcribe, GET /health
 ```
 
 Reference implementations used in Dynamic Devices labs (separate repos /
-trees): Qwen3-TTS and faster-whisper HTTP wrappers under systemd — not
-required to use the MCP UI alone.
+trees): Qwen3-TTS and faster-whisper HTTP wrappers under systemd — **not**
+required for the MCP UI.
 
 Mute / offline:
 
