@@ -230,7 +230,7 @@ def _main() -> int:
 
     gi.require_version("Gtk", "4.0")
     gi.require_version("Adw", "1")
-    from gi.repository import Adw, Gdk, GLib, Gtk
+    from gi.repository import Adw, Gdk, GLib, Gtk, Pango
 
     question = str(payload.get("question") or "").strip()
     title = str(payload.get("title") or "Decide")
@@ -330,7 +330,7 @@ def _main() -> int:
               font-weight: 600;
               background-color: #eceff1;
               border: 1px solid #b0bec5;
-              padding: 8px 10px;
+              padding: 4px 8px;
               border-radius: 6px;
             }
             label.ask-q-status-speaking {
@@ -457,7 +457,12 @@ def _main() -> int:
 
         status_lbl = Gtk.Label(label="")
         status_lbl.set_xalign(0.0)
-        status_lbl.set_wrap(True)
+        # Single line in the pinned footer — wrapping overlaps Cancel/OK.
+        status_lbl.set_wrap(False)
+        status_lbl.set_ellipsize(Pango.EllipsizeMode.END)
+        status_lbl.set_lines(1)
+        status_lbl.set_hexpand(True)
+        status_lbl.set_valign(Gtk.Align.CENTER)
         status_lbl.add_css_class("ask-q-status")
         _status_states = (
             "ask-q-status-idle",
@@ -482,6 +487,7 @@ def _main() -> int:
                 status_lbl.remove_css_class(c)
             status_lbl.add_css_class(cls)
             status_lbl.set_text(text)
+            status_lbl.set_tooltip_text(text)
 
         if voice_answer_on:
             set_status("speaking", "● Waiting for question audio…")
@@ -492,7 +498,9 @@ def _main() -> int:
                 else "Text only — click or type an option (voice not configured)."
             )
             status_lbl.add_css_class("ask-q-text-only")
-            set_status("idle", f"● {note}")
+            # Short footer line; full note stays in the tooltip.
+            set_status("idle", "● Text only — click or type (Audio off)")
+            status_lbl.set_tooltip_text(note)
         elif speak_enabled and not voice_answer_on:
             set_status("idle", "● Speak on — use click / type to answer (no STT).")
 
@@ -668,9 +676,9 @@ def _main() -> int:
         voice_recover_box: Gtk.Box | None = None
         repeat_btn: Gtk.Button | None = None
         use_freeform_btn: Gtk.Button | None = None
-        footer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        footer.set_margin_top(4)
-        footer.set_margin_bottom(16)
+        footer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        footer.set_margin_top(8)
+        footer.set_margin_bottom(20)
         footer.set_margin_start(16)
         footer.set_margin_end(16)
         footer.append(status_lbl)
