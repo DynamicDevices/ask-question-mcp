@@ -1,0 +1,24 @@
+# Dependabot — keep Actions + Python deps current (CRA hygiene).
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - security-hygiene
+
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - security-hygiene
+    # uv.lock is authoritative; Dependabot updates pyproject/lock when possible.
+    versioning-strategy: lockfile-only

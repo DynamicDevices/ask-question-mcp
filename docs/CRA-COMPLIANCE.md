@@ -1,6 +1,6 @@
 # CRA / PSTI — engineering notes (`ask-question-mcp`)
 
-**Date:** 2026-07-26  
+**Date:** 2026-07-27  
 **Surface:** Open-source desktop MCP server (Gtk MCQ + optional local TTS/STT)  
 **Not legal advice** — gap analysis for engineering hygiene only. Confirm
 scope with a qualified adviser before treating this as a “product placed on
@@ -24,13 +24,13 @@ CE marking does **not** apply today:
 
 | Control | Status | Notes |
 |---------|--------|-------|
-| No known exploitable vulns at release | Yellow | CI: tests + secret scan; Dependabot/OSV recommended; no claim of continuous CVE-zero |
+| No known exploitable vulns at release | Yellow | CI: tests + secret scan + **`pip-audit`** + weekly Dependabot; still no continuous CVE-zero claim |
 | Secure-by-default | Green | No hardcoded lab IPs; TTS/STT URLs and tokens **empty until configured**; speak/listen can be disabled via env |
 | No secrets in repo | Green | Tokens via env / `~/.config/ask-question-mcp/token` only; `.gitignore` excludes prefs/tokens |
 | Vulnerability disclosure (CVD) | Green | [`SECURITY.md`](../SECURITY.md) → `security@dynamicdevices.co.uk` |
-| Machine-readable SBOM | Green | CI generates CycloneDX from `uv.lock` (artifact + optional release attach) |
-| Security updates | Yellow | Process: fix on `main`, tag releases; security-only tags when needed |
-| Support period | Yellow | **Intent:** security fixes for **3 years** from each tagged release (revisit commercially) |
+| Machine-readable SBOM | Green | CI CycloneDX from `uv.lock`; **`release-sbom`** attaches `sbom.cdx.json` to GitHub Releases |
+| Security updates | Yellow | Playbook in `SECURITY.md`; security-only tags when needed; signed tags preferred |
+| Support period | Green | **3 years** from each tagged release — published in `SECURITY.md` |
 | Data minimisation | Green | Optional STT transcripts stay local; debug WAVs only if `ASK_QUESTION_VOICE_DEBUG_WAV=1` |
 | Attack surface | Green | Local stdio MCP; optional HTTP clients to operator-chosen TTS/STT only |
 | Article 14 CSIRT/ENISA reporting | N/A* | Applies to manufacturers of in-scope PDEs after the duty date — not claimed for this OSS tool alone |
@@ -39,17 +39,17 @@ CE marking does **not** apply today:
 
 ## Vulnerability handling (Annex I Part II — mirrored)
 
-1. **SBOM** — see CI workflow `.github/workflows/ci.yml` (`sbom` job).
+1. **SBOM** — `.github/workflows/ci.yml` (`sbom`) + `.github/workflows/release-sbom.yml`.
 2. **Remediate without undue delay** — prefer security fixes separable from features when practical.
-3. **Regular testing** — unit tests for matching/IPC; expand as contributors land.
+3. **Regular testing** — unit/contract tests + `pip-audit` on PRs.
 4. **Public disclosure after fix** — GitHub Security Advisories.
 5. **CVD policy** — `SECURITY.md`.
 6. **Contact** — `security@dynamicdevices.co.uk`.
-7. **Update distribution** — git tags + GitHub Releases (signed commits preferred).
+7. **Update distribution** — git tags + GitHub Releases (signed commits/tags preferred).
 
 ## Residual risks
 
-- Operators may point env at unauthenticated LAN TTS/STT — document TLS/Bearer for non-lab use.
+- Operators may point env at unauthenticated LAN TTS/STT — use HTTPS + Bearer off-lab ([SECURITY.md](../SECURITY.md), [docs/VOICE-BACKENDS.md](VOICE-BACKENDS.md)).
 - Bundled ack WAVs are TTS-generated samples (style `charlie-t`); not a biometric of a named person for product claims.
 - Gtk/PipeWire stack is Linux-desktop specific; no Windows/macOS security claim.
 

@@ -1,0 +1,53 @@
+# Attach CycloneDX SBOM to GitHub Releases (CRA / supply-chain hygiene).
+name: release-sbom
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to attach SBOM to (optional; blank = skip upload)
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  sbom:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name || github.ref }}
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Generate CycloneDX SBOM from lockfile
+        run: |
+          set -euo pipefail
+          uv sync
+          uv export --format requirements-txt --no-hashes --no-emit-project \
+            -o requirements-export.txt
+          uvx --from cyclonedx-bom cyclonedx-py requirements requirements-export.txt \
+            -o sbom.cdx.json --of JSON
+          test -s sbom.cdx.json
+          python3 -c "import json; d=json.load(open('sbom.cdx.json')); print(d.get('bomFormat'), len(d.get('components') or []))"
+      - name: Upload SBOM to release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "${{ github.event.release.tag_name }}" sbom.cdx.json \
+            --clobber
+      - name: Upload SBOM to tag (workflow_dispatch)
+        if: github.event_name == 'workflow_dispatch' && inputs.tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "${{ inputs.tag }}" sbom.cdx.json --clobber
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sbom-cyclonedx
+          path: sbom.cdx.json

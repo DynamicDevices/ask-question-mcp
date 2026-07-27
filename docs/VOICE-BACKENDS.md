@@ -101,9 +101,13 @@ Disable mic answers: `ASK_QUESTION_VOICE_ANSWER=0`.
 
 ## Security notes
 
-- Bind to localhost or a trusted LAN; use Bearer tokens before any tunnel/public exposure.
+- Lab: `http://127.0.0.1:…` is fine on the same machine.
+- Off-localhost / shared LAN / tunnels: prefer **HTTPS** and a **Bearer** token
+  (`ASK_QUESTION_TTS_TOKEN` / `ASK_QUESTION_STT_TOKEN` or
+  `~/.config/ask-question-mcp/token`) before any public exposure.
 - Do not put tokens in the public repo or chat transcripts.
-- CRA/CVD: see [CRA-COMPLIANCE.md](CRA-COMPLIANCE.md) and [SECURITY.md](../SECURITY.md).
+- CVD / support period: [SECURITY.md](../SECURITY.md) ·
+  [CRA-COMPLIANCE.md](CRA-COMPLIANCE.md).
 
 ## Verify
 

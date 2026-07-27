@@ -16,7 +16,7 @@ real dialog (`ask_multiple_choice`) when the host has no native AskQuestion UI.
 [Demo](https://www.youtube.com/watch?v=5wVKCIXAfi4) ·
 [SETUP](SETUP.md) ·
 [Dependencies](DEPENDENCIES.md) ·
-[Security](SECURITY.md) ·
+[Security](SECURITY.md) (3-year fix window) ·
 [Maintainers](MAINTAINERS.md)
 
 > **Use at your own risk.** Heavily AI-facilitated; runs on your display with
