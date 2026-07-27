@@ -23,7 +23,7 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq \
             python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 zenity
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
       - name: Sync + unit / contract tests
@@ -62,7 +62,7 @@ jobs:
     runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["self-hosted","Linux"]') || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
       - name: Generate CycloneDX SBOM from lockfile
@@ -86,7 +86,7 @@ jobs:
     runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["self-hosted","Linux"]') || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
       - name: pip-audit against uv.lock
