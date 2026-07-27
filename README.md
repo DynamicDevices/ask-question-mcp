@@ -151,6 +151,38 @@ correctly**. Follow this checklist in order.
 Do **not** call `check_setup` before routine MCQs — go straight to
 `ask_multiple_choice`.
 
+### Token / catalog cost (structural)
+
+Hosts inject **tool descriptions + server instructions every model turn** while
+this MCP is enabled. That is the dominant cost of enabling ask-question — not
+the click itself. Figures below are **structural** (chars ÷ 4 ≈ tokens), not
+billing CSVs. Measured **2026-07-27** on the maintainer Cursor stack after the
+lean-result / short-docstring pass.
+
+| Surface | Size | ≈ tokens | Notes |
+|---------|-----:|---------:|-------|
+| Server instructions | 347 chars | ~90 | Prefer MCQ; `check_setup` only when needed |
+| All tool descriptions (4 tools) | 457 chars | ~110 | Soft CI budgets: instructions ≤600, each desc ≤400 |
+| On-disk Cursor MCP descriptors (`user-ask-question`) | ~4.9k chars | ~1.2k | This package’s share of a lean core catalog |
+| Idle successful MCQ result (default) | ~57 chars | ~14 | `id` / `label` / `cancelled` only |
+| Same result with full voice + capabilities echo | ~485 chars | ~120 | Avoided unless useful; `ASK_QUESTION_RESULT_VERBOSE=1` forces it |
+| Saved per idle MCQ (lean vs fat echo) | — | **~100** | Do not call `check_setup` before routine picks |
+
+**Host context (not this package):** Cursor also loads builtins
+(`cursor-app-control`, `cursor-ide-browser`) and any other enabled servers
+(e.g. MemPalace). A lean core catalog on this host was ≈ **15k tok** MCP disk
+total with ask-question ≈ **1.2k** of that. Marketplace plugins can add tens
+of thousands of tokens per turn if left enabled — keep optional plugins off
+unless the workspace needs them.
+
+**Agent habits that keep cost low:**
+
+1. Call **`ask_multiple_choice`** directly for routine forks.
+2. Call **`check_setup`** only on first enable, dialog failure, or before voice.
+3. Leave **`ASK_QUESTION_RESULT_VERBOSE`** unset unless debugging voice/setup.
+
+See also [SETUP.md](SETUP.md#5-env-cheat-sheet) (`ASK_QUESTION_RESULT_VERBOSE`).
+
 ### What this MCP is / is not
 
 | Is | Is not |
@@ -299,6 +331,7 @@ After editing: reload the host. Listings usually show server **`ask-question`**;
 | `ASK_QUESTION_VOICE_ANSWER` | on | `0` = never open mic path |
 | `ASK_QUESTION_DUCK` | on | `0` = do not duck other audio (prefs `duck_enabled`) |
 | `ASK_QUESTION_ACK` | on | `0` = mute spoken acks only (prefs `ack_enabled`; cancel never acks) |
+| `ASK_QUESTION_RESULT_VERBOSE` | off | `1` = always attach full `voice` + `capabilities` on MCQ results |
 | `ASK_QUESTION_SPEAK_VOLUME` / `ASK_QUESTION_ACK_VOLUME` | `0.60` / `0.55` | Linear playback gain |
 | `ASK_QUESTION_ALWAYS_LISTEN` | on | `0` = Listen button only |
 | `ASK_QUESTION_AGENT` / `LANE_ID` | unset | Fallback for `agent=` if omitted |
@@ -428,6 +461,8 @@ error — call `setup_guide` if the human wants speech later.
 - Inline Something else (type or Speak→STT when configured)
 - **Text-only fallback** when TTS/STT are unset — dialog still works; response
   includes `capabilities.notes` when setup hints apply (lean otherwise)
+- Lean idle MCQ JSON (omit empty `voice` / `capabilities`); see
+  [Token / catalog cost](#token--catalog-cost-structural)
 - Optional TTS + bundled multi-take ack WAVs; optional STT phrase matching
 - Media duck under PipeWire only while speaking
 - Per-dialog session IPC so parallel agents do not share speak gates
