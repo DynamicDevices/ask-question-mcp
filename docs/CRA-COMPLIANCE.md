@@ -1,7 +1,8 @@
 # CRA / PSTI — engineering notes (`ask-question-mcp`)
 
 **Date:** 2026-07-27  
-**Surface:** Open-source desktop MCP server (Gtk MCQ + optional local TTS/STT)  
+**Surface:** Open-source desktop MCP server (Gtk/tk MCQ; text-only by default,
+optional TTS/STT)  
 **Not legal advice** — gap analysis for engineering hygiene only. Confirm
 scope with a qualified adviser before treating this as a “product placed on
 the market”.
@@ -10,7 +11,7 @@ the market”.
 
 | Question | Assessment |
 |----------|------------|
-| Is this a CRA **product with digital elements (PDE)** by default? | **Unlikely as published.** This repository is **developer tooling** (Cursor MCP) distributed as source under GPLv3. It is not itself a consumer/industrial connected product, companion app for a sold device, or remote data processing whose absence stops a PDE’s intended use. |
+| Is this a CRA **product with digital elements (PDE)** by default? | **Unlikely as published.** This repository is **developer tooling** (stdio MCP desktop helper) distributed as source under GPLv3. It is not itself a consumer/industrial connected product, companion app for a sold device, or remote data processing whose absence stops a PDE’s intended use. |
 | When would CRA/PSTI bite harder? | If Dynamic Devices (or a licensee) **embeds** this component into a **connected product** sold in the EU/UK, the **whole product** must be assessed; this component’s SBOM, CVD, and secure defaults then feed that product’s technical file. |
 | UK PSTI 2022 | Same posture: tool-only OSS ≠ automatically a “connectable product”. Re-assess if bundled into a sold connectable device. |
 

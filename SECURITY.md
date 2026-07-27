@@ -56,6 +56,6 @@ This project is a **local desktop MCP helper**. Typical risk areas:
 `ASK_QUESTION_STT_TOKEN` or `~/.config/ask-question-mcp/token`). Plain
 `http://` on a shared LAN is lab-only.
 
-Out of scope for this repo: third-party TTS/STT deployments, Cursor itself,
-and unrelated Dynamic Devices products (report those to the same address with
-the product name in the subject).
+Out of scope for this repo: third-party TTS/STT deployments, the MCP host
+application (Cursor, Claude, etc.), and unrelated Dynamic Devices products
+(report those to the same address with the product name in the subject).

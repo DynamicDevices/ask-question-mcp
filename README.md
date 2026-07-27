@@ -6,12 +6,13 @@
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](pyproject.toml)
 [![MCP](https://img.shields.io/badge/MCP-stdio-informational.svg)](#configuration)
 
-**Desktop multiple-choice for coding agents** — a local stdio MCP that opens a
-real dialog (`ask_multiple_choice`) when the host has no native AskQuestion UI.
+**Desktop multiple-choice over MCP** — a local stdio server that opens a real
+dialog (`ask_multiple_choice`) on any compatible host. **Works text-only**
+(click / type); TTS/STT are optional extras.
 
 | Linux | Windows | Agents |
 |-------|---------|--------|
-| Gtk4/Adw · optional voice | Phase 1 tkinter · text-only | Full contract → **[docs/AGENTS.md](docs/AGENTS.md)** |
+| Gtk4/Adw · text-first, optional voice | Phase 1 tkinter · text-only | Full contract → **[docs/AGENTS.md](docs/AGENTS.md)** |
 
 [Demo](https://www.youtube.com/watch?v=5wVKCIXAfi4) ·
 [SETUP](SETUP.md) ·
@@ -19,8 +20,8 @@ real dialog (`ask_multiple_choice`) when the host has no native AskQuestion UI.
 [Security](SECURITY.md) (3-year fix window) ·
 [Maintainers](MAINTAINERS.md)
 
-> **Use at your own risk.** Heavily AI-facilitated; runs on your display with
-> optional mic/TTS. No warranty — [LICENSE](LICENSE). Report problems via
+> **Use at your own risk.** Heavily AI-facilitated; runs on your display.
+> Voice is optional. No warranty — [LICENSE](LICENSE). Report problems via
 > [GitHub Issues](https://github.com/DynamicDevices/ask-question-mcp/issues).
 
 ---
@@ -37,11 +38,11 @@ pwd   # absolute REPO_ROOT
 
 1. Add the server to your host’s MCP config ([below](#configuration)) — use an
    **absolute** path to `uv`.
-2. Reload the host (Cursor: **Developer: Reload Window**).
+2. Reload / relaunch the host (e.g. Cursor: **Developer: Reload Window**).
 3. Ask the agent for `check_setup`, then a smoke `ask_multiple_choice`.
-4. Voice is optional — leave TTS/STT unset for click/type only.
+4. Leave TTS/STT unset unless you want voice — dialogs work without audio.
 
-**Windows (Cursor, text-only):** [docs/WINDOWS.md](docs/WINDOWS.md).
+**Windows (text-only):** [docs/WINDOWS.md](docs/WINDOWS.md).
 
 ---
 
@@ -62,7 +63,8 @@ miss `~/.local/bin`.
 }
 ```
 
-Optional voice (`env` — omit for text-only):
+**Default is text-only.** Optional voice (`env` — omit entirely if you only
+want click/type):
 
 ```json
 "env": {
@@ -73,6 +75,7 @@ Optional voice (`env` — omit for text-only):
 
 | Host | Where |
 |------|--------|
+| Any stdio MCP host | Same JSON shape under that host’s `mcpServers` / MCP config |
 | Cursor | `~/.cursor/mcp.json` · Win: `%USERPROFILE%\.cursor\mcp.json` |
 | Claude Code | `claude mcp add --transport stdio …` or project `.mcp.json` — [@jackghx](https://github.com/jackghx) |
 | Claude Desktop | `mcpServers` in the app config JSON; quit + relaunch |
