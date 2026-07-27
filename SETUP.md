@@ -138,7 +138,7 @@ Expose `POST /transcribe` (multipart WAV) and `GET /health`. Point
 
 | Path | Purpose |
 |------|---------|
-| `~/.config/ask-question-mcp/prefs.json` | Optional `audio_enabled` / `duck_enabled` / `ack_enabled` / volume / always_listen |
+| `~/.config/ask-question-mcp/prefs.json` | Optional `audio_enabled` / `duck_enabled` / `ack_enabled` / volume / always_listen / `window` size |
 | `~/.config/ask-question-mcp/acks.json` | Optional ack phrase packs (see `acks.example.json`) |
 | `~/.cache/ask-question-mcp/` | Session IPC, ack/question WAV cache, voice-debug |
 

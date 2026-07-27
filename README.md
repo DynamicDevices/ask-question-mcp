@@ -85,6 +85,8 @@ Full env / prefs: [SETUP.md](SETUP.md). Never commit tokens.
 ## Features
 
 - Radiolist / checklist; recommended option first
+- Keyboard: **1–8** select · **Enter** OK · **Esc** cancel (hint in footer)
+- Remembers last dialog size (and position on Windows / X11 when available)
 - Danger chrome; OK/Enter briefly armed (~1s / ~4s)
 - Something else is always available (type, or Speak→STT when configured)
 - Works text-only without TTS/STT; lean JSON results by default

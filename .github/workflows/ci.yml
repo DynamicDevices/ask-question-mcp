@@ -33,6 +33,7 @@ jobs:
           uv run python scripts/test_doctor.py
           uv run python scripts/test_acks.py
           uv run python scripts/test_install.py
+          uv run python scripts/test_dialog_ergonomics.py
           uv run python scripts/test_windows_backend.py
           uv run python scripts/test_contracts.py
       - name: Import package

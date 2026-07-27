@@ -42,6 +42,10 @@ try:
     import audio_duck as _audio_duck
 except ImportError:  # pragma: no cover
     _audio_duck = None  # type: ignore[assignment]
+try:
+    import dialog_keys as _dialog_keys
+except ImportError:  # pragma: no cover
+    _dialog_keys = None  # type: ignore[assignment]
 
 
 def _force_unduck_media() -> None:
@@ -295,7 +299,15 @@ def _main() -> int:
 
         win = Adw.ApplicationWindow(application=application)
         win.set_title(title)
-        win.set_default_size(520, 480)
+        geom_w, geom_h = 520, 480
+        if _prefs is not None:
+            try:
+                g = _prefs.get_window_geometry()
+                geom_w = int(g.get("w") or geom_w)
+                geom_h = int(g.get("h") or geom_h)
+            except Exception:  # noqa: BLE001
+                pass
+        win.set_default_size(geom_w, geom_h)
         win.set_modal(True)
 
         css = Gtk.CssProvider()
@@ -584,13 +596,17 @@ def _main() -> int:
         checks: dict[str, Gtk.CheckButton] = {}
         group_leader: Gtk.CheckButton | None = None
 
-        for oid in ids:
+        for i, oid in enumerate(ids):
             label = labels.get(oid, oid)
             if oid in danger_ids:
                 if _danger_arm is not None:
                     label = _danger_arm.prefix_danger_mark(label)
                 elif not label.lstrip().startswith(("⛔", "🛑", "🛡", "⚠")):
                     label = f"⛔ {label}"
+            if _dialog_keys is not None:
+                label = _dialog_keys.label_with_hotkey(i, label)
+            else:
+                label = f"{i + 1} · {label}"
             row = Gtk.ListBoxRow()
             row.set_activatable(True)
             btn = Gtk.CheckButton(label=label)
@@ -835,6 +851,24 @@ def _main() -> int:
         spacer = Gtk.Box()
         spacer.set_hexpand(True)
         btn_row.append(spacer)
+        hint = Gtk.Label(
+            label=(
+                _dialog_keys.KEYBOARD_HINT
+                if _dialog_keys is not None
+                else "1–8 select · Enter OK · Esc cancel"
+            )
+        )
+        hint.add_css_class("dim-label")
+        hint.set_xalign(0.0)
+        hint.set_hexpand(False)
+        hint.set_margin_end(12)
+        hint.set_wrap(False)
+        hint.set_ellipsize(Pango.EllipsizeMode.END)
+        hint.set_tooltip_text(
+            "Number keys select an option (toggle in multi-select). "
+            "Enter confirms after the short arm delay. Escape cancels."
+        )
+        btn_row.append(hint)
         cancel_btn = Gtk.Button(label="Cancel")
         ok_btn = Gtk.Button(label="OK")
         ok_btn.add_css_class("suggested-action")
@@ -901,6 +935,14 @@ def _main() -> int:
         def quit_app() -> None:
             closed["v"] = True
             listen_gen["n"] += 1
+            if _prefs is not None:
+                try:
+                    _prefs.set_window_geometry(
+                        w=max(200, int(win.get_width() or 0)),
+                        h=max(200, int(win.get_height() or 0)),
+                    )
+                except Exception:  # noqa: BLE001
+                    pass
             application.quit()
 
         def finish_cancel(reason: str = "user cancelled") -> None:
@@ -1515,6 +1557,30 @@ def _main() -> int:
             typing_freeform = freeform_entry is not None and focus is freeform_entry
             if typing_freeform:
                 return False
+            # 1–8 (and keypad) select / toggle options.
+            idx = None
+            if _dialog_keys is not None:
+                idx = _dialog_keys.option_hotkey_index(int(keyval))
+            else:
+                # GDK KEY_1..8 = 0x031..0x038; KP_1..8 = 0xFFB1..0xFFB8
+                if 0x031 <= keyval <= 0x038:
+                    idx = keyval - 0x031
+                elif 0xFFB1 <= keyval <= 0xFFB8:
+                    idx = keyval - 0xFFB1
+            if idx is not None and 0 <= idx < len(ids):
+                oid = ids[idx]
+                btn = checks.get(oid)
+                if btn is not None:
+                    if allow_multiple:
+                        btn.set_active(not btn.get_active())
+                    else:
+                        btn.set_active(True)
+                    row = btn.get_parent()
+                    if isinstance(row, Gtk.ListBoxRow):
+                        row.grab_focus()
+                    else:
+                        btn.grab_focus()
+                return True
             if speak_enabled and keyval in (Gdk.KEY_r, Gdk.KEY_R):
                 on_replay()
                 return True

@@ -43,6 +43,9 @@ Shared path (`zenity_ask` → `win_list_ask.py`):
 | Red OK on danger | Yes |
 | Voice / duck / STT | No (text-only) |
 | Gtk footer / scroll layout fixes | N/A (tkinter layout) |
+| 1–8 hotkeys + Enter / Esc | Yes |
+| Remember size/position | Yes (`prefs.window`) |
+| Scrollable options | Yes |
 
 ## Out of scope (Phase 1)
 

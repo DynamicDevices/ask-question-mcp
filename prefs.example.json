@@ -4,5 +4,6 @@
   "ack_enabled": false,
   "always_listen": false,
   "speak_volume": 0.6,
-  "ack_volume": 0.55
+  "ack_volume": 0.55,
+  "window": { "w": 520, "h": 480 }
 }

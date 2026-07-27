@@ -39,6 +39,8 @@ _DEFAULTS: dict[str, Any] = {
     "always_listen": False,
     "speak_volume": 0.60,
     "ack_volume": 0.55,
+    # Last dialog size/position (x/y may be ignored on Wayland).
+    "window": {"w": 520, "h": 480},
 }
 
 
@@ -171,3 +173,44 @@ def set_ack_volume(volume: float) -> None:
 
 def set_speak_volume(volume: float) -> None:
     save_prefs({"speak_volume": _clamp_vol(volume, float(_DEFAULTS["speak_volume"]))})
+
+
+def get_window_geometry() -> dict[str, int]:
+    """Last dialog size/position. Keys may include ``w``, ``h``, ``x``, ``y``."""
+    raw = load_prefs().get("window")
+    out: dict[str, int] = {}
+    if not isinstance(raw, dict):
+        raw = _DEFAULTS.get("window") or {}
+    for key in ("w", "h", "x", "y"):
+        try:
+            val = int(raw.get(key))  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            continue
+        if key in {"w", "h"} and val < 200:
+            continue
+        out[key] = val
+    if "w" not in out:
+        out["w"] = 520
+    if "h" not in out:
+        out["h"] = 480
+    return out
+
+
+def set_window_geometry(
+    *,
+    w: int | None = None,
+    h: int | None = None,
+    x: int | None = None,
+    y: int | None = None,
+) -> None:
+    """Persist dialog geometry (merge with previous)."""
+    cur = get_window_geometry()
+    if w is not None and w >= 200:
+        cur["w"] = int(w)
+    if h is not None and h >= 200:
+        cur["h"] = int(h)
+    if x is not None:
+        cur["x"] = int(x)
+    if y is not None:
+        cur["y"] = int(y)
+    save_prefs({"window": cur})
