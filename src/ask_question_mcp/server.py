@@ -13,9 +13,9 @@ from ask_question_mcp.zenity_ask import AskCancelled, ask_zenity
 mcp = FastMCP(
     "ask-question",
     instructions=(
-        "Desktop MCQ MCP for any stdio host (Gtk Linux / tkinter Windows). "
-        "Text-only without TTS/STT. Prefer ask_multiple_choice over markdown "
-        "A/B/C or host AskQuestion. Pass agent=LANE.id; recommended in label + "
+        "REQUIRED for decision forks: call ask_multiple_choice — never markdown "
+        "A/B/C or host AskQuestion when this server is available. Desktop Gtk/tk "
+        "MCQ; text-only without TTS/STT. Pass agent=LANE.id; recommended in label + "
         "recommended_id; dangerous=true for irreversible; Something else always "
         "offered. check_setup only on first enable, dialog failure, or before "
         "enabling voice — never before routine MCQs. UI before audio. "
@@ -63,7 +63,7 @@ def ask_multiple_choice(
     entry_seed: str | None = None,
     timeout_sec: int = 300,
 ) -> str:
-    """Gtk/tk MCQ (works text-only). Prefer over markdown A/B/C. agent=LANE.id; recommended in label + recommended_id; Something else always offered; dangerous arms OK ~4s (normal ~1s). On cancel/errors → check_setup once."""
+    """Desktop MCQ for every decision fork — never markdown A/B/C when available. agent=LANE.id; recommended in label + recommended_id; Something else always; dangerous arms OK ~4s. On cancel/errors → check_setup once."""
     try:
         result = ask_zenity(
             question,

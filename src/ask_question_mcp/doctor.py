@@ -795,15 +795,17 @@ def setup_guide(topic: str) -> dict[str, Any]:
     sections["mcp"] = {
         "title": "Register the MCP (Cursor, Claude Code, Claude Desktop, other stdio hosts)",
         "summary": (
-            "Tier A: uv + Python ≥ 3.12 + uv sync, then a stdio server block. "
+            "Tier A: uv + Python ≥ 3.12 + uv sync, then wire the host. "
+            "Preferred: `uv run ask-question-install --host cursor --skill`. "
             "Use an absolute path to uv — GUI hosts often lack ~/.local/bin on PATH."
         ),
         "steps": [
             "Install uv if needed: https://docs.astral.sh/uv/getting-started/installation/",
             "Clone: `git clone https://github.com/DynamicDevices/ask-question-mcp.git`",
-            "In the clone: `uv sync` (installs mcp[cli] from uv.lock).",
-            "Find uv: `command -v uv` (e.g. /home/YOU/.local/bin/uv).",
-            "Edit the host MCP config and add a stdio server (absolute uv + REPO_ROOT):",
+            "In the clone: `uv sync` then `uv run ask-question-install --host cursor --skill` "
+            "(also: claude-desktop | claude-code | print; optional `--voice`).",
+            "Or wire manually — find uv: `command -v uv` (e.g. /home/YOU/.local/bin/uv).",
+            "Manual mcpServers block (absolute uv + REPO_ROOT):",
             {
                 "ask-question": {
                     "command": "/absolute/path/to/uv",  # Windows: C:\\Users\\YOU\\.local\\bin\\uv.exe

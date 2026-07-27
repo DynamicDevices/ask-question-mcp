@@ -20,6 +20,7 @@ Repository = "https://github.com/DynamicDevices/ask-question-mcp"
 
 [project.scripts]
 ask-question-mcp = "ask_question_mcp.server:main"
+ask-question-install = "ask_question_mcp.install:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -30,6 +31,7 @@ packages = ["src/ask_question_mcp"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "src/ask_question_mcp/assets" = "ask_question_mcp/assets"
+"skills/ask-multiple-choice" = "ask_question_mcp/skills/ask-multiple-choice"
 
 [tool.uv]
 package = true

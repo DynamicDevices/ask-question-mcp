@@ -33,23 +33,21 @@ sudo apt install -y python3 python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 zenity
 curl -LsSf https://astral.sh/uv/install.sh | sh   # if needed
 git clone https://github.com/DynamicDevices/ask-question-mcp.git
 cd ask-question-mcp && uv sync
-pwd   # absolute REPO_ROOT
+uv run ask-question-install --host cursor --skill
 ```
 
-1. Add the server to your host’s MCP config ([below](#configuration)) — use an
-   **absolute** path to `uv`.
-2. Reload / relaunch the host (e.g. Cursor: **Developer: Reload Window**).
-3. Ask the agent for `check_setup`, then a smoke `ask_multiple_choice`.
-4. Leave TTS/STT unset unless you want voice — dialogs work without audio.
+Then **Developer: Reload Window**. Ask the agent for `check_setup`, then a
+smoke `ask_multiple_choice`. Leave TTS/STT unset unless you want voice.
 
-**Windows (text-only):** [docs/WINDOWS.md](docs/WINDOWS.md).
+**Windows (text-only):** [docs/WINDOWS.md](docs/WINDOWS.md) — same install
+command works with `uv.exe`.
 
 ---
 
 ## Configuration
 
-Stdio launch — prefer an **absolute** `uv` (`command -v uv`). GUI hosts often
-miss `~/.local/bin`.
+Prefer the installer above. Manual stdio launch — use an **absolute** `uv`
+(`command -v uv`); GUI hosts often miss `~/.local/bin`.
 
 ```json
 "ask-question": {
@@ -90,7 +88,9 @@ Full env / prefs: [SETUP.md](SETUP.md). Never commit tokens.
 - Danger chrome; OK/Enter briefly armed (~1s / ~4s)
 - Something else is always available (type, or Speak→STT when configured)
 - Works text-only without TTS/STT; lean JSON results by default
-- Optional TTS, ack phrases, mic answers, PipeWire media duck
+- Optional TTS / mic answers / acks (auto-listen and acks **off** until opted in)
+- Optional PipeWire media duck while speaking/listening
+- Agent skill (`ask-multiple-choice`) so models use the dialog, not markdown A/B/C
 
 Packages & audio matrix: [DEPENDENCIES.md](DEPENDENCIES.md).
 

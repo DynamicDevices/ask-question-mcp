@@ -149,7 +149,7 @@ _SOMETHING_ELSE_RE = re.compile(
 
 _OTHER_OPTION_IDS = frozenset({"other", "something_else", "something-else"})
 
-# Phase 2: confirm unmatched transcript as freeform.
+# Confirm unmatched transcript as freeform (Use this / speech).
 # Do NOT include "something else" here — that means open/type freeform, not
 # confirm the pending transcript (2026-07-26).
 _FREEFORM_CONFIRM_RE = re.compile(
