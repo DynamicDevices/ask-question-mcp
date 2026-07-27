@@ -79,9 +79,12 @@ def main() -> int:
     outer.rowconfigure(2, weight=1)
 
     if dangerous or danger_ids:
+        mark = (
+            _danger_arm.DANGER_MARK if _danger_arm is not None else "🛡"
+        )
         warn = ttk.Label(
             outer,
-            text="⚠ High-risk decision — choose carefully.",
+            text=f"{mark} High-risk decision — choose carefully.",
             foreground="#b71c1c",
             font=("", 10, "bold"),
         )
@@ -102,8 +105,11 @@ def main() -> int:
     if allow_multiple:
         for i, oid in enumerate(ids):
             label = labels.get(oid, oid)
-            if oid in danger_ids and not label.lstrip().startswith("⚠"):
-                label = f"⚠ {label}"
+            if oid in danger_ids:
+                if _danger_arm is not None:
+                    label = _danger_arm.prefix_danger_mark(label)
+                elif not label.lstrip().startswith(("🛡", "⚠")):
+                    label = f"🛡 {label}"
             var = tk.BooleanVar(value=oid in want)
             vars_by_id[oid] = var
             ttk.Checkbutton(list_frame, text=label, variable=var).grid(
@@ -114,8 +120,11 @@ def main() -> int:
         vars_by_id["_radio"] = var
         for i, oid in enumerate(ids):
             label = labels.get(oid, oid)
-            if oid in danger_ids and not label.lstrip().startswith("⚠"):
-                label = f"⚠ {label}"
+            if oid in danger_ids:
+                if _danger_arm is not None:
+                    label = _danger_arm.prefix_danger_mark(label)
+                elif not label.lstrip().startswith(("🛡", "⚠")):
+                    label = f"🛡 {label}"
             ttk.Radiobutton(list_frame, text=label, value=oid, variable=var).grid(
                 row=i, column=0, sticky="w", pady=2
             )

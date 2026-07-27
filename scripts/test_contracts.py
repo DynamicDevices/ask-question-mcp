@@ -94,7 +94,8 @@ def test_resolve_agent() -> None:
     ):
         assert resolve_agent(None) == "cursor-first"
 
-    assert "⚠" in window_title(agent="a", title="Fuse", dangerous=True)
+    assert "🛡" in window_title(agent="a", title="Fuse", dangerous=True)
+    assert "⚠" not in window_title(agent="a", title="Fuse", dangerous=True)
     assert "[a]" in window_title(agent="a", title="Ship", dangerous=False)
 
 

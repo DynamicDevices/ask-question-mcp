@@ -288,9 +288,11 @@ def resolve_agent(explicit: str | None = None) -> str:
 
 
 def window_title(*, agent: str, title: str, dangerous: bool) -> str:
+    from ask_question_mcp.danger_arm import DANGER_MARK
+
     base = title.strip() or "Decide"
     tagged = f"[{agent}] {base}"
-    return f"⚠ {tagged}" if dangerous else tagged
+    return f"{DANGER_MARK} {tagged}" if dangerous else tagged
 
 
 def normalize_speak_text(text: str) -> str:

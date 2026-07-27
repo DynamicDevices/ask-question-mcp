@@ -546,9 +546,12 @@ def _main() -> int:
         banner.set_margin_bottom(8)
         banner.set_tooltip_text(question)
         if dangerous:
+            mark = (
+                _danger_arm.DANGER_MARK if _danger_arm is not None else "🛡"
+            )
             esc_q = GLib.markup_escape_text(question)
             banner.set_markup(
-                f'<span foreground="#b71c1c"><b>⚠ Confirm</b></span>\n\n{esc_q}'
+                f'<span foreground="#b71c1c"><b>{mark} Confirm</b></span>\n\n{esc_q}'
             )
             banner.add_css_class("ask-q-banner")
             banner.set_lines(6)
@@ -583,8 +586,11 @@ def _main() -> int:
 
         for oid in ids:
             label = labels.get(oid, oid)
-            if oid in danger_ids and not label.lstrip().startswith("⚠"):
-                label = f"⚠ {label}"
+            if oid in danger_ids:
+                if _danger_arm is not None:
+                    label = _danger_arm.prefix_danger_mark(label)
+                elif not label.lstrip().startswith(("🛡", "⚠")):
+                    label = f"🛡 {label}"
             row = Gtk.ListBoxRow()
             row.set_activatable(True)
             btn = Gtk.CheckButton(label=label)
