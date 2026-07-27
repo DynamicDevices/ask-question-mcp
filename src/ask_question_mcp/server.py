@@ -16,9 +16,10 @@ mcp = FastMCP(
         "Desktop MCQ MCP for any stdio host (Gtk Linux / tkinter Windows). "
         "Text-only without TTS/STT. Prefer ask_multiple_choice over markdown "
         "A/B/C or host AskQuestion. Pass agent=LANE.id; recommended in label + "
-        "recommended_id; dangerous=true for irreversible; allow_other default. "
-        "check_setup only on first enable, dialog failure, or before enabling "
-        "voice — never before routine MCQs. UI before audio. Detail: docs/AGENTS.md."
+        "recommended_id; dangerous=true for irreversible; Something else always "
+        "offered. check_setup only on first enable, dialog failure, or before "
+        "enabling voice — never before routine MCQs. UI before audio. "
+        "Detail: docs/AGENTS.md."
     ),
 )
 
@@ -62,7 +63,7 @@ def ask_multiple_choice(
     entry_seed: str | None = None,
     timeout_sec: int = 300,
 ) -> str:
-    """Gtk/tk MCQ (works text-only). Prefer over markdown A/B/C. agent=LANE.id; recommended in label + recommended_id; dangerous arms OK ~4s (normal ~1s). On cancel/errors → check_setup once."""
+    """Gtk/tk MCQ (works text-only). Prefer over markdown A/B/C. agent=LANE.id; recommended in label + recommended_id; Something else always offered; dangerous arms OK ~4s (normal ~1s). On cancel/errors → check_setup once."""
     try:
         result = ask_zenity(
             question,
@@ -70,7 +71,7 @@ def ask_multiple_choice(
             recommended_id=recommended_id,
             recommended_ids=recommended_ids,
             allow_multiple=allow_multiple,
-            allow_other=allow_other,
+            allow_other=True,
             dangerous=dangerous,
             speak=speak,
             title=title,

@@ -631,12 +631,17 @@ def ask_zenity(
     ``ASK_QUESTION_SPEAK=0`` to mute.
     ``agent`` (or LANE.id / ``ASK_QUESTION_AGENT``) is prefixed in the window
     title so multi-agent sessions stay distinguishable.
+
+    ``allow_other`` is accepted for API compatibility but ignored — Something
+    else is always appended when missing (unless already present / no room).
     """
     if not question.strip():
         raise ValueError("question must be non-empty")
     if len(options) < 1 or len(options) > 8:
         raise ValueError("options must have between 1 and 8 entries")
 
+    # Always offer freeform Something else (param kept for host/API compat).
+    allow_other = True
     from ask_question_mcp.session_ipc import ensure_session, prune_stale_sessions
 
     ensure_session()

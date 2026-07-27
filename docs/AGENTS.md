@@ -41,7 +41,8 @@ CLI: `uv run python -m ask_question_mcp.doctor --json` /
 - Mark recommended **only** in the option label (`Foo (recommended)`) **and**
   pass **`recommended_id`** / `recommended_ids`. Never put “Recommended: …”
   inside `question`.
-- Prefer **`allow_other=true`** (default).
+- **Something else** is always offered (freeform). `allow_other` is ignored if
+  passed.
 - Set **`dangerous=true`** (and/or per-option `dangerous`) for irreversible /
   high-risk forks.
 - One decision per turn; wait for the JSON result.
@@ -57,7 +58,7 @@ CLI: `uv run python -m ask_question_mcp.doctor --json` /
 | `recommended_id` | string \| null | no | Single-select preferred id (listed first + pre-selected) |
 | `recommended_ids` | string[] \| null | no | Multi-select preferred ids |
 | `allow_multiple` | bool | no | default `false` (radio); `true` = checklist |
-| `allow_other` | bool | no | default `true` — appends Something else |
+| `allow_other` | bool | no | **Ignored** — Something else is always appended when missing |
 | `dangerous` | bool | no | Danger chrome; OK/Enter armed ~4s (`ASK_QUESTION_DANGER_ARM_MS`). Normal MCQs arm ~1s (`ASK_QUESTION_ARM_MS`). |
 | `speak` | bool | no | default `true` (honours mute env / missing TTS) |
 | `title` | string | no | default `"Decide"` — short noun phrase |

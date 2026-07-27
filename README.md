@@ -88,7 +88,7 @@ Full env / prefs: [SETUP.md](SETUP.md). Never commit tokens.
 
 - Radiolist / checklist; recommended option first
 - Danger chrome; OK/Enter briefly armed (~1s / ~4s)
-- Something else (type, or Speak→STT when configured)
+- Something else is always available (type, or Speak→STT when configured)
 - Works text-only without TTS/STT; lean JSON results by default
 - Optional TTS, ack phrases, mic answers, PipeWire media duck
 
