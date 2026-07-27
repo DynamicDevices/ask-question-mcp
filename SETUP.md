@@ -158,4 +158,7 @@ use — no live TTS required for those phrases.
 echo). Call `check_setup` on first enable / errors / before voice — not before
 every MCQ. Full report: [docs/AGENTS.md — Token / catalog cost](docs/AGENTS.md#token--catalog-cost-structural).
 
+**TTS/STT off-lab:** prefer HTTPS + Bearer — [SECURITY.md](SECURITY.md),
+[docs/VOICE-BACKENDS.md](docs/VOICE-BACKENDS.md).
+
 See [DEPENDENCIES.md](DEPENDENCIES.md) for packages and more knobs.
