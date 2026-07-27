@@ -75,7 +75,7 @@ jobs:
             -o sbom.cdx.json --of JSON
           test -s sbom.cdx.json
           python3 -c "import json; d=json.load(open('sbom.cdx.json')); print(d.get('bomFormat'), len(d.get('components') or []))"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: sbom-cyclonedx
           path: sbom.cdx.json
