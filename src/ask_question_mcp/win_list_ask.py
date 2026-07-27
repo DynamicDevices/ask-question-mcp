@@ -78,20 +78,49 @@ def main() -> int:
     outer.columnconfigure(0, weight=1)
     outer.rowconfigure(2, weight=1)
 
-    if dangerous or danger_ids:
+    # Match Linux gtk4_list_ask danger chrome: "⛔ Confirm" + question in one banner.
+    show_danger = bool(dangerous or danger_ids)
+    if show_danger:
         mark = (
             _danger_arm.DANGER_MARK if _danger_arm is not None else "⛔"
         )
-        warn = ttk.Label(
+        # tk.Frame (not ttk) so we can set a pink danger background.
+        banner = tk.Frame(
             outer,
-            text=f"{mark} High-risk decision — choose carefully.",
-            foreground="#b71c1c",
-            font=("", 10, "bold"),
+            bg="#ffcdd2",
+            highlightbackground="#c62828",
+            highlightthickness=0,
+            bd=0,
+            padx=12,
+            pady=10,
         )
-        warn.grid(row=0, column=0, sticky="w", pady=(0, 8))
-
-    q_lbl = ttk.Label(outer, text=question, wraplength=480, justify="left")
-    q_lbl.grid(row=1, column=0, sticky="ew", pady=(0, 8))
+        banner.grid(row=0, column=0, sticky="ew", pady=(0, 8))
+        # Left accent bar via nested frame.
+        accent = tk.Frame(banner, bg="#c62828", width=6)
+        accent.pack(side="left", fill="y", padx=(0, 10))
+        banner_body = tk.Frame(banner, bg="#ffcdd2")
+        banner_body.pack(side="left", fill="both", expand=True)
+        tk.Label(
+            banner_body,
+            text=f"{mark} Confirm",
+            fg="#b71c1c",
+            bg="#ffcdd2",
+            font=("", 11, "bold"),
+            anchor="w",
+        ).pack(fill="x")
+        tk.Label(
+            banner_body,
+            text=question,
+            fg="#212121",
+            bg="#ffcdd2",
+            font=("", 10),
+            wraplength=460,
+            justify="left",
+            anchor="w",
+        ).pack(fill="x", pady=(6, 0))
+    else:
+        q_lbl = ttk.Label(outer, text=question, wraplength=480, justify="left")
+        q_lbl.grid(row=1, column=0, sticky="ew", pady=(0, 8))
 
     list_frame = ttk.Frame(outer)
     list_frame.grid(row=2, column=0, sticky="nsew")
@@ -200,13 +229,29 @@ def main() -> int:
         finish({"cancelled": True, "reason": "user cancelled"})
 
     ttk.Button(btn_row, text="Cancel", command=on_cancel).grid(row=0, column=0, padx=(0, 8))
-    ok_btn = ttk.Button(btn_row, text="OK", command=on_ok)
+    # Danger OK uses tk.Button so we can paint red like Linux ask-q-danger-ok.
+    if show_danger:
+        ok_btn = tk.Button(
+            btn_row,
+            text="OK",
+            command=on_ok,
+            bg="#c62828",
+            fg="#ffffff",
+            activebackground="#8e0000",
+            activeforeground="#ffffff",
+            disabledforeground="#eeeeee",
+            relief="raised",
+            padx=12,
+            pady=4,
+        )
+    else:
+        ok_btn = ttk.Button(btn_row, text="OK", command=on_ok)
     ok_btn.grid(row=0, column=1)
 
     if _danger_arm is not None:
-        arm_ms = int(_danger_arm.danger_arm_ms(dangerous=bool(dangerous or danger_ids)))
+        arm_ms = int(_danger_arm.danger_arm_ms(dangerous=show_danger))
     else:
-        arm_ms = 4000 if (dangerous or danger_ids) else 1000
+        arm_ms = 4000 if show_danger else 1000
     armed = {"v": arm_ms <= 0}
 
     def _arm_confirm() -> None:
