@@ -22,10 +22,14 @@ CI must stay green (`test`, `secrets-hygiene`). Also say what **you** ran:
 |-------|--------|-------|
 | `uv run python scripts/test_match_transcript.py` | Pass / Fail / Skip | |
 | `uv run python scripts/test_doctor.py` | Pass / Fail / Skip | |
+| `uv run python scripts/test_acks.py` | Pass / Fail / Skip | |
+| `uv run python scripts/test_install.py` | Pass / Fail / Skip | |
+| `uv run python scripts/test_dialog_ergonomics.py` | Pass / Fail / Skip | |
 | `uv run python scripts/test_windows_backend.py` | Pass / Fail / Skip | |
 | `uv run python scripts/test_contracts.py` | Pass / Fail / Skip | |
 | `check_setup` in a real host | Pass / Fail / Skip | host: |
 | `ask_multiple_choice` dialog click | Pass / Fail / Skip | |
+| Keyboard 1–8 / Enter / Esc | Pass / Fail / Skip | |
 | Freeform / Something else | Pass / Fail / Skip | |
 | Speak / duck (if claiming voice) | Pass / Fail / Skip | |
 

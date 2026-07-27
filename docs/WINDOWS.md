@@ -19,14 +19,17 @@ Canonical install steps: this file (and a one-line pointer from the
 4. Cursor → **Developer: Reload Window**.
 5. Ask the agent: call **`check_setup`** (expect `ready.ui` / `ready.text_mcq` true; `audio_mode` text_only).
 6. Smoke **`ask_multiple_choice`** — dialog should appear on top; pick an option.
-7. Smoke **Something else** — every MCQ should include a freeform row / entry; typing
-   should submit as Something else.
-8. Smoke **dangerous** — ask for an irreversible choice (`dangerous=true`). Expect:
+7. Smoke **keyboard** — labels show `1 · …`; press **2**, wait for OK to arm,
+   **Enter**. **Esc** cancels. Footer hint: `1–8 select · Enter OK · Esc cancel`.
+8. Smoke **Something else** — every MCQ should include a freeform row / entry; typing
+   should submit as Something else (digits while typing go to the entry, not options).
+9. Smoke **dangerous** — ask for an irreversible choice (`dangerous=true`). Expect:
    - Window title / options prefixed with **⛔** (no-entry)
    - Pink **Confirm** banner with the question
    - Red **OK** that stays disabled ~4s (`OK (Ns)`) before confirm
-9. When nudged for platform feedback: choose **works** (or open a GitHub issue) so
-   maintainers can flip the README matrix row to **Verified**.
+10. Resize the dialog, OK, reopen — size (and position) should roughly match.
+11. When nudged for platform feedback: choose **works** (or open a GitHub issue) so
+    maintainers can flip the README matrix row to **Verified**.
 
 Manual mcp.json edit is still fine if you skip the installer — use absolute
 `uv.exe` + `--directory` to the clone.
