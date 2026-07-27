@@ -19,6 +19,26 @@ try:
     import danger_arm as _danger_arm
 except ImportError:  # pragma: no cover
     _danger_arm = None  # type: ignore[assignment]
+try:
+    import prefs as _prefs
+except ImportError:  # pragma: no cover
+    _prefs = None  # type: ignore[assignment]
+try:
+    import dialog_keys as _dialog_keys
+except ImportError:  # pragma: no cover
+    _dialog_keys = None  # type: ignore[assignment]
+
+
+def _option_label(i: int, oid: str, labels: dict[str, str], danger_ids: set[str]) -> str:
+    label = labels.get(oid, oid)
+    if oid in danger_ids:
+        if _danger_arm is not None:
+            label = _danger_arm.prefix_danger_mark(label)
+        elif not label.lstrip().startswith(("⛔", "🛑", "🛡", "⚠")):
+            label = f"⛔ {label}"
+    if _dialog_keys is not None:
+        return _dialog_keys.label_with_hotkey(i, label)
+    return f"{i + 1} · {label}"
 
 
 def main() -> int:
@@ -84,7 +104,6 @@ def main() -> int:
         mark = (
             _danger_arm.DANGER_MARK if _danger_arm is not None else "⛔"
         )
-        # tk.Frame (not ttk) so we can set a pink danger background.
         banner = tk.Frame(
             outer,
             bg="#ffcdd2",
@@ -95,7 +114,6 @@ def main() -> int:
             pady=10,
         )
         banner.grid(row=0, column=0, sticky="ew", pady=(0, 8))
-        # Left accent bar via nested frame.
         accent = tk.Frame(banner, bg="#c62828", width=6)
         accent.pack(side="left", fill="y", padx=(0, 10))
         banner_body = tk.Frame(banner, bg="#ffcdd2")
@@ -122,9 +140,36 @@ def main() -> int:
         q_lbl = ttk.Label(outer, text=question, wraplength=480, justify="left")
         q_lbl.grid(row=1, column=0, sticky="ew", pady=(0, 8))
 
-    list_frame = ttk.Frame(outer)
-    list_frame.grid(row=2, column=0, sticky="nsew")
-    list_frame.columnconfigure(0, weight=1)
+    # Scrollable option list (many options / small screens).
+    list_shell = ttk.Frame(outer)
+    list_shell.grid(row=2, column=0, sticky="nsew")
+    list_shell.columnconfigure(0, weight=1)
+    list_shell.rowconfigure(0, weight=1)
+
+    canvas = tk.Canvas(list_shell, highlightthickness=0, borderwidth=0)
+    sb = ttk.Scrollbar(list_shell, orient="vertical", command=canvas.yview)
+    list_frame = ttk.Frame(canvas)
+    list_frame.bind(
+        "<Configure>",
+        lambda _e: canvas.configure(scrollregion=canvas.bbox("all")),
+    )
+    canvas_window = canvas.create_window((0, 0), window=list_frame, anchor="nw")
+
+    def _sync_canvas_width(event: tk.Event) -> None:  # type: ignore[name-defined]
+        canvas.itemconfigure(canvas_window, width=event.width)
+
+    canvas.bind("<Configure>", _sync_canvas_width)
+    canvas.configure(yscrollcommand=sb.set)
+    canvas.grid(row=0, column=0, sticky="nsew")
+    sb.grid(row=0, column=1, sticky="ns")
+
+    def _on_mousewheel(event: tk.Event) -> None:  # type: ignore[name-defined]
+        # Windows / X11; macOS uses different delta.
+        delta = int(-1 * (event.delta / 120)) if event.delta else 0
+        if delta:
+            canvas.yview_scroll(delta, "units")
+
+    canvas.bind_all("<MouseWheel>", _on_mousewheel)
 
     vars_by_id: dict[str, tk.Variable] = {}
     want = [oid for oid in ids if oid in preselect]
@@ -133,12 +178,7 @@ def main() -> int:
 
     if allow_multiple:
         for i, oid in enumerate(ids):
-            label = labels.get(oid, oid)
-            if oid in danger_ids:
-                if _danger_arm is not None:
-                    label = _danger_arm.prefix_danger_mark(label)
-                elif not label.lstrip().startswith(("⛔", "🛑", "🛡", "⚠")):
-                    label = f"⛔ {label}"
+            label = _option_label(i, oid, labels, danger_ids)
             var = tk.BooleanVar(value=oid in want)
             vars_by_id[oid] = var
             ttk.Checkbutton(list_frame, text=label, variable=var).grid(
@@ -148,25 +188,21 @@ def main() -> int:
         var = tk.StringVar(value=want[0] if want else ids[0])
         vars_by_id["_radio"] = var
         for i, oid in enumerate(ids):
-            label = labels.get(oid, oid)
-            if oid in danger_ids:
-                if _danger_arm is not None:
-                    label = _danger_arm.prefix_danger_mark(label)
-                elif not label.lstrip().startswith(("⛔", "🛑", "🛡", "⚠")):
-                    label = f"⛔ {label}"
+            label = _option_label(i, oid, labels, danger_ids)
             ttk.Radiobutton(list_frame, text=label, value=oid, variable=var).grid(
                 row=i, column=0, sticky="w", pady=2
             )
 
     freeform_var = tk.StringVar()
     other_ids = {"other", "something_else", "something-else"}
+    freeform_entry: Any = None
     if allow_other and any(oid in other_ids for oid in ids):
         ff = ttk.Frame(outer)
         ff.grid(row=3, column=0, sticky="ew", pady=(8, 0))
         ff.columnconfigure(0, weight=1)
         ttk.Label(ff, text="Or type something else:").grid(row=0, column=0, sticky="w")
-        entry = ttk.Entry(ff, textvariable=freeform_var)
-        entry.grid(row=1, column=0, sticky="ew", pady=(4, 0))
+        freeform_entry = ttk.Entry(ff, textvariable=freeform_var)
+        freeform_entry.grid(row=1, column=0, sticky="ew", pady=(4, 0))
 
         def on_ff_key(_event: object = None) -> None:
             text = freeform_var.get().strip()
@@ -178,16 +214,42 @@ def main() -> int:
                         vars_by_id["_radio"].set(oid)
                         break
 
-        entry.bind("<KeyRelease>", on_ff_key)
+        freeform_entry.bind("<KeyRelease>", on_ff_key)
+
+    hint_text = (
+        _dialog_keys.KEYBOARD_HINT
+        if _dialog_keys is not None
+        else "1–8 select · Enter OK · Esc cancel"
+    )
+    ttk.Label(outer, text=hint_text).grid(row=4, column=0, sticky="w", pady=(8, 0))
 
     btn_row = ttk.Frame(outer)
-    btn_row.grid(row=4, column=0, sticky="e", pady=(12, 0))
+    btn_row.grid(row=5, column=0, sticky="e", pady=(8, 0))
+
+    def _save_geometry() -> None:
+        if _prefs is None:
+            return
+        try:
+            root.update_idletasks()
+            _prefs.set_window_geometry(
+                w=max(200, int(root.winfo_width())),
+                h=max(200, int(root.winfo_height())),
+                x=int(root.winfo_x()),
+                y=int(root.winfo_y()),
+            )
+        except Exception:  # noqa: BLE001
+            pass
 
     def finish(payload_out: dict[str, Any], code: int = 0) -> None:
         nonlocal result
         if closed["v"]:
             return
         closed["v"] = True
+        _save_geometry()
+        try:
+            root.unbind_all("<MouseWheel>")
+        except tk.TclError:
+            pass
         result = payload_out
         try:
             root.quit()
@@ -216,7 +278,6 @@ def main() -> int:
             finish({"ids": [chosen_id], "freeform_text": typed})
             return
         if typed and chosen_id not in other_ids:
-            # Typing implies Something else when allow_other.
             other = next((oid for oid in ids if oid in other_ids), None)
             if other:
                 finish({"ids": [other], "freeform_text": typed})
@@ -229,7 +290,6 @@ def main() -> int:
         finish({"cancelled": True, "reason": "user cancelled"})
 
     ttk.Button(btn_row, text="Cancel", command=on_cancel).grid(row=0, column=0, padx=(0, 8))
-    # Danger OK uses tk.Button so we can paint red like Linux ask-q-danger-ok.
     if show_danger:
         ok_btn = tk.Button(
             btn_row,
@@ -266,6 +326,8 @@ def main() -> int:
     def on_ok_gated() -> None:
         if not armed["v"]:
             return
+        # While typing freeform, Entry handles Return via activate path —
+        # still OK (same as Gtk).
         on_ok()
 
     ok_btn.configure(command=on_ok_gated)
@@ -298,15 +360,41 @@ def main() -> int:
 
         _arm_tick()
 
-    try:
-        if armed["v"]:
-            ok_btn.focus_set()
-    except tk.TclError:
-        pass
+    def _typing_freeform() -> bool:
+        if freeform_entry is None:
+            return False
+        try:
+            return root.focus_get() is freeform_entry
+        except tk.TclError:
+            return False
+
+    def on_digit(event: tk.Event) -> str | None:  # type: ignore[name-defined]
+        if _typing_freeform():
+            return None
+        idx = None
+        if _dialog_keys is not None:
+            idx = _dialog_keys.option_hotkey_index(str(event.keysym))
+        else:
+            key = str(event.keysym)
+            if key.isdigit() and 1 <= int(key) <= 8:
+                idx = int(key) - 1
+        if idx is None or idx >= len(ids):
+            return None
+        oid = ids[idx]
+        if allow_multiple:
+            var = vars_by_id.get(oid)
+            if isinstance(var, tk.BooleanVar):
+                var.set(not bool(var.get()))
+        else:
+            vars_by_id["_radio"].set(oid)
+        return "break"
 
     root.protocol("WM_DELETE_WINDOW", on_cancel)
     root.bind("<Escape>", lambda _e: on_cancel())
     root.bind("<Return>", lambda _e: on_ok_gated())
+    for key in ("1", "2", "3", "4", "5", "6", "7", "8"):
+        root.bind(key, on_digit)
+        root.bind(f"<KP_{key}>", on_digit)
 
     if timeout_sec > 0:
 
@@ -315,11 +403,27 @@ def main() -> int:
 
         root.after(timeout_sec * 1000, on_timeout)
 
-    # Centre roughly.
+    # Restore size/position when known; else centre roughly.
     root.update_idletasks()
-    w, h = root.winfo_width(), root.winfo_height()
     sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
-    root.geometry(f"+{(sw - w) // 2}+{(sh - h) // 3}")
+    geom = (
+        _prefs.get_window_geometry()
+        if _prefs is not None
+        else {"w": 520, "h": 480}
+    )
+    w = int(geom.get("w") or 520)
+    h = int(geom.get("h") or 480)
+    if "x" in geom and "y" in geom:
+        x, y = int(geom["x"]), int(geom["y"])
+        # Keep on-screen if monitor layout changed.
+        x = max(0, min(x, max(0, sw - 100)))
+        y = max(0, min(y, max(0, sh - 100)))
+        root.geometry(f"{w}x{h}+{x}+{y}")
+    else:
+        root.geometry(f"{w}x{h}")
+        root.update_idletasks()
+        cw, ch = root.winfo_width(), root.winfo_height()
+        root.geometry(f"+{(sw - cw) // 2}+{(sh - ch) // 3}")
 
     root.mainloop()
     try:

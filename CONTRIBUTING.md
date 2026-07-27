@@ -10,6 +10,9 @@ cd ask-question-mcp
 uv sync
 uv run python scripts/test_match_transcript.py
 uv run python scripts/test_doctor.py
+uv run python scripts/test_acks.py
+uv run python scripts/test_install.py
+uv run python scripts/test_dialog_ergonomics.py
 uv run python scripts/test_windows_backend.py
 uv run python scripts/test_contracts.py
 ```
@@ -17,6 +20,9 @@ uv run python scripts/test_contracts.py
 Optional voice: set `ASK_QUESTION_TTS_URL` and `ASK_QUESTION_STT_URL` to your
 own HTTP services (see [SETUP.md](SETUP.md)). Never commit tokens or
 `prefs.json`.
+
+Dialog keyboard / geometry behaviour for humans:
+[docs/AGENTS.md — Dialog UX](docs/AGENTS.md#dialog-ux-humans).
 
 ## Pull requests
 

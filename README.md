@@ -84,13 +84,19 @@ Full env / prefs: [SETUP.md](SETUP.md). Never commit tokens.
 
 ## Features
 
-- Radiolist / checklist; recommended option first
+- Radiolist / checklist; recommended option first; options capped at **8**
+- Keyboard: **1–8** select · **Enter** OK · **Esc** cancel (footer hint;
+  see [docs/AGENTS.md — Dialog UX](docs/AGENTS.md#dialog-ux-humans))
+- Remembers last dialog size (`prefs.window`; position on Windows; size-only
+  on typical Wayland)
+- Windows: scrollable option list
 - Danger chrome; OK/Enter briefly armed (~1s / ~4s)
 - Something else is always available (type, or Speak→STT when configured)
 - Works text-only without TTS/STT; lean JSON results by default
 - Optional TTS / mic answers / acks (auto-listen and acks **off** until opted in)
 - Optional PipeWire media duck while speaking/listening
 - Agent skill (`ask-multiple-choice`) so models use the dialog, not markdown A/B/C
+- One-shot wiring: `uv run ask-question-install --host cursor --skill`
 
 Packages & audio matrix: [DEPENDENCIES.md](DEPENDENCIES.md).
 
@@ -122,6 +128,9 @@ print(ask_zenity(
 ))
 "
 ```
+
+Keyboard check in the dialog: press **2**, wait for OK to arm, **Enter**.
+Esc cancels.
 
 Troubleshooting: [docs/AGENTS.md](docs/AGENTS.md) · [SETUP.md](SETUP.md).
 

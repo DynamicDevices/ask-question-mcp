@@ -23,6 +23,9 @@ choose among options the human must decide.
 5. **`dangerous=true`** for irreversible / high-risk forks.
 6. Wait for the JSON result. On cancel → stop. On freeform → use **`freeform_text`**.
 
+Humans use the dialog keyboard (**1–8**, Enter, Esc); do not put hotkey
+instructions in `question`. Detail: repo `docs/AGENTS.md` (Dialog UX).
+
 ## Don't
 
 - Markdown A/B/C, numbered lists, or host AskQuestion when this MCP is available

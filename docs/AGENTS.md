@@ -109,6 +109,23 @@ OK and Enter stay locked briefly after open (countdown on OK): **~1s** normal
 (`ASK_QUESTION_ARM_MS`), **~4s** when `dangerous` (`ASK_QUESTION_DANGER_ARM_MS`).
 Set either env to `0` to disable. Cancel / Escape always work immediately.
 
+## Dialog UX (humans)
+
+Agents do not need to document these in `question` text — the dialog shows a
+footer hint. Useful when coaching a human or writing host docs:
+
+| Input | Behaviour |
+|-------|-----------|
+| **1–8** (top row or keypad) | Select that option (1-based). Labels show `1 · …`. Multi-select **toggles**. Ignored while the Something else entry is focused. |
+| **Enter** | Confirm OK after the arm delay (same as clicking OK). |
+| **Esc** / window close | Cancel. |
+| **R** / **L** | Replay question / Listen (Linux voice only, when configured). |
+
+Size (and on Windows, position) is remembered in
+`~/.config/ask-question-mcp/prefs.json` under `"window": { "w", "h", … }`.
+Wayland usually restores **size only** (compositors block absolute moves).
+Windows option lists scroll when tall.
+
 ## Return value (JSON string)
 
 Parse the string before branching.

@@ -138,11 +138,24 @@ Expose `POST /transcribe` (multipart WAV) and `GET /health`. Point
 
 | Path | Purpose |
 |------|---------|
-| `~/.config/ask-question-mcp/prefs.json` | Optional `audio_enabled` / `duck_enabled` / `ack_enabled` / volume / always_listen |
+| `~/.config/ask-question-mcp/prefs.json` | Optional audio toggles, volumes, `always_listen`, and `window` geometry |
 | `~/.config/ask-question-mcp/acks.json` | Optional ack phrase packs (see `acks.example.json`) |
 | `~/.cache/ask-question-mcp/` | Session IPC, ack/question WAV cache, voice-debug |
 
 Copy `prefs.example.json` only when diverging from shipped defaults.
+
+**`window` geometry** (written automatically when a dialog closes):
+
+```json
+"window": { "w": 520, "h": 480, "x": 100, "y": 80 }
+```
+
+| Key | Role |
+|-----|------|
+| `w` / `h` | Restored on Linux (Gtk) and Windows |
+| `x` / `y` | Restored on Windows; often ignored on Wayland |
+
+Delete the `window` key (or the prefs file) to reset size/position.
 
 Bundled ack WAVs seed `~/.cache/ask-question-mcp/charlize-acks/v2/` on first
 use — no live TTS required for those phrases.
