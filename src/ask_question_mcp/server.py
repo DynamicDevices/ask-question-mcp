@@ -17,7 +17,7 @@ mcp = FastMCP(
         "over host AskQuestion. Pass agent=LANE.id; mark recommended in label + "
         "recommended_id; dangerous=true for irreversible; allow_other default. "
         "check_setup only on first enable, dialog failure, or before enabling "
-        "voice — never before routine MCQs. UI before audio. Detail: README."
+        "voice — never before routine MCQs. UI before audio. Detail: docs/AGENTS.md."
     ),
 )
 

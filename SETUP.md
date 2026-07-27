@@ -76,7 +76,7 @@ still speak if installed — uncheck **Audio** in the dialog (persistent) or set
 
 On Windows use absolute `uv.exe` and a Windows `--directory` path. Same
 `mcpServers` / `command`+`args`+`env` shape. Linux process must inherit
-`DISPLAY`. Not a remote/HTTP MCP — see README [MCP client configuration](README.md#mcp-client-configuration).
+`DISPLAY`. Not a remote/HTTP MCP — see README [Configuration](README.md#configuration).
 
 Windows Phase 1 is text-only (tkinter); omit TTS/STT `env` entries.
 
@@ -148,7 +148,7 @@ use — no live TTS required for those phrases.
 | `ASK_QUESTION_VOICE_ANSWER` | on when STT set | `0` to disable mic path |
 | `ASK_QUESTION_DUCK` | on | `0` disables media duck (prefs `duck_enabled`) |
 | `ASK_QUESTION_ACK` | on | `0` disables spoken acks (prefs `ack_enabled`) |
-| `ASK_QUESTION_RESULT_VERBOSE` | off | `1` = always attach full voice + capabilities on MCQ results (default omits idle echo — see [Token / catalog cost](README.md#token--catalog-cost-structural)) |
+| `ASK_QUESTION_RESULT_VERBOSE` | off | `1` = always attach full voice + capabilities on MCQ results (default omits idle echo — see [docs/AGENTS.md](docs/AGENTS.md#token--catalog-cost-structural)) |
 | `ASK_QUESTION_SPEAK_VOLUME` / `ASK_QUESTION_ACK_VOLUME` | 0.60 / 0.55 | Linear gain |
 | `ASK_QUESTION_ALWAYS_LISTEN` | on | `0` = Listen button only |
 | `ASK_QUESTION_VOICE_DEBUG_WAV` | off | Keep debug WAVs only when `1` |
@@ -156,6 +156,6 @@ use — no live TTS required for those phrases.
 **Lean results:** leave `ASK_QUESTION_RESULT_VERBOSE` unset. Idle picks return
 `id` / `label` / `cancelled` only (~14 tok vs ~120 with full voice/capabilities
 echo). Call `check_setup` on first enable / errors / before voice — not before
-every MCQ. Full report: [README — Token / catalog cost](README.md#token--catalog-cost-structural).
+every MCQ. Full report: [docs/AGENTS.md — Token / catalog cost](docs/AGENTS.md#token--catalog-cost-structural).
 
 See [DEPENDENCIES.md](DEPENDENCIES.md) for packages and more knobs.

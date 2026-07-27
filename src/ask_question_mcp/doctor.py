@@ -707,6 +707,7 @@ def summarize(checks: list[Check]) -> dict[str, Any]:
         "next_actions": next_actions,
         "docs": {
             "readme": DOCS_README,
+            "agents": "docs/AGENTS.md",
             "setup": DOCS_SETUP,
             "voice_backends": DOCS_VOICE,
             "dependencies": DOCS_DEPS,
