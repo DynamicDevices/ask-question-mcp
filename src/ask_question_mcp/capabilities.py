@@ -72,9 +72,36 @@ class VoiceCapabilities:
         return asdict(self)
 
 
+def _audio_enabled() -> bool:
+    """Master TTS+STT switch: env ASK_QUESTION_AUDIO → prefs → default True."""
+    try:
+        from ask_question_mcp.prefs import get_audio_enabled
+
+        return bool(get_audio_enabled())
+    except Exception:
+        try:
+            import prefs as _prefs  # type: ignore
+
+            return bool(_prefs.get_audio_enabled())
+        except Exception:
+            if _falsy("ASK_QUESTION_AUDIO"):
+                return False
+            if _truthy("ASK_QUESTION_AUDIO"):
+                return True
+            return True
+
+
 def resolve_voice_capabilities(*, speak_requested: bool) -> VoiceCapabilities:
     """Decide effective speak/listen; never block the text MCQ path."""
-    if _falsy("ASK_QUESTION_SPEAK"):
+    notes: list[str] = []
+    audio_on = _audio_enabled()
+    if not audio_on:
+        speak_requested = False
+        notes.append(
+            "Audio disabled (prefs audio_enabled=false or ASK_QUESTION_AUDIO=0) "
+            "— text-only MCQ (TTS + STT off)."
+        )
+    elif _falsy("ASK_QUESTION_SPEAK"):
         speak_requested = False
     elif _truthy("ASK_QUESTION_SPEAK"):
         speak_requested = True
@@ -84,13 +111,14 @@ def resolve_voice_capabilities(*, speak_requested: bool) -> VoiceCapabilities:
 
     # Windows Phase 1: tkinter text MCQ only — no duck / STT / local speak path.
     if sys.platform == "win32":
-        notes = [
+        win_notes = [
             "Windows Phase 1: text-only MCQ (tkinter) — speak/listen not supported yet.",
         ]
         if tts or stt:
-            notes.append(
+            win_notes.append(
                 "TTS/STT URLs are ignored on Windows until Phase 2 voice support."
             )
+        win_notes.extend(notes)
         return VoiceCapabilities(
             tts_configured=tts,
             stt_configured=stt,
@@ -100,7 +128,7 @@ def resolve_voice_capabilities(*, speak_requested: bool) -> VoiceCapabilities:
             speak_active=False,
             listen_active=False,
             audio_mode="text_only",
-            notes=notes,
+            notes=win_notes,
         )
 
     piper = piper_available()
@@ -108,7 +136,6 @@ def resolve_voice_capabilities(*, speak_requested: bool) -> VoiceCapabilities:
 
     # Speak needs at least one generation path (remote TTS, Piper, or notify-voice).
     can_speak = tts or piper or notify
-    notes: list[str] = []
 
     if not tts:
         if can_speak and speak_requested:
@@ -122,13 +149,18 @@ def resolve_voice_capabilities(*, speak_requested: bool) -> VoiceCapabilities:
                 "(click / type)."
             )
 
-    speak_active = bool(speak_requested and can_speak)
+    speak_active = bool(speak_requested and can_speak and audio_on)
 
     listen_active = False
-    if stt and speak_active and not _falsy("ASK_QUESTION_VOICE_ANSWER"):
+    if (
+        audio_on
+        and stt
+        and speak_active
+        and not _falsy("ASK_QUESTION_VOICE_ANSWER")
+    ):
         listen_active = True
 
-    if not stt:
+    if not stt and audio_on:
         notes.append(
             "ASK_QUESTION_STT_URL unset — answer by click / type "
             "(optional: setup_guide topic=stt for faster-whisper)."

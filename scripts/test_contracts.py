@@ -151,16 +151,27 @@ def test_doctor_script_still_importable() -> None:
 def test_danger_arm_ms() -> None:
     from ask_question_mcp.danger_arm import (
         DEFAULT_DANGER_ARM_MS,
+        DEFAULT_SAFE_ARM_MS,
         arm_label_secs,
         danger_arm_ms,
     )
 
-    with mock.patch.dict(os.environ, {"ASK_QUESTION_DANGER_ARM_MS": ""}, clear=False):
-        assert danger_arm_ms(dangerous=False) == 0
+    with mock.patch.dict(
+        os.environ,
+        {"ASK_QUESTION_ARM_MS": "", "ASK_QUESTION_DANGER_ARM_MS": ""},
+        clear=False,
+    ):
+        assert danger_arm_ms(dangerous=False) == DEFAULT_SAFE_ARM_MS
         assert danger_arm_ms(dangerous=True) == DEFAULT_DANGER_ARM_MS
+
+    with mock.patch.dict(os.environ, {"ASK_QUESTION_ARM_MS": "0"}, clear=False):
+        assert danger_arm_ms(dangerous=False) == 0
 
     with mock.patch.dict(os.environ, {"ASK_QUESTION_DANGER_ARM_MS": "0"}, clear=False):
         assert danger_arm_ms(dangerous=True) == 0
+
+    with mock.patch.dict(os.environ, {"ASK_QUESTION_ARM_MS": "1500"}, clear=False):
+        assert danger_arm_ms(dangerous=False) == 1500
 
     with mock.patch.dict(os.environ, {"ASK_QUESTION_DANGER_ARM_MS": "3500"}, clear=False):
         assert danger_arm_ms(dangerous=True) == 3500
@@ -173,6 +184,8 @@ def test_danger_arm_ms() -> None:
 
     assert arm_label_secs(0) == 0
     assert arm_label_secs(1) == 1
+    assert arm_label_secs(1000) == 1
+    assert arm_label_secs(1001) == 2
     assert arm_label_secs(4000) == 4
     assert arm_label_secs(4001) == 5
 

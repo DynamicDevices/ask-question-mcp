@@ -1,39 +1,47 @@
-"""Arming delay for dangerous (⚠) ask-question dialogs.
+"""Confirm-arming delay for ask-question dialogs.
 
 Blocks OK / Enter until the countdown finishes so a stray Return from the
-previous keystroke cannot confirm a high-risk choice.
+previous keystroke (or mid-typing) cannot dismiss the dialog.
 
-Env: ``ASK_QUESTION_DANGER_ARM_MS`` (default 4000). Set ``0`` to disable.
+- Normal MCQs: ``ASK_QUESTION_ARM_MS`` (default **1000**). Set ``0`` to disable.
+- Dangerous (⚠): ``ASK_QUESTION_DANGER_ARM_MS`` (default **4000**). Set ``0`` to
+  disable the danger-only longer arm (safe arm still applies unless also 0).
 """
 
 from __future__ import annotations
 
 import os
 
+DEFAULT_SAFE_ARM_MS = 1000
 DEFAULT_DANGER_ARM_MS = 4000
+ENV_SAFE_ARM_MS = "ASK_QUESTION_ARM_MS"
 ENV_DANGER_ARM_MS = "ASK_QUESTION_DANGER_ARM_MS"
 _MAX_ARM_MS = 60_000
 
 
-def danger_arm_ms(*, dangerous: bool = True) -> int:
-    """Milliseconds to block confirm on a dangerous dialog.
-
-    Returns ``0`` when the dialog is not dangerous, when the env is ``0``,
-    or when the value cannot be parsed (falls back to the default only for
-    non-empty invalid values that fail int() — empty uses default).
-    """
-    if not dangerous:
-        return 0
-    raw = os.environ.get(ENV_DANGER_ARM_MS, "").strip()
+def _parse_arm_ms(env_name: str, default: int) -> int:
+    raw = os.environ.get(env_name, "").strip()
     if not raw:
-        return DEFAULT_DANGER_ARM_MS
+        return default
     try:
         ms = int(raw)
     except ValueError:
-        return DEFAULT_DANGER_ARM_MS
+        return default
     if ms <= 0:
         return 0
     return min(ms, _MAX_ARM_MS)
+
+
+def danger_arm_ms(*, dangerous: bool = True) -> int:
+    """Milliseconds to block OK / Enter after the dialog opens.
+
+    Dangerous dialogs use the longer danger arm (default 4s). Normal dialogs
+    use the safe arm (default 1s) so accidental Return while typing does not
+    confirm.
+    """
+    if dangerous:
+        return _parse_arm_ms(ENV_DANGER_ARM_MS, DEFAULT_DANGER_ARM_MS)
+    return _parse_arm_ms(ENV_SAFE_ARM_MS, DEFAULT_SAFE_ARM_MS)
 
 
 def arm_label_secs(remaining_ms: int) -> int:

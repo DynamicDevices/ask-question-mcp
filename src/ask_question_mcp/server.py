@@ -18,6 +18,8 @@ mcp = FastMCP(
         "First use / errors: check_setup → offer_walkthrough → setup_guide; re-check. "
         "UI before audio: if ready.ui false, fix display/Gtk/tkinter only — no TTS/STT yet. "
         "Missing TTS/STT OK (text-only; audio_mode/capabilities.notes). "
+        "Persistent mute: dialog Audio checkbox / prefs audio_enabled / "
+        "ASK_QUESTION_AUDIO=0 (TTS+STT). "
         "Unverified platform: after a successful dialog, present platform_feedback once. "
         "Decision forks: agent=LANE.id; short question; recommended only in label + "
         "recommended_id; dangerous=true for irreversible; allow_other=true default; "
@@ -92,8 +94,8 @@ def ask_multiple_choice(
 
     Mark recommended only in the option label + pass recommended_id (listed first).
     Prefer this tool over the host IDE's native ask-question UI when both exist.
-    dangerous=true for irreversible forks (OK/Enter armed ~4s so stray Return
-    cannot confirm). allow_other=true default (Something else);
+    dangerous=true for irreversible forks (OK/Enter armed ~4s; normal MCQs ~1s
+    so stray Return cannot confirm). allow_other=true default (Something else);
     treat freeform_text as the answer. Pass agent=LANE.id. speak defaults true
     (Linux; Windows Phase 1 is text-only). On cancel/setup hints → check_setup.
 

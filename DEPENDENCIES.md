@@ -113,7 +113,8 @@ We do **not** require classic PulseAudio specifically. We use the Pulse
 compatibility API. Pure ALSA desktops: text MCQ works; duck/BT features do not.
 See [README — Audio stack](README.md#audio-stack).
 
-Without C: set `ASK_QUESTION_SPEAK=0` or leave TTS unset — MCQ stays click/type.
+Without C: uncheck **Audio** / set `ASK_QUESTION_AUDIO=0` / `ASK_QUESTION_SPEAK=0`
+or leave TTS unset — MCQ stays click/type.
 
 ### D — Voice backends (optional)
 
@@ -154,7 +155,8 @@ SBOM: CI uploads CycloneDX from the lockfile (`.github/workflows/ci.yml`).
 
 | Path | Purpose |
 |------|---------|
-| `~/.config/ask-question-mcp/prefs.json` | Optional volume / always_listen |
+| `~/.config/ask-question-mcp/prefs.json` | Optional `audio_enabled` / `duck_enabled` / `ack_enabled` / volume / always_listen |
+| `~/.config/ask-question-mcp/acks.json` | Optional ack phrase packs |
 | `~/.config/ask-question-mcp/token` | Optional Bearer for TTS/STT |
 | `~/.cache/ask-question-mcp/sessions/<id>/` | Per-dialog speak gates |
 | `~/.cache/ask-question-mcp/charlize-acks/v2/` | Ack WAV pool (seeded from package assets) |

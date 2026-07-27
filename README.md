@@ -292,13 +292,16 @@ After editing: reload the host. Listings usually show server **`ask-question`**;
 | `ASK_QUESTION_TTS_URL` | empty | TTS HTTP base (`/tts`, `/tts/stream`). Empty = no live TTS |
 | `ASK_QUESTION_STT_URL` | empty | Full STT URL ending in `/transcribe`. Empty = no voice answers |
 | `ASK_QUESTION_TTS_TOKEN` / `ASK_QUESTION_STT_TOKEN` | empty | Optional Bearer tokens |
-| `ASK_QUESTION_SPEAK` | on | `0` / `false` = mute question speech |
+| `ASK_QUESTION_AUDIO` | on | `0` / `false` = **master mute** (TTS + STT); overrides dialog Audio checkbox via env |
+| `ASK_QUESTION_SPEAK` | on | `0` / `false` = mute question speech only |
 | `ASK_QUESTION_VOICE_ANSWER` | on | `0` = never open mic path |
-| `ASK_QUESTION_DUCK` | on | `0` = do not duck other audio |
+| `ASK_QUESTION_DUCK` | on | `0` = do not duck other audio (prefs `duck_enabled`) |
+| `ASK_QUESTION_ACK` | on | `0` = mute spoken acks only (prefs `ack_enabled`; cancel never acks) |
 | `ASK_QUESTION_SPEAK_VOLUME` / `ASK_QUESTION_ACK_VOLUME` | `0.60` / `0.55` | Linear playback gain |
 | `ASK_QUESTION_ALWAYS_LISTEN` | on | `0` = Listen button only |
 | `ASK_QUESTION_AGENT` / `LANE_ID` | unset | Fallback for `agent=` if omitted |
-| `ASK_QUESTION_DANGER_ARM_MS` | `4000` | Dangerous dialogs: block OK/Enter this many ms after open (`0` = off) |
+| `ASK_QUESTION_ARM_MS` | `1000` | All MCQs: block OK/Enter this many ms after open (`0` = off) |
+| `ASK_QUESTION_DANGER_ARM_MS` | `4000` | Dangerous dialogs: longer arm (`0` = off for danger path) |
 
 Full knobs + prefs paths: [SETUP.md](SETUP.md), [DEPENDENCIES.md](DEPENDENCIES.md).
 
@@ -322,7 +325,7 @@ Full knobs + prefs paths: [SETUP.md](SETUP.md), [DEPENDENCIES.md](DEPENDENCIES.m
 | `recommended_ids` | string[] \| null | no | Multi-select preferred ids |
 | `allow_multiple` | bool | no | default `false` (radio); `true` = checklist |
 | `allow_other` | bool | no | default `true` — appends Something else |
-| `dangerous` | bool | no | Whole-dialog danger chrome; OK/Enter armed ~4s (`ASK_QUESTION_DANGER_ARM_MS`) |
+| `dangerous` | bool | no | Whole-dialog danger chrome; OK/Enter armed ~4s (`ASK_QUESTION_DANGER_ARM_MS`). Normal MCQs arm ~1s (`ASK_QUESTION_ARM_MS`). |
 | `speak` | bool | no | default `true` (honours mute env / missing TTS) |
 | `title` | string | no | default `"Decide"` — short noun phrase |
 | `agent` | string \| null | **strongly yes** | Window title prefix `[agent]` |
@@ -361,9 +364,10 @@ Full knobs + prefs paths: [SETUP.md](SETUP.md), [DEPENDENCIES.md](DEPENDENCIES.m
 }
 ```
 
-While `dangerous` is set, OK and Enter stay locked for ~4 seconds (countdown on the
-OK button) so a stray Return cannot confirm. Override with `ASK_QUESTION_DANGER_ARM_MS`
-(`0` disables). Cancel / Escape still work immediately.
+OK and Enter stay locked briefly after open (countdown on the OK button) so a
+stray Return cannot confirm: **~1s** on normal MCQs (`ASK_QUESTION_ARM_MS`),
+**~4s** when `dangerous` is set (`ASK_QUESTION_DANGER_ARM_MS`). Set either env
+to `0` to disable that path. Cancel / Escape still work immediately.
 
 ### Return value (JSON string)
 
@@ -451,9 +455,21 @@ No prefs file required. Optional `~/.config/ask-question-mcp/prefs.json`
 
 | Key | Default |
 |-----|---------|
+| `audio_enabled` | `true` — master TTS+STT; dialog **Audio** checkbox; env `ASK_QUESTION_AUDIO` |
+| `duck_enabled` | `true` — lower other apps while speaking/listening; env `ASK_QUESTION_DUCK` |
+| `ack_enabled` | `true` — spoken ack after OK; env `ASK_QUESTION_ACK` |
 | `speak_volume` | `0.60` |
 | `ack_volume` | `0.55` |
 | `always_listen` | `true` |
+
+### Ack packs
+
+Spoken acks after OK are chosen by **outcome** (agree / diverge / neutral /
+freeform / danger). Cancel stays silent. Phrase lists ship in code; optional
+override: copy [`acks.example.json`](acks.example.json) →
+`~/.config/ask-question-mcp/acks.json`. WAV cache:
+`~/.cache/ask-question-mcp/charlize-acks/v2/`. Grow takes with
+`scripts/review_acks.py`.
 
 ---
 
@@ -481,7 +497,9 @@ mic helpers are optional and layered on top.
 - **Pure ALSA** (no Pulse/PipeWire session): UI still works; WAV playback may
   work via `aplay` as a last resort; **media duck and BT mic helpers will not**.
   Prefer PipeWire/Pulse on the desktop for voice features.
-- Mute speak entirely with `ASK_QUESTION_SPEAK=0` or leave TTS unset (text-only).
+- Mute speak + listen with the dialog **Audio** checkbox (saves
+  `prefs.json` `audio_enabled`), or `ASK_QUESTION_AUDIO=0`, or leave TTS unset
+  (text-only). Finer: `ASK_QUESTION_SPEAK=0` / `ASK_QUESTION_VOICE_ANSWER=0`.
 
 Detail / packages: [DEPENDENCIES.md](DEPENDENCIES.md) tier C.
 
@@ -549,7 +567,7 @@ Or register the MCP and invoke `ask_multiple_choice` from the agent.
 | Tool missing / server fails to start | Use **absolute** `uv` path (not bare `uv`); check REPO_ROOT; reload host; `check_setup` |
 | Dialog never appears | `check_setup` → fix `display` / `gtk_*`; `echo $DISPLAY`; ensure host inherits display (not headless/SSH without X) |
 | Hang / timeout | Human must click; or raise `timeout_sec`; check for off-screen dialog |
-| Speaks without TTS URL | Local Piper / `notify-voice.sh` present — expected; mute with `ASK_QUESTION_SPEAK=0` |
+| Speaks without TTS URL | Local Piper / `notify-voice.sh` present — expected; mute with Audio checkbox / `ASK_QUESTION_AUDIO=0` / `ASK_QUESTION_SPEAK=0` |
 | No speech | TTS URL unset and no local speak path; `setup_guide` topic `tts`; or mute env |
 | Mic never listens | STT URL unset — `setup_guide` topic `stt`; or `ASK_QUESTION_VOICE_ANSWER=0` |
 | Import / Gtk errors | Install Gtk4/Adw GI bindings; see `check_setup` failing checks |

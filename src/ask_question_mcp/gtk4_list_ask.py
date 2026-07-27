@@ -38,13 +38,31 @@ try:
     import danger_arm as _danger_arm
 except ImportError:  # pragma: no cover
     _danger_arm = None  # type: ignore[assignment]
+try:
+    import audio_duck as _audio_duck
+except ImportError:  # pragma: no cover
+    _audio_duck = None  # type: ignore[assignment]
 
+
+def _force_unduck_media() -> None:
+    """Restore system audio immediately (Audio toggle off / text-only)."""
+    if _audio_duck is None:
+        return
+    try:
+        if _audio_duck.duck_hold_count() > 0:
+            _audio_duck.release_duck_hold(ramp=True, force=True)
+        else:
+            # Clear any orphaned duck state even if hold count is 0.
+            _audio_duck.restore_other_audio(ramp=True, force=True)
+    except Exception:
+        pass
 
 
 def _ipc_root() -> Path:
     if _session_ipc is not None:
         return _session_ipc.ipc_dir()
-    return _ipc_root()
+    return Path.home() / ".cache" / "ask-question-mcp"
+
 
 def _stop_question_audio(pgid_file: str | None) -> None:
     """Kill question playback as soon as OK/Cancel is pressed."""
@@ -474,6 +492,9 @@ def _main() -> int:
             set_status("idle", "● Speak on — use click / type to answer (no STT).")
 
         def on_replay(*_args: object) -> None:
+            if _prefs is not None and not _prefs.get_audio_enabled():
+                set_status("idle", "Audio off — enable Audio to replay")
+                return
             voice_retries["n"] = 0
             _replay_question_speak(
                 speak_text=speak_text,
@@ -706,8 +727,35 @@ def _main() -> int:
         btn_row.set_margin_bottom(12)
         btn_row.set_margin_start(16)
         btn_row.set_margin_end(16)
-        # Replay + Listen on the left; Cancel/OK stay on the right.
+        # Audio master toggle (always visible when prefs load) + Replay/Listen;
+        # Cancel/OK stay on the right.
         footer_listen: Gtk.Button | None = None
+        if _prefs is not None:
+            audio_chk = Gtk.CheckButton(label="Audio")
+            audio_chk.set_tooltip_text(
+                "Speak questions and listen for answers (saved). "
+                "Off = text-only until turned back on. "
+                "Turning on mid-dialog applies to the next question."
+            )
+            audio_chk.set_focusable(False)
+            audio_chk.set_active(_prefs.get_audio_enabled())
+
+            def on_audio_toggled(btn: Gtk.CheckButton) -> None:
+                enabled = bool(btn.get_active())
+                _prefs.set_audio_enabled(enabled)
+                if not enabled:
+                    _stop_question_audio(speak_pgid_file_s)
+                    listen_gen["n"] += 1
+                    show_voice_recover(False)
+                    _force_unduck_media()
+                    if not closed["v"]:
+                        set_status(
+                            "idle",
+                            "Audio off — click / type (saved)",
+                        )
+
+            audio_chk.connect("toggled", on_audio_toggled)
+            btn_row.append(audio_chk)
         if speak_enabled:
             footer_replay = Gtk.Button()
             footer_replay.set_tooltip_text("Replay question (R)")
@@ -744,8 +792,12 @@ def _main() -> int:
             def on_always_listen_toggled(btn: Gtk.CheckButton) -> None:
                 if _prefs is not None:
                     _prefs.set_always_listen(btn.get_active())
-                # Turning on mid-dialog: start listening if idle.
-                if btn.get_active() and not closed["v"]:
+                # Turning on mid-dialog: start listening if idle and audio on.
+                if (
+                    btn.get_active()
+                    and not closed["v"]
+                    and (_prefs is None or _prefs.get_audio_enabled())
+                ):
                     start_voice_listen_thread()
 
             always_listen_chk.connect("toggled", on_always_listen_toggled)
@@ -772,7 +824,7 @@ def _main() -> int:
         if _danger_arm is not None:
             arm_ms = int(_danger_arm.danger_arm_ms(dangerous=dangerous))
         else:
-            arm_ms = 4000 if dangerous else 0
+            arm_ms = 4000 if dangerous else 1000
         armed = {"v": arm_ms <= 0}
 
         def _arm_confirm() -> None:
@@ -1075,6 +1127,8 @@ def _main() -> int:
         def start_voice_listen_thread() -> None:
             if not voice_answer_on or _voice_answer is None or allow_multiple:
                 return
+            if _prefs is not None and not _prefs.get_audio_enabled():
+                return
             show_voice_recover(False)
             listen_gen["n"] += 1
             my_gen = listen_gen["n"]
@@ -1278,6 +1332,8 @@ def _main() -> int:
             """Re-listen for an option without waiting for question audio again."""
             if not voice_answer_on or _voice_answer is None or allow_multiple:
                 return
+            if _prefs is not None and not _prefs.get_audio_enabled():
+                return
             show_voice_recover(False)
             listen_gen["n"] += 1
             my_gen = listen_gen["n"]
@@ -1353,6 +1409,9 @@ def _main() -> int:
         def on_listen(*_args: object) -> None:
             """Manual mic — stop question audio if still playing, then listen now."""
             if not voice_answer_on or allow_multiple:
+                return
+            if _prefs is not None and not _prefs.get_audio_enabled():
+                set_status("idle", "Audio off — enable Audio to listen")
                 return
             voice_retries["n"] = 0
             show_voice_recover(False)
@@ -1493,7 +1552,8 @@ def _main() -> int:
 
             GLib.timeout_add(150, _poll_speak_phase)
             always = True if _prefs is None else _prefs.get_always_listen()
-            if always:
+            audio_on = True if _prefs is None else _prefs.get_audio_enabled()
+            if always and audio_on:
                 start_voice_listen_thread()
 
     app.connect("activate", on_activate)

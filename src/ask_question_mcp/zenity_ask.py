@@ -25,7 +25,6 @@ from pathlib import Path
 from typing import Any
 
 from ask_question_mcp.voice_acks import (
-    followed_recommendation,
     read_ack_allowed,
     resolve_agent,
     snapshot_ack_allowed_and_invalidate,
@@ -541,7 +540,8 @@ def ask_zenity(
     pair with ``"auto_listen": true`` to start mic on open (e.g. Re-record).
     ``entry_seed`` prefills the edit box (voice-turn transcript confirm).
     Pass ``dangerous=True`` to flag the whole decision.
-    ``speak`` defaults True (local TTS). Pass ``speak=False`` or set env
+    ``speak`` defaults True (local TTS). Pass ``speak=False``, uncheck dialog
+    **Audio** (prefs ``audio_enabled``), or set ``ASK_QUESTION_AUDIO=0`` /
     ``ASK_QUESTION_SPEAK=0`` to mute.
     ``agent`` (or LANE.id / ``ASK_QUESTION_AGENT``) is prefixed in the window
     title so multi-agent sessions stay distinguishable.
@@ -642,16 +642,17 @@ def ask_zenity(
 
     # Hold duck for the whole MCQ: question → listen → ack. Stops other apps
     # blasting between speech finishing and the mic opening.
-    # Text-only: never duck — and heal any orphaned hold left by a killed TTS child.
+    # Text-only / Audio off: never duck — heal any orphaned hold.
     duck_mod = None
     duck_held = False
     try:
         from ask_question_mcp import audio_duck as duck_mod
     except ImportError:
         duck_mod = None
+    should_duck = bool(do_speak)  # False when audio_enabled off / no TTS path
     if duck_mod is not None:
         try:
-            if not do_speak:
+            if not should_duck:
                 if duck_mod.duck_hold_count() > 0:
                     duck_mod.release_duck_hold(ramp=True, force=True)
             else:
@@ -672,7 +673,7 @@ def ask_zenity(
                     duck_mod.release_duck_hold(ramp=True, force=True)
                 except Exception:
                     pass
-            elif not do_speak:
+            elif not should_duck:
                 # Belt-and-braces: text-only must never leave media ducked.
                 try:
                     if duck_mod.duck_hold_count() > 0:
@@ -734,10 +735,23 @@ def ask_zenity(
         allow_ack = snapshot_ack_allowed_and_invalidate()
     stop_speak()
 
-    rec_kw = {
-        "recommended_id": recommended_id,
-        "recommended_ids": recommended_ids,
-    }
+    def _play_ack(
+        *,
+        out_ids: list[str],
+        out_labels: list[str] | None = None,
+        freeform: bool = False,
+        dangerous_pick: bool = False,
+    ) -> None:
+        if not (do_speak and allow_ack):
+            return
+        speak_ack(
+            chosen_ids=out_ids,
+            recommended_id=recommended_id,
+            recommended_ids=recommended_ids,
+            dangerous=bool(dangerous_pick or whole_danger),
+            freeform=freeform,
+            labels=out_labels,
+        )
 
     def _with_voice(payload: dict[str, Any]) -> dict[str, Any]:
         meta = dict(voice_meta) if voice_meta else {}
@@ -843,12 +857,12 @@ def ask_zenity(
             if freeform_text is not None:
                 result["freeform"] = True
                 result["freeform_text"] = freeform_text
-            if do_speak and allow_ack:
-                speak_ack(
-                    followed_recommendation=followed_recommendation(
-                        out_ids, **rec_kw
-                    )
-                )
+            _play_ack(
+                out_ids=out_ids,
+                out_labels=out_labels,
+                freeform=freeform_text is not None,
+                dangerous_pick=any(i in danger_ids for i in out_ids),
+            )
             return _with_voice(result)
 
         chosen_id = chosen_ids[0] if chosen_ids else ""
@@ -862,12 +876,12 @@ def ask_zenity(
                 freeform_text = voice_freeform
             else:
                 freeform_text = _open_entry(auto_listen=chosen_id in auto_listen_ids)
-            if do_speak and allow_ack:
-                speak_ack(
-                    followed_recommendation=followed_recommendation(
-                        [chosen_id], **rec_kw
-                    )
-                )
+            _play_ack(
+                out_ids=[chosen_id],
+                out_labels=[freeform_text],
+                freeform=True,
+                dangerous_pick=chosen_id in danger_ids,
+            )
             return _with_voice(
                 {
                     "id": chosen_id,
@@ -881,12 +895,12 @@ def ask_zenity(
                 }
             )
 
-        if do_speak and allow_ack:
-            speak_ack(
-                followed_recommendation=followed_recommendation(
-                    [chosen_id], **rec_kw
-                )
-            )
+        _play_ack(
+            out_ids=[chosen_id],
+            out_labels=[labels[chosen_id]],
+            freeform=False,
+            dangerous_pick=chosen_id in danger_ids,
+        )
         return _with_voice(
             {
                 "id": chosen_id,

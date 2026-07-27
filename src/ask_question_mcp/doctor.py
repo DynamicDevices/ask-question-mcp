@@ -333,12 +333,23 @@ def run_checks(*, want_voice: bool | None = None) -> list[Check]:
     stt = _stt_url()
     speak_off = _falsy("ASK_QUESTION_SPEAK")
     voice_off = _falsy("ASK_QUESTION_VOICE_ANSWER")
+    audio_off = False
+    try:
+        from ask_question_mcp.prefs import get_audio_enabled
+
+        audio_off = not bool(get_audio_enabled())
+    except Exception:
+        audio_off = _falsy("ASK_QUESTION_AUDIO")
     if want_voice is None:
         # Windows Phase 1 ignores TTS/STT for readiness.
         if sys.platform == "win32":
             want_voice = False
         else:
-            want_voice = bool(tts or stt) and not (speak_off and voice_off)
+            want_voice = (
+                bool(tts or stt)
+                and not audio_off
+                and not (speak_off and voice_off)
+            )
 
     if not tts:
         if sys.platform == "win32":
@@ -438,6 +449,16 @@ def run_checks(*, want_voice: bool | None = None) -> list[Check]:
                 )
             )
 
+    if audio_off:
+        checks.append(
+            Check(
+                "audio_pref",
+                "Audio (TTS+STT)",
+                "ok",
+                "Audio disabled via prefs audio_enabled=false or "
+                "ASK_QUESTION_AUDIO=0 (intentional text-only).",
+            )
+        )
     if speak_off:
         checks.append(
             Check(
@@ -866,7 +887,8 @@ def setup_guide(topic: str) -> dict[str, Any]:
             "health": "GET {base}/health",
             "transcribe": "POST {base}/transcribe  multipart field `file` (WAV)",
         },
-        "note": "Disable mic path with ASK_QUESTION_VOICE_ANSWER=0 if undesired.",
+        "note": "Disable mic path with ASK_QUESTION_VOICE_ANSWER=0, or uncheck "
+        "Audio in the dialog (prefs audio_enabled / ASK_QUESTION_AUDIO=0).",
         "docs": [DOCS_VOICE, DOCS_SETUP],
     }
 
@@ -877,6 +899,7 @@ def setup_guide(topic: str) -> dict[str, Any]:
             "Complete the STT walkthrough (topic=stt).",
             "Put both URLs in mcp.json `env` (see topic=mcp).",
             "Re-run check_setup until ready.tts and ready.stt are true.",
+            "Keep the dialog Audio checkbox on (prefs audio_enabled, default true).",
         ],
         "docs": [DOCS_VOICE],
     }
@@ -884,9 +907,11 @@ def setup_guide(topic: str) -> dict[str, Any]:
     sections["ui_only"] = {
         "title": "UI only — skip voice",
         "steps": [
-            "Leave ASK_QUESTION_TTS_URL and ASK_QUESTION_STT_URL unset.",
-            "Optionally set ASK_QUESTION_SPEAK=0 and ASK_QUESTION_VOICE_ANSWER=0 "
-            "in mcp.json env to silence optional paths.",
+            "Leave ASK_QUESTION_TTS_URL and ASK_QUESTION_STT_URL unset, or uncheck "
+            "Audio in any MCQ dialog (saves prefs audio_enabled=false).",
+            "Alternatively set ASK_QUESTION_AUDIO=0 in mcp.json env "
+            "(master mute for TTS + STT; survives until changed).",
+            "Finer knobs: ASK_QUESTION_SPEAK=0 and/or ASK_QUESTION_VOICE_ANSWER=0.",
             "Ensure UI checks pass (topic=ui + mcp).",
             "Call ask_multiple_choice — dialog works without speech/mic.",
         ],

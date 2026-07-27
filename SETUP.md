@@ -63,7 +63,8 @@ often do not see `~/.local/bin` on `PATH`.
 ```
 
 Omit `env` for text-only (click/type). Local Piper / `notify-voice.sh` may
-still speak if installed — set `ASK_QUESTION_SPEAK=0` for silence.
+still speak if installed — uncheck **Audio** in the dialog (persistent) or set
+`ASK_QUESTION_AUDIO=0` / `ASK_QUESTION_SPEAK=0` for silence.
 
 | Host | Config path (typical) | Reload |
 |------|----------------------|--------|
@@ -125,7 +126,8 @@ Expose `POST /transcribe` (multipart WAV) and `GET /health`. Point
 
 | Path | Purpose |
 |------|---------|
-| `~/.config/ask-question-mcp/prefs.json` | Optional volume / always_listen overrides |
+| `~/.config/ask-question-mcp/prefs.json` | Optional `audio_enabled` / `duck_enabled` / `ack_enabled` / volume / always_listen |
+| `~/.config/ask-question-mcp/acks.json` | Optional ack phrase packs (see `acks.example.json`) |
 | `~/.cache/ask-question-mcp/` | Session IPC, ack/question WAV cache, voice-debug |
 
 Copy `prefs.example.json` only when diverging from shipped defaults.
@@ -141,9 +143,11 @@ use — no live TTS required for those phrases.
 |-----|---------|--------|
 | `ASK_QUESTION_TTS_URL` | *(empty)* | Required for live TTS |
 | `ASK_QUESTION_STT_URL` | *(empty)* | Required for voice answers |
-| `ASK_QUESTION_SPEAK` | on | `0` to mute |
+| `ASK_QUESTION_AUDIO` | on | `0` = master mute (TTS + STT); dialog Audio checkbox / prefs |
+| `ASK_QUESTION_SPEAK` | on | `0` to mute speak only |
 | `ASK_QUESTION_VOICE_ANSWER` | on when STT set | `0` to disable mic path |
-| `ASK_QUESTION_DUCK` | on | `0` disables media duck |
+| `ASK_QUESTION_DUCK` | on | `0` disables media duck (prefs `duck_enabled`) |
+| `ASK_QUESTION_ACK` | on | `0` disables spoken acks (prefs `ack_enabled`) |
 | `ASK_QUESTION_SPEAK_VOLUME` / `ASK_QUESTION_ACK_VOLUME` | 0.60 / 0.55 | Linear gain |
 | `ASK_QUESTION_ALWAYS_LISTEN` | on | `0` = Listen button only |
 | `ASK_QUESTION_VOICE_DEBUG_WAV` | off | Keep debug WAVs only when `1` |
