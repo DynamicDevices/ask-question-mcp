@@ -66,8 +66,10 @@ def main() -> None:
 
     os.environ["ASK_QUESTION_ACK"] = "0"
     assert get_ack_enabled() is False
-    os.environ.pop("ASK_QUESTION_ACK", None)
+    os.environ["ASK_QUESTION_ACK"] = "1"
     assert get_ack_enabled() is True
+    os.environ.pop("ASK_QUESTION_ACK", None)
+    # Shipped default is off (text-first); prefs.json may still enable acks.
 
     from ask_question_mcp.capabilities import VoiceCapabilities
     from ask_question_mcp.zenity_ask import _lean_mcq_result

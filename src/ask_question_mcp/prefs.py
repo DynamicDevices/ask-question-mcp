@@ -14,8 +14,8 @@ Env overrides:
 
 - ``ASK_QUESTION_AUDIO=0|1`` — master TTS+STT kill switch (``audio_enabled``)
 - ``ASK_QUESTION_DUCK=0|1`` — lower other apps while speaking/listening (``duck_enabled``)
-- ``ASK_QUESTION_ACK=0|1`` — spoken ack after OK (``ack_enabled``)
-- ``ASK_QUESTION_ALWAYS_LISTEN=0|1``
+- ``ASK_QUESTION_ACK=0|1`` — spoken ack after OK (``ack_enabled``; default off)
+- ``ASK_QUESTION_ALWAYS_LISTEN=0|1`` — auto mic after speak (default off)
 - ``ASK_QUESTION_SPEAK_VOLUME`` / ``ASK_QUESTION_ACK_VOLUME`` (linear 0.01–1.0)
 """
 
@@ -29,13 +29,14 @@ from typing import Any
 _PREFS_PATH = Path.home() / ".config" / "ask-question-mcp" / "prefs.json"
 
 # Packaged defaults for new installs / other users (no prefs.json required).
-# Tuned 2026-07-26 under session duck + pw-play + flat-volumes boost; do not
-# calibrate against unducked media blips.
+# Text-first: speak questions when TTS is configured; do not auto-listen or
+# speak acks until the human opts in (dialog checkbox / prefs.json / env).
+# Volumes tuned 2026-07-26 under session duck + pw-play + flat-volumes boost.
 _DEFAULTS: dict[str, Any] = {
     "audio_enabled": True,
     "duck_enabled": True,
-    "ack_enabled": True,
-    "always_listen": True,
+    "ack_enabled": False,
+    "always_listen": False,
     "speak_volume": 0.60,
     "ack_volume": 0.55,
 }
@@ -114,11 +115,11 @@ def set_duck_enabled(enabled: bool) -> None:
 
 
 def get_ack_enabled() -> bool:
-    """Spoken ack after a successful OK (default on; cancel stays silent)."""
+    """Spoken ack after a successful OK (default off; cancel stays silent)."""
     env = _env_bool("ASK_QUESTION_ACK")
     if env is not None:
         return env
-    return bool(load_prefs().get("ack_enabled", True))
+    return bool(load_prefs().get("ack_enabled", False))
 
 
 def set_ack_enabled(enabled: bool) -> None:
@@ -126,10 +127,11 @@ def set_ack_enabled(enabled: bool) -> None:
 
 
 def get_always_listen() -> bool:
+    """Auto-start mic after question TTS (default off — click Listen to answer)."""
     env = _env_bool("ASK_QUESTION_ALWAYS_LISTEN")
     if env is not None:
         return env
-    return bool(load_prefs().get("always_listen", True))
+    return bool(load_prefs().get("always_listen", False))
 
 
 def set_always_listen(enabled: bool) -> None:

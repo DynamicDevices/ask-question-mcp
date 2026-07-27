@@ -43,8 +43,20 @@ export ASK_QUESTION_VOICE_ANSWER=0
 
 ## 1. MCP registration (any stdio host)
 
-Prefer an **absolute** path to `uv` (`command -v uv`). GUI-launched apps
-often do not see `~/.local/bin` on `PATH`.
+**Preferred:** from the clone, after `uv sync`:
+
+```bash
+uv run ask-question-install --host cursor --skill
+# also: --host claude-desktop | claude-code | print
+# optional voice env placeholders: --voice
+```
+
+That merges `mcpServers.ask-question` with absolute `uv` + `--directory`,
+optionally installs `~/.cursor/skills/ask-multiple-choice`, and prints reload
+steps.
+
+**Manual:** prefer an **absolute** path to `uv` (`command -v uv`). GUI-launched
+apps often do not see `~/.local/bin` on `PATH`.
 
 ```json
 "ask-question": {
@@ -147,10 +159,10 @@ use — no live TTS required for those phrases.
 | `ASK_QUESTION_SPEAK` | on | `0` to mute speak only |
 | `ASK_QUESTION_VOICE_ANSWER` | on when STT set | `0` to disable mic path |
 | `ASK_QUESTION_DUCK` | on | `0` disables media duck (prefs `duck_enabled`) |
-| `ASK_QUESTION_ACK` | on | `0` disables spoken acks (prefs `ack_enabled`) |
+| `ASK_QUESTION_ACK` | **off** | `1` enables spoken acks (prefs `ack_enabled`) |
 | `ASK_QUESTION_RESULT_VERBOSE` | off | `1` = always attach full voice + capabilities on MCQ results (default omits idle echo — see [docs/AGENTS.md](docs/AGENTS.md#token--catalog-cost-structural)) |
 | `ASK_QUESTION_SPEAK_VOLUME` / `ASK_QUESTION_ACK_VOLUME` | 0.60 / 0.55 | Linear gain |
-| `ASK_QUESTION_ALWAYS_LISTEN` | on | `0` = Listen button only |
+| `ASK_QUESTION_ALWAYS_LISTEN` | **off** | `1` = auto mic after speak; default is Listen button only |
 | `ASK_QUESTION_VOICE_DEBUG_WAV` | off | Keep debug WAVs only when `1` |
 
 **Lean results:** leave `ASK_QUESTION_RESULT_VERBOSE` unset. Idle picks return

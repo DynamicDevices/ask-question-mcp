@@ -396,7 +396,7 @@ def _main() -> int:
         listen_gen = {"n": 0}
         voice_retries = {"n": 0}
         closed = {"v": False}
-        # Phase 2: unmatched speech → confirm as freeform (Something else).
+        # Unmatched speech → confirm as freeform (Something else / Use this).
         freeform_pending = {"text": ""}
         # Surfaced to MCP/chat so the agent sees what STT heard.
         voice_trace: dict[str, Any] = {
@@ -817,7 +817,7 @@ def _main() -> int:
             if _prefs is not None:
                 always_listen_chk.set_active(_prefs.get_always_listen())
             else:
-                always_listen_chk.set_active(True)
+                always_listen_chk.set_active(False)
 
             def on_always_listen_toggled(btn: Gtk.CheckButton) -> None:
                 if _prefs is not None:
@@ -1327,7 +1327,7 @@ def _main() -> int:
                     if abort():
                         return
                     heard = str(out.get("transcript") or "").strip()
-                    # Phase 2: confirm unmatched transcript as freeform.
+                    # Unmatched transcript confirmed as freeform (Use this / speech).
                     if freeform_pending.get("text") and (
                         _voice_answer.match_voice_freeform_confirm(heard)
                     ):
@@ -1587,7 +1587,7 @@ def _main() -> int:
                 return GLib.SOURCE_CONTINUE
 
             GLib.timeout_add(150, _poll_speak_phase)
-            always = True if _prefs is None else _prefs.get_always_listen()
+            always = False if _prefs is None else _prefs.get_always_listen()
             audio_on = True if _prefs is None else _prefs.get_audio_enabled()
             if always and audio_on:
                 start_voice_listen_thread()

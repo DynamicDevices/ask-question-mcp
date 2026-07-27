@@ -114,6 +114,9 @@ def test_mcp_tool_surface() -> None:
     assert "never before routine" in instructions.lower() or (
         "not before routine" in instructions.lower()
     ), "instructions must discourage check_setup spam"
+    assert "never markdown" in instructions.lower() or (
+        "required for decision" in instructions.lower()
+    ), "instructions must require MCQ over markdown A/B/C"
     for name, tool in tm._tools.items():
         desc = getattr(tool, "description", None) or ""
         assert len(desc) <= MAX_TOOL_DESC_CHARS, (

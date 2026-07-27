@@ -7,7 +7,7 @@ Canonical detail for coding agents and MCP hosts. Humans usually start at the
 
 | Tool | When to use |
 |------|-------------|
-| `ask_multiple_choice` | Every decision fork (prefer over markdown A/B/C / host AskQuestion) |
+| `ask_multiple_choice` | **Required** for every decision fork — never markdown A/B/C / host AskQuestion when this MCP is loaded |
 | `check_setup` | **First enable**, dialog failure, or **before enabling voice** — not before routine MCQs |
 | `setup_guide` | After `check_setup` / walkthrough (`ui` \| `mcp` \| `tts` \| `stt` \| `voice` \| `ui_only` \| `all`) |
 | `record_platform_feedback` | After an unverified-platform nudge (`works` \| `broken` \| `later` \| `dont_ask`) |
@@ -22,18 +22,25 @@ CLI: `uv run python -m ask_question_mcp.doctor --json` /
 
 1. **Platform:** Linux GUI (`DISPLAY` + Gtk) or Windows desktop (tkinter Phase 1
    text-only). Not headless CI / macOS GUI yet.
-2. **Install** — [DEPENDENCIES.md](../DEPENDENCIES.md); clone; `uv sync`; note
-   absolute `REPO_ROOT`.
-3. **Register** stdio MCP with absolute `uv` / `uv.exe` + `REPO_ROOT` — see
-   [README — Configuration](../README.md#configuration).
-   Reload the host.
+2. **Install** — [DEPENDENCIES.md](../DEPENDENCIES.md); clone; `uv sync`; then
+   `uv run ask-question-install --host cursor --skill` (or `--host print` /
+   `claude-desktop` / `claude-code`). That writes absolute `uv` + `REPO_ROOT`
+   into the host MCP config and installs the agent skill.
+3. **Reload** the host (Cursor: Developer → Reload Window).
 4. **Self-check once:** `check_setup`. If UI not ready → walkthrough →
    `setup_guide` → re-check.
 5. **Voice (Linux, optional):** only after `ready.ui`, and only if the human
    wants it (`setup_guide` topic `tts` / `stt`).
 6. Call **`ask_multiple_choice`** for decisions — see below.
 
-## Non-negotiable behaviour
+## Agent habit (non-negotiable)
+
+If this MCP server is available, **every** decision fork goes through
+`ask_multiple_choice`. Do not fall back to markdown A/B/C, numbered chat
+options, or the host’s built-in AskQuestion. Humans can install the Cursor
+skill via `ask-question-install --skill` (`~/.cursor/skills/ask-multiple-choice`).
+
+## Call contract
 
 - Pass **`agent=`** (chat / lane id) so the window title shows `[agent] …`.
 - **`question`:** one short sentence a colleague would say — no meta about
