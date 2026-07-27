@@ -1316,7 +1316,8 @@ def stop_speak() -> None:
         )
 
         release_orphaned_playback_duck()
-        restore_other_audio(ramp=True)
+        # Instant: avoid ramp racing the next acquire / dialog teardown.
+        restore_other_audio(ramp=False, force=True)
     except Exception:
         pass
     clear_speak_phase()

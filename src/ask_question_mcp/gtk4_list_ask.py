@@ -49,11 +49,13 @@ def _force_unduck_media() -> None:
     if _audio_duck is None:
         return
     try:
-        if _audio_duck.duck_hold_count() > 0:
-            _audio_duck.release_duck_hold(ramp=True, force=True)
-        else:
-            # Clear any orphaned duck state even if hold count is 0.
-            _audio_duck.restore_other_audio(ramp=True, force=True)
+        # Kill may leave a playback-owner marker; clear it then force-restore
+        # instantly (no ramp — teardown races leave media stuck ducked).
+        release_orphaned = getattr(_audio_duck, "release_orphaned_playback_duck", None)
+        if callable(release_orphaned):
+            release_orphaned()
+        _audio_duck.release_duck_hold(ramp=False, force=True)
+        _audio_duck.restore_other_audio(ramp=False, force=True)
     except Exception:
         pass
 

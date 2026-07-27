@@ -753,19 +753,17 @@ def ask_zenity(
     def _release_session_duck() -> None:
         nonlocal duck_held
         if duck_mod is not None:
-            if duck_held:
-                duck_held = False
-                try:
-                    duck_mod.release_duck_hold(ramp=True, force=True)
-                except Exception:
-                    pass
-            elif not should_duck:
-                # Belt-and-braces: text-only must never leave media ducked.
-                try:
-                    if duck_mod.duck_hold_count() > 0:
-                        duck_mod.release_duck_hold(ramp=True, force=True)
-                except Exception:
-                    pass
+            # Always force-restore on dialog end. Gtk may have toggled Audio off
+            # (cleared the hold file) while this process still thinks duck_held.
+            duck_held = False
+            try:
+                duck_mod.release_duck_hold(ramp=False, force=True)
+            except Exception:
+                pass
+            try:
+                duck_mod.restore_other_audio(ramp=False, force=True)
+            except Exception:
+                pass
         # Always gentle-flush A2DP in case a listen left HFP pending.
         try:
             from ask_question_mcp import voice_answer as _va
@@ -828,6 +826,14 @@ def ask_zenity(
         freeform: bool = False,
         dangerous_pick: bool = False,
     ) -> None:
+        # Honour Audio checkbox toggled mid-dialog (prefs updated by Gtk).
+        try:
+            from ask_question_mcp.prefs import get_audio_enabled
+
+            if not get_audio_enabled():
+                return
+        except Exception:
+            pass
         if not (do_speak and allow_ack):
             return
         speak_ack(

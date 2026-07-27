@@ -53,7 +53,8 @@ def _duck_release(*, force: bool = False) -> None:
     if _audio_duck is None:
         return
     try:
-        _audio_duck.release_duck_hold(ramp=True, force=force)
+        # force → instant restore (see audio_duck.release_duck_hold).
+        _audio_duck.release_duck_hold(ramp=not force, force=force)
     except Exception:  # noqa: BLE001
         pass
     if _voice_answer is not None:
