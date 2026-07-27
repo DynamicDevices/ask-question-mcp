@@ -547,7 +547,7 @@ def _main() -> int:
         banner.set_tooltip_text(question)
         if dangerous:
             mark = (
-                _danger_arm.DANGER_MARK if _danger_arm is not None else "🛡"
+                _danger_arm.DANGER_MARK if _danger_arm is not None else "⛔"
             )
             esc_q = GLib.markup_escape_text(question)
             banner.set_markup(
@@ -589,8 +589,8 @@ def _main() -> int:
             if oid in danger_ids:
                 if _danger_arm is not None:
                     label = _danger_arm.prefix_danger_mark(label)
-                elif not label.lstrip().startswith(("🛡", "⚠")):
-                    label = f"🛡 {label}"
+                elif not label.lstrip().startswith(("⛔", "🛑", "🛡", "⚠")):
+                    label = f"⛔ {label}"
             row = Gtk.ListBoxRow()
             row.set_activatable(True)
             btn = Gtk.CheckButton(label=label)

@@ -4,7 +4,7 @@ Blocks OK / Enter until the countdown finishes so a stray Return from the
 previous keystroke (or mid-typing) cannot dismiss the dialog.
 
 - Normal MCQs: ``ASK_QUESTION_ARM_MS`` (default **1000**). Set ``0`` to disable.
-- Dangerous (shield mark): ``ASK_QUESTION_DANGER_ARM_MS`` (default **4000**).
+- Dangerous (no-entry mark): ``ASK_QUESTION_DANGER_ARM_MS`` (default **4000**).
   Set ``0`` to disable the danger-only longer arm (safe arm still applies
   unless also 0).
 """
@@ -13,8 +13,8 @@ from __future__ import annotations
 
 import os
 
-# Visual mark for high-risk dialogs / options (not a warning-triangle emoji).
-DANGER_MARK = "🛡"
+# Visual mark for high-risk dialogs / options (no-entry).
+DANGER_MARK = "⛔"
 
 DEFAULT_SAFE_ARM_MS = 1000
 DEFAULT_DANGER_ARM_MS = 4000
@@ -24,15 +24,21 @@ _MAX_ARM_MS = 60_000
 
 
 def label_has_danger_mark(label: str) -> bool:
-    """True if label already starts with the shield (or legacy triangle)."""
+    """True if label already starts with no-entry / legacy stop, shield, triangle."""
     s = label.lstrip()
-    return s.startswith(DANGER_MARK) or s.startswith("⚠")
+    return (
+        s.startswith(DANGER_MARK)
+        or s.startswith("🛑")
+        or s.startswith("🛡")
+        or s.startswith("⚠")
+    )
 
 
 def prefix_danger_mark(label: str) -> str:
     if label_has_danger_mark(label):
         return label
     return f"{DANGER_MARK} {label}"
+
 
 def _parse_arm_ms(env_name: str, default: int) -> int:
     raw = os.environ.get(env_name, "").strip()
