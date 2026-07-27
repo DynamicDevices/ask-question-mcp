@@ -301,7 +301,10 @@ def _main() -> int:
         css = Gtk.CssProvider()
         css.load_from_data(
             b"""
-            window.ask-q-danger { border: 4px solid #c62828; }
+            /* Outer ring - avoid border (insets and clips footer buttons). */
+            window.ask-q-danger {
+              box-shadow: 0 0 0 4px #c62828;
+            }
             .ask-q-banner {
               background-color: #ffcdd2;
               padding: 12px;
@@ -667,7 +670,7 @@ def _main() -> int:
         use_freeform_btn: Gtk.Button | None = None
         footer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         footer.set_margin_top(4)
-        footer.set_margin_bottom(12)
+        footer.set_margin_bottom(16)
         footer.set_margin_start(16)
         footer.set_margin_end(16)
         footer.append(status_lbl)

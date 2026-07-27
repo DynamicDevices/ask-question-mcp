@@ -236,7 +236,7 @@ def main() -> int:
 
         footer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         footer.set_margin_top(8)
-        footer.set_margin_bottom(12)
+        footer.set_margin_bottom(20)
         footer.set_margin_start(16)
         footer.set_margin_end(16)
 
