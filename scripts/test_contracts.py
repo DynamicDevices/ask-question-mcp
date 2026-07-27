@@ -29,8 +29,8 @@ REQUIRED_TOOLS = {
 }
 
 # Soft budget: FastMCP instructions + tool descs burn every host turn.
-MAX_INSTRUCTIONS_CHARS = 12_000
-MAX_TOOL_DESC_CHARS = 4_000
+MAX_INSTRUCTIONS_CHARS = 600
+MAX_TOOL_DESC_CHARS = 400
 
 
 def _clear_agent_env() -> dict[str, str]:
@@ -108,11 +108,16 @@ def test_mcp_tool_surface() -> None:
     assert len(instructions) <= MAX_INSTRUCTIONS_CHARS, (
         f"FastMCP instructions {len(instructions)} > {MAX_INSTRUCTIONS_CHARS}"
     )
+    assert "never before routine" in instructions.lower() or (
+        "not before routine" in instructions.lower()
+    ), "instructions must discourage check_setup spam"
     for name, tool in tm._tools.items():
         desc = getattr(tool, "description", None) or ""
         assert len(desc) <= MAX_TOOL_DESC_CHARS, (
             f"tool {name} description {len(desc)} > {MAX_TOOL_DESC_CHARS}"
         )
+        if name == "check_setup":
+            assert "not before every" in desc.lower() or "routine" in desc.lower()
 
 
 def test_setup_guide_mcp_host_agnostic() -> None:

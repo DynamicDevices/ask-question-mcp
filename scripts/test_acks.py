@@ -69,7 +69,36 @@ def main() -> None:
     os.environ.pop("ASK_QUESTION_ACK", None)
     assert get_ack_enabled() is True
 
-    print("OK ack outcomes + packs + ranking + ack_enabled")
+    from ask_question_mcp.capabilities import VoiceCapabilities
+    from ask_question_mcp.zenity_ask import _lean_mcq_result
+
+    caps_full = VoiceCapabilities(
+        tts_configured=True,
+        stt_configured=True,
+        piper_available=True,
+        notify_voice_available=True,
+        speak_requested=True,
+        speak_active=True,
+        listen_active=True,
+        audio_mode="full",
+        notes=[],
+    )
+    idle = {
+        "enabled": True,
+        "used": False,
+        "freeform_voice": False,
+        "transcript": "",
+        "error": None,
+        "source": None,
+        "peak_rms": None,
+        "matched_option_id": None,
+        "attempts": [],
+    }
+    base = {"id": "a", "label": "A", "cancelled": False}
+    lean = _lean_mcq_result(base, voice_meta=idle, caps=caps_full)
+    assert set(lean) == {"id", "label", "cancelled"}
+
+    print("OK ack outcomes + packs + ranking + ack_enabled + lean results")
 
 
 if __name__ == "__main__":

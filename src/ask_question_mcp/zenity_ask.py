@@ -45,6 +45,92 @@ _WIN_LIST_ASK = Path(__file__).resolve().with_name("win_list_ask.py")
 _WIN_ENTRY_ASK = Path(__file__).resolve().with_name("win_entry_ask.py")
 
 
+def _truthy_env(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _voice_meta_useful(meta: dict[str, Any] | None) -> bool:
+    """True when voice block carries signal beyond idle defaults."""
+    if not meta:
+        return False
+    if meta.get("used") or meta.get("freeform_voice"):
+        return True
+    if str(meta.get("transcript") or "").strip():
+        return True
+    if meta.get("error"):
+        return True
+    if meta.get("matched_option_id"):
+        return True
+    attempts = meta.get("attempts")
+    if isinstance(attempts, list):
+        for a in attempts:
+            if not isinstance(a, dict):
+                continue
+            if a.get("transcript") or a.get("error") or a.get("option_id"):
+                return True
+    return False
+
+
+def _slim_voice_meta(meta: dict[str, Any]) -> dict[str, Any]:
+    """Drop null/empty noise from a useful voice block."""
+    out: dict[str, Any] = {}
+    for key in (
+        "enabled",
+        "used",
+        "freeform_voice",
+        "transcript",
+        "error",
+        "source",
+        "peak_rms",
+        "matched_option_id",
+        "attempts",
+    ):
+        if key not in meta:
+            continue
+        val = meta[key]
+        if val is None or val == "" or val == []:
+            continue
+        if key in {"used", "freeform_voice", "enabled"} and val is False:
+            # Keep enabled=false only when other signal present; skip unused flags.
+            if key != "enabled":
+                continue
+        out[key] = val
+    return out
+
+
+def _lean_mcq_result(
+    payload: dict[str, Any],
+    *,
+    voice_meta: dict[str, Any] | None,
+    caps: Any,
+) -> dict[str, Any]:
+    """Omit idle voice/capabilities echo (~100+ tok/call) unless useful.
+
+    Set ``ASK_QUESTION_RESULT_VERBOSE=1`` to restore full voice + capabilities.
+    """
+    out = dict(payload)
+    verbose = _truthy_env("ASK_QUESTION_RESULT_VERBOSE")
+    if verbose:
+        if voice_meta:
+            out["voice"] = voice_meta
+        out["audio_mode"] = getattr(caps, "audio_mode", "text_only")
+        as_dict = getattr(caps, "as_dict", None)
+        out["capabilities"] = as_dict() if callable(as_dict) else caps
+        return out
+
+    if _voice_meta_useful(voice_meta):
+        slim = _slim_voice_meta(dict(voice_meta or {}))
+        if slim:
+            out["voice"] = slim
+
+    notes = [str(n) for n in (getattr(caps, "notes", None) or []) if str(n).strip()]
+    if notes:
+        mode = str(getattr(caps, "audio_mode", "") or "text_only")
+        out["audio_mode"] = mode
+        out["capabilities"] = {"notes": notes, "audio_mode": mode}
+    return out
+
+
 def _is_windows() -> bool:
     return sys.platform == "win32"
 
@@ -771,10 +857,7 @@ def ask_zenity(
                         break
             except (OSError, json.JSONDecodeError):
                 meta = {}
-        if meta:
-            payload["voice"] = meta
-        payload["audio_mode"] = caps.audio_mode
-        payload["capabilities"] = caps.as_dict()
+        lean = _lean_mcq_result(payload, voice_meta=meta, caps=caps)
         # One-shot nudge when host is not on the README verified matrix.
         try:
             from ask_question_mcp.platform_info import (
@@ -788,18 +871,18 @@ def ask_zenity(
             if (
                 classification.get("ask_feedback")
                 and session_nudge_pending()
-                and not payload.get("cancelled")
+                and not lean.get("cancelled")
             ):
-                payload["platform"] = {
+                lean["platform"] = {
                     "status": classification["status"],
                     "verified": False,
                     "summary": classification["summary"],
                     "host": classification["host"],
                 }
-                payload["platform_feedback"] = offer_platform_feedback(
+                lean["platform_feedback"] = offer_platform_feedback(
                     classification["host"]
                 )
-                payload["agent_note"] = (
+                lean["agent_note"] = (
                     "Unverified platform — present platform_feedback via "
                     "ask_multiple_choice (once). On works/broken use "
                     "github_issue_draft_* and help open a GitHub issue or "
@@ -808,7 +891,7 @@ def ask_zenity(
                 mark_session_nudged()
         except Exception:
             pass
-        return payload
+        return lean
 
     def _open_entry(*, auto_listen: bool) -> str:
         nonlocal voice_meta

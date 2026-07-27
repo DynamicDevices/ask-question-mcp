@@ -146,8 +146,10 @@ correctly**. Follow this checklist in order.
 | `ask_multiple_choice` | Human decision dialog; on config errors includes a `setup` hint block |
 | `record_platform_feedback` | Persist works/broken/later/dont_ask after an unverified-platform nudge |
 
-**Agent pattern:** `check_setup` → (if needed) `ask_multiple_choice(offer_walkthrough)` →
-`setup_guide(topic)` → human applies steps → `check_setup` again → then normal MCQs.
+**Agent pattern:** On **first enable / dialog failure / before voice only:**
+`check_setup` → (if needed) walkthrough → `setup_guide` → re-check once.
+Do **not** call `check_setup` before routine MCQs — go straight to
+`ask_multiple_choice`.
 
 ### What this MCP is / is not
 
@@ -396,17 +398,16 @@ The tool returns a **JSON string**. Parse it before branching.
 { "cancelled": true, "reason": "…" }
 ```
 
-**Capabilities (always present on success):**
+**Capabilities (only when useful):** omitted on a normal successful pick when
+voice is healthy. Included when `capabilities.notes` has setup hints (e.g.
+TTS unset). Full dump: `ASK_QUESTION_RESULT_VERBOSE=1`.
 
 ```json
 {
   "audio_mode": "text_only",
   "capabilities": {
-    "tts_configured": false,
-    "stt_configured": false,
-    "speak_active": false,
-    "listen_active": false,
-    "notes": ["No TTS configured … — text-only MCQ (click / type)."]
+    "notes": ["No TTS configured … — text-only MCQ (click / type)."],
+    "audio_mode": "text_only"
   }
 }
 ```
@@ -414,9 +415,9 @@ The tool returns a **JSON string**. Parse it before branching.
 `audio_mode` is `text_only` | `speak` | `full`. Missing voice is never a hard
 error — call `setup_guide` if the human wants speech later.
 
-**Voice diagnostics (optional):** a `voice` object may include `transcript`,
-`matched_option_id`, `attempts`, etc. Useful for debugging; the chosen `id` /
-`freeform_text` remains authoritative.
+**Voice diagnostics:** `voice` is included only when speech was used or failed
+(transcript / match / error). Idle empty voice blobs are omitted. The chosen
+`id` / `freeform_text` remains authoritative.
 
 ---
 
@@ -426,7 +427,7 @@ error — call `setup_guide` if the human wants speech later.
 - Danger chrome for high-risk decisions
 - Inline Something else (type or Speak→STT when configured)
 - **Text-only fallback** when TTS/STT are unset — dialog still works; response
-  includes `audio_mode` + `capabilities.notes` so agents can offer `setup_guide`
+  includes `capabilities.notes` when setup hints apply (lean otherwise)
 - Optional TTS + bundled multi-take ack WAVs; optional STT phrase matching
 - Media duck under PipeWire only while speaking
 - Per-dialog session IPC so parallel agents do not share speak gates

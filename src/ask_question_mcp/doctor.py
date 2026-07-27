@@ -2,8 +2,8 @@
 
 Agents should call ``check_setup`` when first enabling the MCP, when
 ``ask_multiple_choice`` fails with a config/runtime error, or when the human
-asks to enable voice. Returns structured JSON so an LLM can walk the user
-through fixes without guessing.
+asks to enable voice — **not** before every routine MCQ. Returns structured
+JSON so an LLM can walk the user through fixes without guessing.
 """
 
 from __future__ import annotations
@@ -668,8 +668,9 @@ def summarize(checks: list[Check]) -> dict[str, Any]:
         "If ok is false or the human wants voice (and ready.ui): call setup_guide "
         "with the chosen topic, then present the steps. Prefer ask_multiple_choice "
         "to ask which walkthrough they want (use offer_walkthrough). After they "
-        "change env/mcp.json, re-run check_setup. Do not invent lab IPs — use "
-        "127.0.0.1 or URLs they provide."
+        "change env/mcp.json, re-run check_setup once. Do not call check_setup "
+        "before routine MCQs. Do not invent lab IPs — use 127.0.0.1 or URLs "
+        "they provide."
     ]
     if ask:
         agent_bits.append(
