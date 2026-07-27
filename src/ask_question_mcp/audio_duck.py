@@ -528,11 +528,15 @@ def acquire_duck_hold(*, ramp: bool = True) -> bool:
 
 
 def release_duck_hold(*, ramp: bool = True, force: bool = False) -> None:
-    """Drop one hold (or all if ``force``); restore only when count hits 0."""
+    """Drop one hold (or all if ``force``); restore only when count hits 0.
+
+    ``force=True`` always restores **immediately** (no ramp): ramps race with
+    dialog teardown / Audio-off and can leave media stuck at ducked volume.
+    """
     with _duck_lock():
         if force:
             _write_hold(0)
-            restore_other_audio(ramp=ramp, force=True)
+            restore_other_audio(ramp=False, force=True)
             return
         n = _read_hold() - 1
         if n <= 0:
@@ -564,11 +568,13 @@ def restore_other_audio(*, ramp: bool = True, force: bool = False) -> None:
     live = _list_sink_inputs()
     targets = _resolve_restore_targets(streams, live)
     if not targets:
-        # Nothing live to restore yet (app closed the stream). Keep
-        # state briefly so a quick retry / next speak stop can still unduck
-        # if the app recreates the input — but drop after one empty pass so
-        # we do not sticky-duck forever. Caller may invoke restore again.
-        # If all apps quit, clear.
+        # Rematch failed (PW renumber / app name change). Still try original
+        # sink-input indexes so we never clear state while leaving volumes low.
+        for s in streams:
+            try:
+                _set_volume(int(s["index"]), int(s["left"]), int(s["right"]))
+            except (KeyError, TypeError, ValueError):
+                continue
         _write_state(None)
         return
     if not ramp or _RAMP_MS <= 0:

@@ -43,10 +43,11 @@ def _force_unduck_media() -> None:
     if _audio_duck is None:
         return
     try:
-        if _audio_duck.duck_hold_count() > 0:
-            _audio_duck.release_duck_hold(ramp=True, force=True)
-        else:
-            _audio_duck.restore_other_audio(ramp=True, force=True)
+        release_orphaned = getattr(_audio_duck, "release_orphaned_playback_duck", None)
+        if callable(release_orphaned):
+            release_orphaned()
+        _audio_duck.release_duck_hold(ramp=False, force=True)
+        _audio_duck.restore_other_audio(ramp=False, force=True)
     except Exception:
         pass
 
