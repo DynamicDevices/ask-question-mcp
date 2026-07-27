@@ -383,9 +383,9 @@ def _main() -> int:
         if dangerous:
             win.add_css_class("ask-q-danger")
 
-        # Plain vertical pack: header | body(scroll) | buttons.
-        # (ToolbarView content previously clipped OK/Cancel under a tall banner.)
-        root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        # ToolbarView: content may scroll/shrink; bottom bar (status+OK/Cancel)
+        # stays pinned so a tall danger banner cannot push buttons off-screen.
+        toolbar = Adw.ToolbarView()
         listen_gen = {"n": 0}
         voice_retries = {"n": 0}
         closed = {"v": False}
@@ -516,20 +516,20 @@ def _main() -> int:
             header_replay.add_css_class("flat")
             header_replay.connect("clicked", on_replay)
             header.pack_end(header_replay)
-        root.append(header)
+        toolbar.add_top_bar(header)
 
         body = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         body.set_margin_top(12)
         body.set_margin_bottom(8)
         body.set_margin_start(16)
         body.set_margin_end(16)
-        body.set_vexpand(True)
 
         banner = Gtk.Label()
         banner.set_wrap(True)
         banner.set_xalign(0.0)
         banner.set_use_markup(True)
         banner.set_vexpand(False)
+        banner.set_tooltip_text(question)
         if dangerous:
             esc_t = GLib.markup_escape_text(title)
             esc_q = GLib.markup_escape_text(question)
@@ -543,17 +543,20 @@ def _main() -> int:
             banner.set_text(question)
         body.append(banner)
 
+        # One scroll for banner + options + freeform so a tall danger question
+        # never eats the pinned bottom bar.
         scroll = Gtk.ScrolledWindow()
         scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         scroll.set_vexpand(True)
         scroll.set_hexpand(True)
+        scroll.set_propagate_natural_height(False)
 
         list_box = Gtk.ListBox()
         list_box.set_selection_mode(Gtk.SelectionMode.NONE)
         list_box.add_css_class("boxed-list")
-        scroll.set_child(list_box)
-        body.append(scroll)
-        root.append(body)
+        body.append(list_box)
+        scroll.set_child(body)
+        toolbar.set_content(scroll)
 
         checks: dict[str, Gtk.CheckButton] = {}
         group_leader: Gtk.CheckButton | None = None
@@ -662,12 +665,13 @@ def _main() -> int:
         voice_recover_box: Gtk.Box | None = None
         repeat_btn: Gtk.Button | None = None
         use_freeform_btn: Gtk.Button | None = None
+        footer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        footer.set_margin_top(4)
+        footer.set_margin_bottom(12)
+        footer.set_margin_start(16)
+        footer.set_margin_end(16)
+        footer.append(status_lbl)
         if voice_answer_on:
-            status_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-            status_box.set_margin_start(16)
-            status_box.set_margin_end(16)
-            status_box.set_margin_top(4)
-            status_box.append(status_lbl)
             # Vertical: label above, footer-height actions below (no tall stretch).
             voice_recover_box = Gtk.Box(
                 orientation=Gtk.Orientation.VERTICAL, spacing=6
@@ -710,8 +714,7 @@ def _main() -> int:
             recover_actions.append(use_freeform_btn)
             voice_recover_box.append(recover_actions)
             voice_recover_box.set_visible(False)
-            status_box.append(voice_recover_box)
-            root.append(status_box)
+            footer.append(voice_recover_box)
         else:
             recover_lbl = None  # type: ignore[assignment]
             use_freeform_btn = None
@@ -726,9 +729,6 @@ def _main() -> int:
         btn_row.set_hexpand(True)
         btn_row.set_vexpand(False)
         btn_row.set_margin_top(4)
-        btn_row.set_margin_bottom(12)
-        btn_row.set_margin_start(16)
-        btn_row.set_margin_end(16)
         # Audio master toggle (always visible when prefs load) + Replay/Listen;
         # Cancel/OK stay on the right.
         footer_listen: Gtk.Button | None = None
@@ -819,9 +819,10 @@ def _main() -> int:
             ok_btn.add_css_class("ask-q-danger-ok")
         btn_row.append(cancel_btn)
         btn_row.append(ok_btn)
-        root.append(btn_row)
+        footer.append(btn_row)
+        toolbar.add_bottom_bar(footer)
 
-        win.set_content(root)
+        win.set_content(toolbar)
         # Dangerous dialogs arm for a few seconds so a stray Return cannot OK.
         if _danger_arm is not None:
             arm_ms = int(_danger_arm.danger_arm_ms(dangerous=dangerous))
