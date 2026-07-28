@@ -562,9 +562,8 @@ def _main() -> int:
             header.pack_end(header_replay)
         root.append(header)
 
-        # Confirm card: title + wrapped body. Short/medium cards use natural
-        # height (no ScrolledWindow) so the bottom border is not clipped.
-        # Only very long bodies go in a height-capped scroll.
+        # Confirm card: title stays fixed; body scrolls inside the card so the
+        # pink border is never clipped and tall text cannot crush options/OK.
         body_text = question
         if _dialog_keys is not None:
             body_text = _dialog_keys.format_confirm_body(question)
@@ -599,32 +598,26 @@ def _main() -> int:
             body_lbl.add_css_class("ask-q-banner-body")
             body_lbl.set_tooltip_text(question)
             card.append(title_lbl)
-            card.append(body_lbl)
 
-            long_q = len(body_text) > 320 or body_text.count("\n") >= 5
-            if long_q:
-                body_lbl.set_lines(8)
-                body_lbl.set_ellipsize(Pango.EllipsizeMode.END)
-                banner_scroll = Gtk.ScrolledWindow()
-                banner_scroll.set_policy(
-                    Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC
-                )
-                banner_scroll.set_vexpand(False)
-                banner_scroll.set_hexpand(True)
-                banner_scroll.set_propagate_natural_height(False)
-                max_banner = 220
-                banner_scroll.set_size_request(-1, max_banner)
-                try:
-                    banner_scroll.set_max_content_height(max_banner)
-                except AttributeError:
-                    pass
-                banner_scroll.set_child(card)
-                _margins(banner_scroll)
-                root.append(banner_scroll)
-            else:
-                # Natural height — full card including bottom border/padding.
-                _margins(card)
-                root.append(card)
+            # Scroll the body only (not the whole card) — short text keeps
+            # natural height; tall text gets a scrollbar inside the border.
+            body_scroll = Gtk.ScrolledWindow()
+            body_scroll.set_policy(
+                Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC
+            )
+            body_scroll.set_vexpand(False)
+            body_scroll.set_hexpand(True)
+            body_scroll.set_propagate_natural_height(True)
+            max_body = 180
+            try:
+                body_scroll.set_max_content_height(max_body)
+            except AttributeError:
+                body_scroll.set_size_request(-1, max_body)
+            body_scroll.set_child(body_lbl)
+            card.append(body_scroll)
+
+            _margins(card)
+            root.append(card)
         else:
             banner = Gtk.Label(label=body_text)
             banner.set_wrap(True)
