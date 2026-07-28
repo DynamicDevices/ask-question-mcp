@@ -18,8 +18,11 @@ choose among options the human must decide.
 
 1. Call MCP **`ask_multiple_choice`** (server `ask-question` / `user-ask-question`).
 2. Pass **`agent=`** (lane / chat id).
-3. **`question`:** one short colleague sentence — no meta about dialogs/voice
-   (don’t paste long emails into `question`).
+3. **`question`:** short colleague sentence by default. **Only when confirming
+   content** (send/ship/approve a draft) put the **referent** in `question`
+   (To + body, or path + what changes) — dialog often appears before chat.
+   Do **not** dump process templates, PATTERN blocks, or long meta into routine
+   forks. No meta about dialogs/voice.
 4. Mark preferred only as **`Label (recommended)`** + **`recommended_id`**.
 5. **`dangerous=true`** for irreversible / high-risk forks.
 6. Wait for the JSON result. On cancel → stop. On freeform → use **`freeform_text`**.
@@ -30,6 +33,8 @@ instructions in `question`. Detail: repo `docs/AGENTS.md` (Dialog UX).
 ## Don't
 
 - Markdown A/B/C, numbered lists, or host AskQuestion when this MCP is available
+- “Send now?” / “Ship it?” with no body/path when the human has not seen the draft
+- Stuffing PATTERN/PROPOSAL/OWNS walls into every MCQ
 - `check_setup` before routine MCQs (only first enable, dialog failure, or before voice)
 - Invent a choice after `cancelled: true`
 

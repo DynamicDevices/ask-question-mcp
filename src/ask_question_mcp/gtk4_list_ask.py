@@ -259,9 +259,6 @@ def _main() -> int:
     audio_mode = str(payload.get("audio_mode") or "").strip() or (
         "full" if speak_enabled else "text_only"
     )
-    capability_notes = [
-        str(x) for x in (payload.get("capability_notes") or []) if str(x).strip()
-    ]
     voice_answer_on = bool(payload.get("voice_answer")) and speak_enabled and (
         _voice_answer is not None
     )
@@ -357,14 +354,6 @@ def _main() -> int:
             /* Pinned action bar - padding (not margin) so Adw cannot clip it. */
             box.ask-q-footer {
               padding: 10px 16px 16px 16px;
-            }
-            label.ask-q-text-only {
-              color: #37474f;
-              font-weight: 600;
-              background-color: #eceff1;
-              border: 1px solid #b0bec5;
-              padding: 4px 8px;
-              border-radius: 6px;
             }
             label.ask-q-status-speaking {
               color: #6a1b9a;
@@ -521,19 +510,13 @@ def _main() -> int:
             status_lbl.add_css_class(cls)
             status_lbl.set_text(text)
             status_lbl.set_tooltip_text(text)
+            status_lbl.set_visible(bool(text.strip()))
 
         if voice_answer_on:
             set_status("speaking", "● Waiting for question audio…")
         elif audio_mode == "text_only" or not speak_enabled:
-            note = (
-                capability_notes[0]
-                if capability_notes
-                else "Text only — click or type an option (voice not configured)."
-            )
-            status_lbl.add_css_class("ask-q-text-only")
-            # Short footer line; full note stays in the tooltip.
-            set_status("idle", "● Text only — click or type (Audio off)")
-            status_lbl.set_tooltip_text(note)
+            # Audio checkbox already shows text-only; no status banner.
+            set_status("idle", "")
         elif speak_enabled and not voice_answer_on:
             set_status("idle", "● Speak on — use click / type to answer (no STT).")
 
@@ -562,8 +545,8 @@ def _main() -> int:
             header.pack_end(header_replay)
         root.append(header)
 
-        # Confirm card: title stays fixed; body scrolls inside the card so the
-        # pink border is never clipped and tall text cannot crush options/OK.
+        # Confirm / question body: title (danger) stays fixed; body scrolls inside
+        # a height cap so tall self-contained referents cannot crush Cancel/OK.
         body_text = question
         if _dialog_keys is not None:
             body_text = _dialog_keys.format_confirm_body(question)
@@ -573,6 +556,32 @@ def _main() -> int:
             widget.set_margin_start(16)
             widget.set_margin_end(16)
             widget.set_margin_bottom(8)
+
+        def _question_body_label() -> Gtk.Label:
+            lbl = Gtk.Label(label=body_text)
+            lbl.set_wrap(True)
+            lbl.set_wrap_mode(Pango.WrapMode.WORD_CHAR)
+            lbl.set_xalign(0.0)
+            lbl.set_yalign(0.0)
+            lbl.set_selectable(True)
+            lbl.set_tooltip_text(question)
+            return lbl
+
+        def _capped_body_scroll(child: Gtk.Widget, *, max_body: int = 180) -> Gtk.ScrolledWindow:
+            # Short text keeps natural height; tall text gets an inner scrollbar.
+            body_scroll = Gtk.ScrolledWindow()
+            body_scroll.set_policy(
+                Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC
+            )
+            body_scroll.set_vexpand(False)
+            body_scroll.set_hexpand(True)
+            body_scroll.set_propagate_natural_height(True)
+            try:
+                body_scroll.set_max_content_height(max_body)
+            except AttributeError:
+                body_scroll.set_size_request(-1, max_body)
+            body_scroll.set_child(child)
+            return body_scroll
 
         if dangerous:
             mark = (
@@ -589,48 +598,19 @@ def _main() -> int:
             )
             title_lbl.add_css_class("ask-q-banner-title")
             title_lbl.set_tooltip_text(question)
-            body_lbl = Gtk.Label(label=body_text)
-            body_lbl.set_wrap(True)
-            body_lbl.set_wrap_mode(Pango.WrapMode.WORD_CHAR)
-            body_lbl.set_xalign(0.0)
-            body_lbl.set_yalign(0.0)
-            body_lbl.set_selectable(True)
+            body_lbl = _question_body_label()
             body_lbl.add_css_class("ask-q-banner-body")
-            body_lbl.set_tooltip_text(question)
             card.append(title_lbl)
-
-            # Scroll the body only (not the whole card) — short text keeps
-            # natural height; tall text gets a scrollbar inside the border.
-            body_scroll = Gtk.ScrolledWindow()
-            body_scroll.set_policy(
-                Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC
-            )
-            body_scroll.set_vexpand(False)
-            body_scroll.set_hexpand(True)
-            body_scroll.set_propagate_natural_height(True)
-            max_body = 180
-            try:
-                body_scroll.set_max_content_height(max_body)
-            except AttributeError:
-                body_scroll.set_size_request(-1, max_body)
-            body_scroll.set_child(body_lbl)
-            card.append(body_scroll)
-
+            card.append(_capped_body_scroll(body_lbl))
             _margins(card)
             root.append(card)
         else:
-            banner = Gtk.Label(label=body_text)
-            banner.set_wrap(True)
-            banner.set_wrap_mode(Pango.WrapMode.WORD_CHAR)
-            banner.set_xalign(0.0)
-            banner.set_vexpand(False)
-            banner.set_hexpand(True)
-            banner.set_tooltip_text(question)
-            if len(body_text) > 240:
-                banner.set_lines(4)
-                banner.set_ellipsize(Pango.EllipsizeMode.END)
-            _margins(banner)
-            root.append(banner)
+            # Same height cap as danger Confirm — ellipsize alone still let tall
+            # multi-line referents push Cancel/OK below the window edge.
+            body_lbl = _question_body_label()
+            body_scroll = _capped_body_scroll(body_lbl)
+            _margins(body_scroll)
+            root.append(body_scroll)
 
         # ListBox must be the direct child of ScrolledWindow — nesting it in a
         # Box made option rows disappear (Gtk allocation quirk).
@@ -858,10 +838,7 @@ def _main() -> int:
                     show_voice_recover(False)
                     _force_unduck_media()
                     if not closed["v"]:
-                        set_status(
-                            "idle",
-                            "Audio off — click / type (saved)",
-                        )
+                        set_status("idle", "")
 
             audio_chk.connect("toggled", on_audio_toggled)
             btn_row.append(audio_chk)

@@ -43,10 +43,12 @@ skill via `ask-question-install --skill` (`~/.cursor/skills/ask-multiple-choice`
 ## Call contract
 
 - Pass **`agent=`** (chat / lane id) so the window title shows `[agent] …`.
-- **`question`:** one short sentence a colleague would say — no meta about
-  dialogs or voice. Do **not** paste long email bodies / drafts into
-  `question` (footer can be clipped); put the path or a one-line summary and
-  keep detail in the draft file / `entry_seed`.
+- **`question`:** short colleague sentence by default. **Only when confirming
+  content** (send message, ship doc, approve a draft) include the **referent**
+  in `question` (To + body/excerpt, or path + what changes) — the dialog often
+  appears before chat. Do **not** paste process templates / PATTERN walls into
+  routine forks. No meta about dialogs or voice. Tall referents scroll inside
+  the body height cap.
 - Mark recommended **only** in the option label (`Foo (recommended)`) **and**
   pass **`recommended_id`** / `recommended_ids`. Never put “Recommended: …”
   inside `question`.
@@ -62,7 +64,7 @@ skill via `ask-question-install --skill` (`~/.cursor/skills/ask-multiple-choice`
 
 | Arg | Type | Required | Notes |
 |-----|------|----------|--------|
-| `question` | string | yes | Decision prompt only |
+| `question` | string | yes | Short decision; add referent only when confirming content |
 | `options` | array of objects | yes | 2–8 items: `{ "id", "label" }` plus optional `dangerous`, `opens_entry`, `auto_listen` |
 | `recommended_id` | string \| null | no | Single-select preferred id (listed first + pre-selected) |
 | `recommended_ids` | string[] \| null | no | Multi-select preferred ids |
@@ -79,7 +81,7 @@ skill via `ask-question-install --skill` (`~/.cursor/skills/ask-multiple-choice`
 
 ```json
 {
-  "question": "Ship the Drive mirror now?",
+  "question": "Ship the Drive mirror now?\n\nPath: specs/DOC-002.md → Google Doc\nChange: Rev C comments ingested; body matches git SoT.",
   "title": "Drive mirror",
   "agent": "docs-agent",
   "recommended_id": "ship",
@@ -87,6 +89,21 @@ skill via `ask-question-install --skill` (`~/.cursor/skills/ask-multiple-choice`
     { "id": "ship", "label": "Ship it (recommended)" },
     { "id": "wait", "label": "Wait for answers" },
     { "id": "git_only", "label": "Git only" }
+  ]
+}
+```
+
+Routine forks stay short (no referent dump):
+
+```json
+{
+  "question": "Sign off mcq-self-contained-referent as standard work?",
+  "title": "Pattern",
+  "agent": "ask-question-mcp",
+  "recommended_id": "signoff",
+  "options": [
+    { "id": "signoff", "label": "Sign off (recommended)" },
+    { "id": "amend", "label": "Amend" }
   ]
 }
 ```
@@ -123,10 +140,11 @@ footer hint. Useful when coaching a human or writing host docs:
 | **Esc** / window close | Cancel. |
 | **R** / **L** | Replay question / Listen (Linux voice only, when configured). |
 
-Long `question` text is shown in a calm Confirm **card** (soft pink, title +
-body; dense ` · `-separated fields become separate lines). Tall bodies scroll
-inside the card (scrollbar) so Cancel/OK stay visible. Prefer a one-line
-decision prompt anyway. Option rows are always shown in the middle scroll.
+Long `question` text is shown in a calm Confirm **card** when `dangerous`
+(soft pink, title + body). All question bodies (danger and normal) height-cap
+with an inner scrollbar so tall self-contained referents cannot push Cancel/OK
+off-screen. Dense ` · `-separated fields become separate lines. Option rows
+stay in the middle scroll.
 
 Size (and on Windows, position) is remembered in
 `~/.config/ask-question-mcp/prefs.json` under `"window": { "w", "h", … }`.
