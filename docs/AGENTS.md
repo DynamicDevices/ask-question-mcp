@@ -123,9 +123,10 @@ footer hint. Useful when coaching a human or writing host docs:
 | **Esc** / window close | Cancel. |
 | **R** / **L** | Replay question / Listen (Linux voice only, when configured). |
 
-Long `question` text is **height-capped** (scroll inside the Confirm banner) so
-Cancel/OK stay visible. Prefer a one-line decision prompt anyway. Option rows
-are always shown in the middle scroll (not nested inside another box).
+Long `question` text is shown in a calm Confirm **card** (soft pink, title +
+body; dense ` · `-separated fields become separate lines). Very long bodies
+scroll inside the card so Cancel/OK stay visible. Prefer a one-line decision
+prompt anyway. Option rows are always shown in the middle scroll.
 
 Size (and on Windows, position) is remembered in
 `~/.config/ask-question-mcp/prefs.json` under `"window": { "w", "h", … }`.

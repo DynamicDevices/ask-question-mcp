@@ -319,15 +319,26 @@ def _main() -> int:
         css = Gtk.CssProvider()
         css.load_from_data(
             b"""
-            /* Outer ring - avoid border (insets and clips footer buttons). */
+            /* Soft outer ring - avoid heavy border that fights the Confirm card. */
             window.ask-q-danger {
-              box-shadow: 0 0 0 4px #c62828;
+              box-shadow: 0 0 0 2px #e57373;
             }
-            .ask-q-banner {
-              background-color: #ffcdd2;
-              padding: 12px;
-              border-radius: 6px;
-              border-left: 6px solid #c62828;
+            /* Confirm card: calm surface, no thick left bar. */
+            box.ask-q-banner {
+              background-color: #fff5f5;
+              padding: 12px 14px;
+              border-radius: 10px;
+              border: 1px solid #ef9a9a;
+            }
+            label.ask-q-banner-title {
+              color: #b71c1c;
+              font-weight: 700;
+              font-size: 1.05em;
+            }
+            label.ask-q-banner-body {
+              color: #37474f;
+              margin-top: 6px;
+              line-height: 1.35;
             }
             button.suggested-action.ask-q-danger-ok {
               background: #c62828;
@@ -551,62 +562,80 @@ def _main() -> int:
             header.pack_end(header_replay)
         root.append(header)
 
-        # Banner: hard height cap. Gtk Label set_lines/ellipsize is unreliable
-        # with markup+wrap — a long danger email body previously pushed Cancel/OK
-        # off-screen. Keep footer always last on root with vexpand=False.
-        banner = Gtk.Label()
-        banner.set_wrap(True)
-        banner.set_xalign(0.0)
-        banner.set_use_markup(True)
-        banner.set_vexpand(False)
-        banner.set_hexpand(True)
-        banner.set_tooltip_text(question)
-        if dangerous:
-            mark = (
-                _danger_arm.DANGER_MARK if _danger_arm is not None else "⛔"
-            )
-            esc_q = GLib.markup_escape_text(question)
-            banner.set_markup(
-                f'<span foreground="#b71c1c"><b>{mark} Confirm</b></span>\n\n{esc_q}'
-            )
-            banner.add_css_class("ask-q-banner")
-            banner.set_lines(4)
-            banner.set_ellipsize(Pango.EllipsizeMode.END)
-        else:
-            banner.set_text(question)
-            banner.set_lines(3)
-            banner.set_ellipsize(Pango.EllipsizeMode.END)
-
+        # Confirm card: title + wrapped body (calm chrome). Long bodies scroll
+        # inside a height-capped region so Cancel/OK stay on-screen.
         banner_scroll = Gtk.ScrolledWindow()
         banner_scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         banner_scroll.set_vexpand(False)
         banner_scroll.set_hexpand(True)
-        # Cap height only for long questions. Short Confirm text must not be
-        # clipped by a fixed 140px box (options vanished + mid-line clipping).
-        max_banner = 160 if dangerous else 96
-        long_q = len(question) > 280
-        if long_q:
-            banner_scroll.set_propagate_natural_height(False)
-            banner_scroll.set_size_request(-1, max_banner)
-            try:
-                banner_scroll.set_max_content_height(max_banner)
-            except AttributeError:
-                pass
-        else:
-            banner_scroll.set_propagate_natural_height(True)
-            try:
-                banner_scroll.set_max_content_height(max_banner)
-            except AttributeError:
-                pass
-        try:
-            banner_scroll.set_min_content_height(40 if dangerous else 28)
-        except AttributeError:
-            pass
         banner_scroll.set_margin_top(12)
         banner_scroll.set_margin_start(16)
         banner_scroll.set_margin_end(16)
         banner_scroll.set_margin_bottom(8)
-        banner_scroll.set_child(banner)
+
+        body_text = question
+        if _dialog_keys is not None:
+            body_text = _dialog_keys.format_confirm_body(question)
+
+        if dangerous:
+            mark = (
+                _danger_arm.DANGER_MARK if _danger_arm is not None else "⛔"
+            )
+            card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+            card.add_css_class("ask-q-banner")
+            card.set_hexpand(True)
+            title_lbl = Gtk.Label()
+            title_lbl.set_xalign(0.0)
+            title_lbl.set_markup(
+                f'<span foreground="#b71c1c"><b>{mark} Confirm</b></span>'
+            )
+            title_lbl.add_css_class("ask-q-banner-title")
+            title_lbl.set_tooltip_text(question)
+            body_lbl = Gtk.Label(label=body_text)
+            body_lbl.set_wrap(True)
+            body_lbl.set_xalign(0.0)
+            body_lbl.set_yalign(0.0)
+            body_lbl.set_selectable(True)
+            body_lbl.add_css_class("ask-q-banner-body")
+            body_lbl.set_tooltip_text(question)
+            long_q = len(body_text) > 280 or body_text.count("\n") >= 4
+            if long_q:
+                body_lbl.set_lines(6)
+                body_lbl.set_ellipsize(Pango.EllipsizeMode.END)
+            card.append(title_lbl)
+            card.append(body_lbl)
+            banner_scroll.set_child(card)
+            max_banner = 180
+            if long_q:
+                banner_scroll.set_propagate_natural_height(False)
+                banner_scroll.set_size_request(-1, max_banner)
+            else:
+                banner_scroll.set_propagate_natural_height(True)
+            try:
+                banner_scroll.set_max_content_height(max_banner)
+            except AttributeError:
+                if long_q:
+                    banner_scroll.set_size_request(-1, max_banner)
+        else:
+            banner = Gtk.Label(label=body_text)
+            banner.set_wrap(True)
+            banner.set_xalign(0.0)
+            banner.set_vexpand(False)
+            banner.set_hexpand(True)
+            banner.set_tooltip_text(question)
+            banner.set_lines(3)
+            banner.set_ellipsize(Pango.EllipsizeMode.END)
+            banner_scroll.set_child(banner)
+            banner_scroll.set_propagate_natural_height(True)
+            try:
+                banner_scroll.set_max_content_height(96)
+            except AttributeError:
+                pass
+
+        try:
+            banner_scroll.set_min_content_height(36 if dangerous else 28)
+        except AttributeError:
+            pass
         root.append(banner_scroll)
 
         # ListBox must be the direct child of ScrolledWindow — nesting it in a

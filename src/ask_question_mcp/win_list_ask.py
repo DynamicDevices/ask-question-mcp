@@ -98,45 +98,44 @@ def main() -> int:
     outer.columnconfigure(0, weight=1)
     outer.rowconfigure(2, weight=1)
 
-    # Match Linux gtk4_list_ask danger chrome: "⛔ Confirm" + question in one banner.
+    # Match Linux gtk4_list_ask: calm Confirm card (no thick left bar).
     show_danger = bool(dangerous or danger_ids)
     if show_danger:
         mark = (
             _danger_arm.DANGER_MARK if _danger_arm is not None else "⛔"
         )
+        body_text = question
+        if _dialog_keys is not None:
+            body_text = _dialog_keys.format_confirm_body(question)
         banner = tk.Frame(
             outer,
-            bg="#ffcdd2",
-            highlightbackground="#c62828",
-            highlightthickness=0,
+            bg="#fff5f5",
+            highlightbackground="#ef9a9a",
+            highlightthickness=1,
             bd=0,
-            padx=12,
-            pady=10,
+            padx=14,
+            pady=12,
         )
         banner.grid(row=0, column=0, sticky="ew", pady=(0, 8))
-        accent = tk.Frame(banner, bg="#c62828", width=6)
-        accent.pack(side="left", fill="y", padx=(0, 10))
-        banner_body = tk.Frame(banner, bg="#ffcdd2")
-        banner_body.pack(side="left", fill="both", expand=True)
         tk.Label(
-            banner_body,
+            banner,
             text=f"{mark} Confirm",
             fg="#b71c1c",
-            bg="#ffcdd2",
+            bg="#fff5f5",
             font=("", 11, "bold"),
             anchor="w",
         ).pack(fill="x")
         # Cap tall danger questions so Cancel/OK stay visible (scroll the body).
-        q_frame = tk.Frame(banner_body, bg="#ffcdd2")
+        q_frame = tk.Frame(banner, bg="#fff5f5")
         q_frame.pack(fill="both", expand=True, pady=(6, 0))
         q_scroll = tk.Scrollbar(q_frame)
         q_scroll.pack(side="right", fill="y")
         q_text = tk.Text(
             q_frame,
-            height=5,
+            height=min(8, max(3, body_text.count("\n") + 2)),
             wrap="word",
-            bg="#ffcdd2",
-            fg="#212121",
+            bg="#fff5f5",
+            fg="#37474f",
             font=("", 10),
             relief="flat",
             highlightthickness=0,
@@ -145,7 +144,7 @@ def main() -> int:
         )
         q_text.pack(side="left", fill="both", expand=True)
         q_scroll.config(command=q_text.yview)
-        q_text.insert("1.0", question)
+        q_text.insert("1.0", body_text)
         q_text.configure(state="disabled")
     else:
         q_lbl = ttk.Label(outer, text=question, wraplength=480, justify="left")

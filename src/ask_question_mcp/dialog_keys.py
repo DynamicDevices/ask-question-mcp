@@ -65,3 +65,19 @@ def label_with_hotkey(index: int, label: str) -> str:
 
 
 KEYBOARD_HINT = "1–8 select · Enter OK · Esc cancel"
+
+
+def format_confirm_body(question: str) -> str:
+    """Make dense Confirm questions readable (one field per line when useful)."""
+    q = (question or "").strip()
+    if not q:
+        return q
+    if "\n" in q:
+        return q
+    # Agents often pack "From: … · To: … · Body: …" on one line.
+    if " · " in q:
+        parts = [p.strip() for p in q.split(" · ") if p.strip()]
+        if len(parts) >= 2:
+            return "\n".join(parts)
+    return q
+

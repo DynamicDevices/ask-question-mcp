@@ -11,6 +11,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from ask_question_mcp.dialog_keys import (  # noqa: E402
     KEYBOARD_HINT,
+    format_confirm_body,
     label_with_hotkey,
     option_hotkey_index,
 )
@@ -28,6 +29,10 @@ def test_hotkeys() -> None:
     assert label_with_hotkey(0, "Ship") == "1 · Ship"
     assert label_with_hotkey(0, "1 · Ship") == "1 · Ship"
     assert "Enter" in KEYBOARD_HINT
+    assert format_confirm_body("From: a · To: b · Body: hi") == (
+        "From: a\nTo: b\nBody: hi"
+    )
+    assert format_confirm_body("Already\nmultiline") == "Already\nmultiline"
 
 
 def test_window_geometry(tmp_path: Path | None = None) -> None:
