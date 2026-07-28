@@ -307,12 +307,12 @@ def _main() -> int:
                 geom_h = int(g.get("h") or geom_h)
             except Exception:  # noqa: BLE001
                 pass
-        # Long danger questions must not open a near-fullscreen window that
-        # clips Cancel/OK — cap default height; banner itself is also capped.
-        if dangerous and len(question) > 280:
-            geom_h = min(geom_h, 560)
-        elif len(question) > 400:
-            geom_h = min(geom_h, 520)
+        # Never reopen at a near-fullscreen height left by a previous tall
+        # Confirm dialog — that left a huge empty band under Cancel/OK.
+        geom_w = min(max(geom_w, 420), 900)
+        geom_h = min(max(geom_h, 360), 560)
+        if len(question) < 200 and len(ids) <= 6:
+            geom_h = min(geom_h, 480)
         win.set_default_size(geom_w, geom_h)
         win.set_modal(True)
 
@@ -581,21 +581,25 @@ def _main() -> int:
         banner_scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         banner_scroll.set_vexpand(False)
         banner_scroll.set_hexpand(True)
-        # Hard cap so Confirm chrome cannot eat the footer. Fixed height when
-        # the question is long — markup labels often ignore set_lines.
-        max_banner = 140 if dangerous else 96
-        long_q = len(question) > 220
-        if long_q or dangerous:
+        # Cap height only for long questions. Short Confirm text must not be
+        # clipped by a fixed 140px box (options vanished + mid-line clipping).
+        max_banner = 160 if dangerous else 96
+        long_q = len(question) > 280
+        if long_q:
             banner_scroll.set_propagate_natural_height(False)
             banner_scroll.set_size_request(-1, max_banner)
+            try:
+                banner_scroll.set_max_content_height(max_banner)
+            except AttributeError:
+                pass
         else:
             banner_scroll.set_propagate_natural_height(True)
+            try:
+                banner_scroll.set_max_content_height(max_banner)
+            except AttributeError:
+                pass
         try:
-            banner_scroll.set_max_content_height(max_banner)
-        except AttributeError:
-            banner_scroll.set_size_request(-1, max_banner)
-        try:
-            banner_scroll.set_min_content_height(48 if dangerous else 32)
+            banner_scroll.set_min_content_height(40 if dangerous else 28)
         except AttributeError:
             pass
         banner_scroll.set_margin_top(12)
@@ -605,10 +609,8 @@ def _main() -> int:
         banner_scroll.set_child(banner)
         root.append(banner_scroll)
 
-        # Middle: options (+ freeform) — only this region scrolls/grows.
-        body = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-        body.set_vexpand(False)
-
+        # ListBox must be the direct child of ScrolledWindow — nesting it in a
+        # Box made option rows disappear (Gtk allocation quirk).
         scroll = Gtk.ScrolledWindow()
         scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         scroll.set_vexpand(True)
@@ -625,7 +627,8 @@ def _main() -> int:
         list_box.set_selection_mode(Gtk.SelectionMode.NONE)
         list_box.add_css_class("boxed-list")
         list_box.set_valign(Gtk.Align.START)
-        body.append(list_box)
+        scroll.set_child(list_box)
+        root.append(scroll)
 
         checks: dict[str, Gtk.CheckButton] = {}
         group_leader: Gtk.CheckButton | None = None
@@ -705,11 +708,12 @@ def _main() -> int:
             freeform_entry.set_hexpand(True)
             freeform_box.append(freeform_lbl)
             freeform_box.append(freeform_entry)
-            freeform_box.set_margin_start(0)
-            freeform_box.set_margin_end(0)
+            freeform_box.set_margin_start(16)
+            freeform_box.set_margin_end(16)
             freeform_box.set_margin_top(8)
-            # Keep freeform in the scroll body so Cancel/OK stay pinned below.
-            body.append(freeform_box)
+            freeform_box.set_vexpand(False)
+            # Between options scroll and footer — fixed height, never eats OK.
+            root.append(freeform_box)
 
             # When typing selects Something else, do NOT grab_focus again —
             # that steals the first character mid-keystroke (2026-07-26).
@@ -742,9 +746,6 @@ def _main() -> int:
             freeform_entry.connect("changed", on_freeform_changed)
             if other_id in checks:
                 checks[other_id].connect("toggled", on_other_toggled)
-
-        scroll.set_child(body)
-        root.append(scroll)
 
         voice_recover_box: Gtk.Box | None = None
         repeat_btn: Gtk.Button | None = None
@@ -976,9 +977,11 @@ def _main() -> int:
             listen_gen["n"] += 1
             if _prefs is not None:
                 try:
+                    # Cap persisted height so a one-off tall dialog cannot leave
+                    # a permanent empty band under Cancel/OK on the next open.
                     _prefs.set_window_geometry(
-                        w=max(200, int(win.get_width() or 0)),
-                        h=max(200, int(win.get_height() or 0)),
+                        w=min(900, max(200, int(win.get_width() or 0))),
+                        h=min(560, max(200, int(win.get_height() or 0))),
                     )
                 except Exception:  # noqa: BLE001
                     pass

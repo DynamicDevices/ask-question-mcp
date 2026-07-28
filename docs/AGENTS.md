@@ -124,11 +124,13 @@ footer hint. Useful when coaching a human or writing host docs:
 | **R** / **L** | Replay question / Listen (Linux voice only, when configured). |
 
 Long `question` text is **height-capped** (scroll inside the Confirm banner) so
-Cancel/OK stay visible. Prefer a one-line decision prompt anyway.
+Cancel/OK stay visible. Prefer a one-line decision prompt anyway. Option rows
+are always shown in the middle scroll (not nested inside another box).
 
 Size (and on Windows, position) is remembered in
 `~/.config/ask-question-mcp/prefs.json` under `"window": { "w", "h", … }`.
-Wayland usually restores **size only** (compositors block absolute moves).
+Saved height is capped (~560px) so a one-off tall dialog cannot leave a permanent
+empty band under the buttons. Wayland usually restores **size only**.
 Windows option lists scroll when tall.
 
 ## Return value (JSON string)
