@@ -307,6 +307,12 @@ def _main() -> int:
                 geom_h = int(g.get("h") or geom_h)
             except Exception:  # noqa: BLE001
                 pass
+        # Long danger questions must not open a near-fullscreen window that
+        # clips Cancel/OK — cap default height; banner itself is also capped.
+        if dangerous and len(question) > 280:
+            geom_h = min(geom_h, 560)
+        elif len(question) > 400:
+            geom_h = min(geom_h, 520)
         win.set_default_size(geom_w, geom_h)
         win.set_modal(True)
 
@@ -545,17 +551,15 @@ def _main() -> int:
             header.pack_end(header_replay)
         root.append(header)
 
-        # Banner stays above the scroll so a long danger question cannot crush
-        # the option list (which previously made the status chip look like a row).
+        # Banner: hard height cap. Gtk Label set_lines/ellipsize is unreliable
+        # with markup+wrap — a long danger email body previously pushed Cancel/OK
+        # off-screen. Keep footer always last on root with vexpand=False.
         banner = Gtk.Label()
         banner.set_wrap(True)
         banner.set_xalign(0.0)
         banner.set_use_markup(True)
         banner.set_vexpand(False)
-        banner.set_margin_top(12)
-        banner.set_margin_start(16)
-        banner.set_margin_end(16)
-        banner.set_margin_bottom(8)
+        banner.set_hexpand(True)
         banner.set_tooltip_text(question)
         if dangerous:
             mark = (
@@ -566,13 +570,44 @@ def _main() -> int:
                 f'<span foreground="#b71c1c"><b>{mark} Confirm</b></span>\n\n{esc_q}'
             )
             banner.add_css_class("ask-q-banner")
-            banner.set_lines(6)
+            banner.set_lines(4)
             banner.set_ellipsize(Pango.EllipsizeMode.END)
         else:
             banner.set_text(question)
-            banner.set_lines(4)
+            banner.set_lines(3)
             banner.set_ellipsize(Pango.EllipsizeMode.END)
-        root.append(banner)
+
+        banner_scroll = Gtk.ScrolledWindow()
+        banner_scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        banner_scroll.set_vexpand(False)
+        banner_scroll.set_hexpand(True)
+        # Hard cap so Confirm chrome cannot eat the footer. Fixed height when
+        # the question is long — markup labels often ignore set_lines.
+        max_banner = 140 if dangerous else 96
+        long_q = len(question) > 220
+        if long_q or dangerous:
+            banner_scroll.set_propagate_natural_height(False)
+            banner_scroll.set_size_request(-1, max_banner)
+        else:
+            banner_scroll.set_propagate_natural_height(True)
+        try:
+            banner_scroll.set_max_content_height(max_banner)
+        except AttributeError:
+            banner_scroll.set_size_request(-1, max_banner)
+        try:
+            banner_scroll.set_min_content_height(48 if dangerous else 32)
+        except AttributeError:
+            pass
+        banner_scroll.set_margin_top(12)
+        banner_scroll.set_margin_start(16)
+        banner_scroll.set_margin_end(16)
+        banner_scroll.set_margin_bottom(8)
+        banner_scroll.set_child(banner)
+        root.append(banner_scroll)
+
+        # Middle: options (+ freeform) — only this region scrolls/grows.
+        body = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        body.set_vexpand(False)
 
         scroll = Gtk.ScrolledWindow()
         scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
@@ -580,7 +615,7 @@ def _main() -> int:
         scroll.set_hexpand(True)
         scroll.set_propagate_natural_height(False)
         try:
-            scroll.set_min_content_height(140)
+            scroll.set_min_content_height(120)
         except AttributeError:
             pass
         scroll.set_margin_start(16)
@@ -590,8 +625,7 @@ def _main() -> int:
         list_box.set_selection_mode(Gtk.SelectionMode.NONE)
         list_box.add_css_class("boxed-list")
         list_box.set_valign(Gtk.Align.START)
-        scroll.set_child(list_box)
-        root.append(scroll)
+        body.append(list_box)
 
         checks: dict[str, Gtk.CheckButton] = {}
         group_leader: Gtk.CheckButton | None = None
@@ -671,9 +705,11 @@ def _main() -> int:
             freeform_entry.set_hexpand(True)
             freeform_box.append(freeform_lbl)
             freeform_box.append(freeform_entry)
-            freeform_box.set_margin_start(16)
-            freeform_box.set_margin_end(16)
-            root.append(freeform_box)
+            freeform_box.set_margin_start(0)
+            freeform_box.set_margin_end(0)
+            freeform_box.set_margin_top(8)
+            # Keep freeform in the scroll body so Cancel/OK stay pinned below.
+            body.append(freeform_box)
 
             # When typing selects Something else, do NOT grab_focus again —
             # that steals the first character mid-keystroke (2026-07-26).
@@ -706,6 +742,9 @@ def _main() -> int:
             freeform_entry.connect("changed", on_freeform_changed)
             if other_id in checks:
                 checks[other_id].connect("toggled", on_other_toggled)
+
+        scroll.set_child(body)
+        root.append(scroll)
 
         voice_recover_box: Gtk.Box | None = None
         repeat_btn: Gtk.Button | None = None

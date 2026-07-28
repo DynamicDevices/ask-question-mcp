@@ -18,7 +18,8 @@ choose among options the human must decide.
 
 1. Call MCP **`ask_multiple_choice`** (server `ask-question` / `user-ask-question`).
 2. Pass **`agent=`** (lane / chat id).
-3. **`question`:** one short colleague sentence — no meta about dialogs/voice.
+3. **`question`:** one short colleague sentence — no meta about dialogs/voice
+   (don’t paste long emails into `question`).
 4. Mark preferred only as **`Label (recommended)`** + **`recommended_id`**.
 5. **`dangerous=true`** for irreversible / high-risk forks.
 6. Wait for the JSON result. On cancel → stop. On freeform → use **`freeform_text`**.
