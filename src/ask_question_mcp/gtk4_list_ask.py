@@ -326,7 +326,7 @@ def _main() -> int:
             /* Confirm card: calm surface, no thick left bar. */
             box.ask-q-banner {
               background-color: #fff5f5;
-              padding: 12px 14px;
+              padding: 14px 16px 16px 16px;
               border-radius: 10px;
               border: 1px solid #ef9a9a;
             }
@@ -562,28 +562,27 @@ def _main() -> int:
             header.pack_end(header_replay)
         root.append(header)
 
-        # Confirm card: title + wrapped body (calm chrome). Long bodies scroll
-        # inside a height-capped region so Cancel/OK stay on-screen.
-        banner_scroll = Gtk.ScrolledWindow()
-        banner_scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
-        banner_scroll.set_vexpand(False)
-        banner_scroll.set_hexpand(True)
-        banner_scroll.set_margin_top(12)
-        banner_scroll.set_margin_start(16)
-        banner_scroll.set_margin_end(16)
-        banner_scroll.set_margin_bottom(8)
-
+        # Confirm card: title + wrapped body. Short/medium cards use natural
+        # height (no ScrolledWindow) so the bottom border is not clipped.
+        # Only very long bodies go in a height-capped scroll.
         body_text = question
         if _dialog_keys is not None:
             body_text = _dialog_keys.format_confirm_body(question)
+
+        def _margins(widget: Gtk.Widget) -> None:
+            widget.set_margin_top(12)
+            widget.set_margin_start(16)
+            widget.set_margin_end(16)
+            widget.set_margin_bottom(8)
 
         if dangerous:
             mark = (
                 _danger_arm.DANGER_MARK if _danger_arm is not None else "⛔"
             )
-            card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+            card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
             card.add_css_class("ask-q-banner")
             card.set_hexpand(True)
+            card.set_vexpand(False)
             title_lbl = Gtk.Label()
             title_lbl.set_xalign(0.0)
             title_lbl.set_markup(
@@ -593,50 +592,52 @@ def _main() -> int:
             title_lbl.set_tooltip_text(question)
             body_lbl = Gtk.Label(label=body_text)
             body_lbl.set_wrap(True)
+            body_lbl.set_wrap_mode(Pango.WrapMode.WORD_CHAR)
             body_lbl.set_xalign(0.0)
             body_lbl.set_yalign(0.0)
             body_lbl.set_selectable(True)
             body_lbl.add_css_class("ask-q-banner-body")
             body_lbl.set_tooltip_text(question)
-            long_q = len(body_text) > 280 or body_text.count("\n") >= 4
-            if long_q:
-                body_lbl.set_lines(6)
-                body_lbl.set_ellipsize(Pango.EllipsizeMode.END)
             card.append(title_lbl)
             card.append(body_lbl)
-            banner_scroll.set_child(card)
-            max_banner = 180
+
+            long_q = len(body_text) > 320 or body_text.count("\n") >= 5
             if long_q:
+                body_lbl.set_lines(8)
+                body_lbl.set_ellipsize(Pango.EllipsizeMode.END)
+                banner_scroll = Gtk.ScrolledWindow()
+                banner_scroll.set_policy(
+                    Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC
+                )
+                banner_scroll.set_vexpand(False)
+                banner_scroll.set_hexpand(True)
                 banner_scroll.set_propagate_natural_height(False)
+                max_banner = 220
                 banner_scroll.set_size_request(-1, max_banner)
+                try:
+                    banner_scroll.set_max_content_height(max_banner)
+                except AttributeError:
+                    pass
+                banner_scroll.set_child(card)
+                _margins(banner_scroll)
+                root.append(banner_scroll)
             else:
-                banner_scroll.set_propagate_natural_height(True)
-            try:
-                banner_scroll.set_max_content_height(max_banner)
-            except AttributeError:
-                if long_q:
-                    banner_scroll.set_size_request(-1, max_banner)
+                # Natural height — full card including bottom border/padding.
+                _margins(card)
+                root.append(card)
         else:
             banner = Gtk.Label(label=body_text)
             banner.set_wrap(True)
+            banner.set_wrap_mode(Pango.WrapMode.WORD_CHAR)
             banner.set_xalign(0.0)
             banner.set_vexpand(False)
             banner.set_hexpand(True)
             banner.set_tooltip_text(question)
-            banner.set_lines(3)
-            banner.set_ellipsize(Pango.EllipsizeMode.END)
-            banner_scroll.set_child(banner)
-            banner_scroll.set_propagate_natural_height(True)
-            try:
-                banner_scroll.set_max_content_height(96)
-            except AttributeError:
-                pass
-
-        try:
-            banner_scroll.set_min_content_height(36 if dangerous else 28)
-        except AttributeError:
-            pass
-        root.append(banner_scroll)
+            if len(body_text) > 240:
+                banner.set_lines(4)
+                banner.set_ellipsize(Pango.EllipsizeMode.END)
+            _margins(banner)
+            root.append(banner)
 
         # ListBox must be the direct child of ScrolledWindow — nesting it in a
         # Box made option rows disappear (Gtk allocation quirk).
