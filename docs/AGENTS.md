@@ -44,7 +44,9 @@ skill via `ask-question-install --skill` (`~/.cursor/skills/ask-multiple-choice`
 
 - Pass **`agent=`** (chat / lane id) so the window title shows `[agent] …`.
 - **`question`:** one short sentence a colleague would say — no meta about
-  dialogs or voice.
+  dialogs or voice. Do **not** paste long email bodies / drafts into
+  `question` (footer can be clipped); put the path or a one-line summary and
+  keep detail in the draft file / `entry_seed`.
 - Mark recommended **only** in the option label (`Foo (recommended)`) **and**
   pass **`recommended_id`** / `recommended_ids`. Never put “Recommended: …”
   inside `question`.
@@ -120,6 +122,9 @@ footer hint. Useful when coaching a human or writing host docs:
 | **Enter** | Confirm OK after the arm delay (same as clicking OK). |
 | **Esc** / window close | Cancel. |
 | **R** / **L** | Replay question / Listen (Linux voice only, when configured). |
+
+Long `question` text is **height-capped** (scroll inside the Confirm banner) so
+Cancel/OK stay visible. Prefer a one-line decision prompt anyway.
 
 Size (and on Windows, position) is remembered in
 `~/.config/ask-question-mcp/prefs.json` under `"window": { "w", "h", … }`.

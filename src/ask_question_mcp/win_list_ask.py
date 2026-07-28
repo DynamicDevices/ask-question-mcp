@@ -126,16 +126,27 @@ def main() -> int:
             font=("", 11, "bold"),
             anchor="w",
         ).pack(fill="x")
-        tk.Label(
-            banner_body,
-            text=question,
-            fg="#212121",
+        # Cap tall danger questions so Cancel/OK stay visible (scroll the body).
+        q_frame = tk.Frame(banner_body, bg="#ffcdd2")
+        q_frame.pack(fill="both", expand=True, pady=(6, 0))
+        q_scroll = tk.Scrollbar(q_frame)
+        q_scroll.pack(side="right", fill="y")
+        q_text = tk.Text(
+            q_frame,
+            height=5,
+            wrap="word",
             bg="#ffcdd2",
+            fg="#212121",
             font=("", 10),
-            wraplength=460,
-            justify="left",
-            anchor="w",
-        ).pack(fill="x", pady=(6, 0))
+            relief="flat",
+            highlightthickness=0,
+            borderwidth=0,
+            yscrollcommand=q_scroll.set,
+        )
+        q_text.pack(side="left", fill="both", expand=True)
+        q_scroll.config(command=q_text.yview)
+        q_text.insert("1.0", question)
+        q_text.configure(state="disabled")
     else:
         q_lbl = ttk.Label(outer, text=question, wraplength=480, justify="left")
         q_lbl.grid(row=1, column=0, sticky="ew", pady=(0, 8))
