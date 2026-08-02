@@ -87,7 +87,13 @@ Default: open on the **OS primary** monitor (not the focused/current screen).
 | `window_monitor` / `ASK_QUESTION_WINDOW_MONITOR` | connector e.g. `DP-2` · `eDP-1` · null | Forces that output; overrides primary |
 
 Edit `~/.config/ask-question-mcp/prefs.json` or set env. Change which display is
-“primary” in GNOME Settings → Displays.
+“primary” in GNOME Settings → Displays (or set `window_monitor`).
+
+**Implementation note:** GTK4 on Wayland cannot reliably move a dialog onto a
+chosen monitor without a fullscreen dance that left windows invisible on some
+GNOME setups. For `primary` / `remember` / `window_monitor`, the launcher forces
+**XWayland** (`GDK_BACKEND=x11`) and centers via `XMoveWindow`. Pure Wayland
+falls back to compositor placement (still visible).
 
 ### Example (single choice)
 

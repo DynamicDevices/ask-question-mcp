@@ -44,6 +44,24 @@ _GTK4_ENTRY_ASK = Path(__file__).resolve().with_name("gtk4_entry_ask.py")
 _WIN_LIST_ASK = Path(__file__).resolve().with_name("win_list_ask.py")
 _WIN_ENTRY_ASK = Path(__file__).resolve().with_name("win_entry_ask.py")
 
+try:
+    from ask_question_mcp import window_placement as _window_placement
+except ImportError:  # pragma: no cover
+    _window_placement = None  # type: ignore[assignment]
+
+
+def _gtk_env(display: str | None = None) -> dict[str, str]:
+    """Env for Gtk dialog children — XWayland when primary placement is on."""
+    base = {**os.environ}
+    if display:
+        base["DISPLAY"] = display
+    if _window_placement is not None:
+        try:
+            return _window_placement.gtk_child_env(base)
+        except Exception:  # noqa: BLE001
+            pass
+    return base
+
 
 def _truthy_env(name: str) -> bool:
     return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "on"}
@@ -336,7 +354,7 @@ def _entry_text(
             raise AskCancelled("empty freeform entry")
         return text, {}
 
-    env = {**os.environ, "DISPLAY": display}
+    env = _gtk_env(display)
     if _GTK4_ENTRY_ASK.is_file():
         try:
             gtk_py = _resolve_gtk_python()
@@ -548,7 +566,7 @@ def _ask_list(
         "audio_mode": audio_mode,
         "capability_notes": list(capability_notes or []),
     }
-    env = {**os.environ, "DISPLAY": display}
+    env = _gtk_env(display)
     try:
         proc = subprocess.run(
             [gtk_py, str(_GTK4_LIST_ASK)],

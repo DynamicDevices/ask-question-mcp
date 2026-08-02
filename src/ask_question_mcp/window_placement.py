@@ -1,9 +1,14 @@
 """Place ask-question dialogs on a chosen monitor (default: OS primary).
 
-Wayland clients cannot set absolute window positions. We place by briefly
-fullscreening onto the target ``Gdk.Monitor`` then unfullscreening — the
-window stays on that monitor. On X11/XWayland, prefer a silent ``XMoveWindow``
-center when available.
+Wayland clients cannot set absolute positions. The previous
+``fullscreen_on_monitor`` → unfullscreen dance hid dialogs on mixed-DPI
+layouts (Alex 2026-08-02). Placement therefore:
+
+1. Prefer launching the Gtk dialog on **XWayland** (``GDK_BACKEND=x11``) when
+   placement is not ``current`` — see ``gtk_child_env()``.
+2. Center with ``XMoveWindow`` once the surface exists.
+3. If still on native Wayland (no X11 surface): **do nothing** — leave the
+   window wherever the compositor mapped it (visible) rather than hide it.
 
 Prefs / env (see ``prefs.py``):
 
@@ -63,6 +68,30 @@ def get_window_monitor_connector() -> str | None:
     return None
 
 
+def wants_explicit_placement() -> bool:
+    """True when we should try to move the dialog off the focus screen."""
+    if get_window_monitor_connector():
+        return True
+    return get_window_placement() in {"primary", "remember"}
+
+
+def gtk_child_env(base: dict[str, str] | None = None) -> dict[str, str]:
+    """Env for Gtk dialog subprocesses.
+
+    When explicit placement is requested, force ``GDK_BACKEND=x11`` (XWayland)
+    so ``XMoveWindow`` can center on the target monitor. Native Wayland cannot
+    be positioned safely on this host's mixed-DPI layout.
+    """
+    env = dict(base if base is not None else os.environ)
+    if not wants_explicit_placement():
+        return env
+    env["GDK_BACKEND"] = "x11"
+    # Otherwise Gtk may still prefer Wayland and ignore GDK_BACKEND.
+    env.pop("WAYLAND_DISPLAY", None)
+    env.pop("WAYLAND_SOCKET", None)
+    return env
+
+
 def _xrandr_primary_connector() -> str | None:
     try:
         out = subprocess.getoutput("xrandr --current")
@@ -99,10 +128,10 @@ def _xrandr_geometry(connector: str) -> tuple[int, int, int, int] | None:
 
 def resolve_target_monitor(display: Any) -> Any | None:
     """Pick the ``Gdk.Monitor`` for placement, or ``None`` to leave alone."""
-    placement = get_window_placement()
-    if placement == "current":
+    if not wants_explicit_placement():
         return None
 
+    placement = get_window_placement()
     mons = display.get_monitors()
     n = int(mons.get_n_items())
     if n <= 0:
@@ -127,7 +156,6 @@ def resolve_target_monitor(display: Any) -> Any | None:
             g = _prefs.get_window_geometry()
             x, y = g.get("x"), g.get("y")
             if isinstance(x, int) and isinstance(y, int):
-                # Monitor containing remembered top-left.
                 for i in range(n):
                     m = mons.get_item(i)
                     geo = m.get_geometry()
@@ -135,14 +163,11 @@ def resolve_target_monitor(display: Any) -> Any | None:
                         return m
         except Exception:  # noqa: BLE001
             pass
-        # Fall through to primary if no usable remembered position.
 
-    # OS primary via xrandr (GdkWaylandMonitor has no is_primary()).
     primary_conn = _xrandr_primary_connector()
     if primary_conn and primary_conn in by_conn:
         return by_conn[primary_conn]
 
-    # Gdk primary when available (X11).
     for i in range(n):
         m = mons.get_item(i)
         try:
@@ -152,6 +177,33 @@ def resolve_target_monitor(display: Any) -> Any | None:
             pass
 
     return mons.get_item(0)
+
+
+def _center_xy(
+    monitor: Any, width: int, height: int
+) -> tuple[int, int, int, int] | None:
+    """Return ``(x, y, ww, wh)`` centered on monitor, or None."""
+    mx = my = mw = mh = None
+    try:
+        geo = monitor.get_geometry()
+        mx, my, mw, mh = int(geo.x), int(geo.y), int(geo.width), int(geo.height)
+    except Exception:  # noqa: BLE001
+        pass
+    if mx is None:
+        conn = ""
+        try:
+            conn = monitor.get_connector() or ""
+        except Exception:  # noqa: BLE001
+            pass
+        parsed = _xrandr_geometry(conn) if conn else None
+        if not parsed:
+            return None
+        mx, my, mw, mh = parsed
+    ww = int(width) if width > 0 else 520
+    wh = int(height) if height > 0 else 480
+    x = int(mx) + max(0, (int(mw) - ww) // 2)
+    y = int(my) + max(0, (int(mh) - wh) // 2)
+    return x, y, ww, wh
 
 
 def _x11_center_on_monitor(win: Any, monitor: Any, width: int, height: int) -> bool:
@@ -165,24 +217,22 @@ def _x11_center_on_monitor(win: Any, monitor: Any, width: int, height: int) -> b
     if surface is None or not isinstance(surface, GdkX11.X11Surface):
         return False
 
+    centered = _center_xy(monitor, width, height)
+    if centered is None:
+        return False
+    x, y, ww, wh = centered
+    # Prefer live size after map.
     try:
-        geo = monitor.get_geometry()
-        mx, my, mw, mh = int(geo.x), int(geo.y), int(geo.width), int(geo.height)
+        lw = int(win.get_width() or 0)
+        lh = int(win.get_height() or 0)
+        if lw >= 200:
+            ww = lw
+        if lh >= 200:
+            wh = lh
+            x = (_center_xy(monitor, ww, wh) or (x, y, ww, wh))[0]
+            y = (_center_xy(monitor, ww, wh) or (x, y, ww, wh))[1]
     except Exception:  # noqa: BLE001
-        conn = ""
-        try:
-            conn = monitor.get_connector() or ""
-        except Exception:  # noqa: BLE001
-            pass
-        parsed = _xrandr_geometry(conn) if conn else None
-        if not parsed:
-            return False
-        mx, my, mw, mh = parsed
-
-    ww = int(width) if width > 0 else int(win.get_width() or 520)
-    wh = int(height) if height > 0 else int(win.get_height() or 480)
-    x = mx + max(0, (mw - ww) // 2)
-    y = my + max(0, (mh - wh) // 2)
+        pass
 
     try:
         xid = int(GdkX11.X11Surface.get_xid(surface))
@@ -199,7 +249,7 @@ def _x11_center_on_monitor(win: Any, monitor: Any, width: int, height: int) -> b
         libX11.XFlush(ctypes.c_void_p(dpy))
         if _prefs is not None:
             try:
-                _prefs.set_window_geometry(x=x, y=y, w=ww, h=wh)
+                _prefs.set_window_geometry(x=int(x), y=int(y), w=int(ww), h=int(wh))
             except Exception:  # noqa: BLE001
                 pass
         return True
@@ -215,7 +265,11 @@ def place_window_on_monitor(
     height: int = 0,
     glib: Any | None = None,
 ) -> None:
-    """Schedule placement after ``win.present()``. No-op if ``monitor`` is None."""
+    """Schedule placement after ``win.present()``. No-op if ``monitor`` is None.
+
+    Never uses Wayland fullscreen tricks — those left dialogs invisible on
+    Alex's Framework + Samsung mixed-DPI layout (2026-08-02).
+    """
     if monitor is None:
         return
     if glib is None:
@@ -223,27 +277,16 @@ def place_window_on_monitor(
 
         glib = GLib
 
+    attempts = {"n": 0}
+
     def _place() -> bool:
-        # Prefer silent X11 move when the surface is X11/XWayland.
         if _x11_center_on_monitor(win, monitor, width, height):
             return False
-        # Wayland: fullscreen onto target monitor, then restore.
-        try:
-            win.fullscreen_on_monitor(monitor)
-        except Exception:  # noqa: BLE001
-            try:
-                win.fullscreen()
-            except Exception:  # noqa: BLE001
-                return False
-
-        def _unfs() -> bool:
-            try:
-                win.unfullscreen()
-            except Exception:  # noqa: BLE001
-                pass
-            return False
-
-        glib.timeout_add(40, _unfs)
+        attempts["n"] += 1
+        # Surface may not be ready on first idle — retry briefly, then give up
+        # (leave window visible wherever the compositor put it).
+        if attempts["n"] < 8:
+            glib.timeout_add(50, _place)
         return False
 
     glib.idle_add(_place)
