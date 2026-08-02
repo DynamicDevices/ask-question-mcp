@@ -40,6 +40,27 @@ If this MCP server is available, **every** decision fork goes through
 options, or the host’s built-in AskQuestion. Humans can install the Cursor
 skill via `ask-question-install --skill` (`~/.cursor/skills/ask-multiple-choice`).
 
+**Never use raw `zenity --list`.** Zenity 4 list dialogs clip tall option
+lists and attach a search bar that captures typing. The supported list UI is
+Gtk4 (`ask_zenity` → `gtk4_list_ask.py`). If MCP returns
+`Gtk couldn't be initialized` (or no dialog appears), use the CLI fallback:
+
+```bash
+uv run --directory /path/to/ask-question-mcp ask-mcq --pretty <<'JSON'
+{ "question": "…", "title": "…", "agent": "…", "recommended_id": "…",
+  "speak": false,
+  "options": [ {"id":"a","label":"Short label (recommended)"}, {"id":"b","label":"Other"} ] }
+JSON
+```
+
+Keep option **labels short** (one line). Put detail in chat before the dialog,
+not in a multi-sentence label.
+
+**Decision log (2026-08-02):** every completed/cancelled MCQ appends one JSON
+line to `~/.local/share/ask-question-mcp/decisions/YYYY-MM-DD.jsonl` (mode
+`600`). Freeform / cancel flagged. EOD: `ask-mcq-eod` (or
+`uv run ask-mcq-eod`). Disable with `ASK_QUESTION_MCQ_LOG=0`.
+
 ## Call contract
 
 - Pass **`agent=`** (chat / lane id) so the window title shows `[agent] …`.

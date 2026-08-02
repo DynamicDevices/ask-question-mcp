@@ -621,6 +621,18 @@ def _opt_truthy(value: Any) -> bool:
     return False
 
 
+def _normalize_policy_title(title: str, *, policy: bool) -> str:
+    """Ensure policy decisions are labelled POLICY — … for chrome + logs."""
+    t = (title or "Decide").strip() or "Decide"
+    if not policy and not t.upper().startswith("POLICY"):
+        return t
+    if t.upper().startswith("POLICY"):
+        # Canonicalise "POLICY:" / "POLICY -" → "POLICY —"
+        rest = t[6:].lstrip(" \t:-—–")
+        return f"POLICY — {rest}" if rest else "POLICY — change"
+    return f"POLICY — {t}"
+
+
 def ask_zenity(
     question: str,
     options: list[dict[str, Any]],
@@ -630,6 +642,7 @@ def ask_zenity(
     allow_multiple: bool = False,
     allow_other: bool = True,
     dangerous: bool = False,
+    policy: bool = False,
     speak: bool = True,
     title: str = "Decide",
     agent: str | None = None,
@@ -644,6 +657,9 @@ def ask_zenity(
     pair with ``"auto_listen": true`` to start mic on open (e.g. Re-record).
     ``entry_seed`` prefills the edit box (voice-turn transcript confirm).
     Pass ``dangerous=True`` to flag the whole decision.
+    Pass ``policy=True`` for durable gate/rule/MCP posture changes — forces
+    dangerous chrome, ``POLICY —`` title, and ``policy`` in the decision log
+    (Alex 2026-08-02).
     ``speak`` defaults True (local TTS). Pass ``speak=False``, uncheck dialog
     **Audio** (prefs ``audio_enabled``), or set ``ASK_QUESTION_AUDIO=0`` /
     ``ASK_QUESTION_SPEAK=0`` to mute.
@@ -664,6 +680,11 @@ def ask_zenity(
 
     ensure_session()
     prune_stale_sessions()
+
+    is_policy = bool(policy) or (title or "").lstrip().upper().startswith("POLICY")
+    if is_policy:
+        dangerous = True
+    title = _normalize_policy_title(title, policy=is_policy)
 
     if _falsy_env("ASK_QUESTION_SPEAK"):
         do_speak = False
@@ -803,6 +824,33 @@ def ask_zenity(
     if do_speak:
         speak_async(speak_line)
 
+    option_rows = [{"id": i, "label": labels[i]} for i in ids]
+
+    def _log_decision(
+        *,
+        result: dict[str, Any] | None = None,
+        cancelled: bool = False,
+        cancel_reason: str | None = None,
+    ) -> None:
+        try:
+            from ask_question_mcp.mcq_log import log_mcq_result
+
+            log_mcq_result(
+                question=question.strip(),
+                title=title,
+                agent=who,
+                recommended_id=recommended_id,
+                recommended_ids=list(recommended_ids) if recommended_ids else None,
+                options=option_rows,
+                result=result,
+                cancelled=cancelled,
+                cancel_reason=cancel_reason,
+                dangerous=whole_danger,
+                policy=is_policy,
+            )
+        except Exception:
+            pass
+
     try:
         chosen_ids, voice_meta, voice_freeform = _ask_list(
             display=display,
@@ -822,12 +870,16 @@ def ask_zenity(
             audio_mode=caps.audio_mode,
             capability_notes=caps.notes,
         )
-    except AskCancelled:
+    except AskCancelled as exc:
         # Cancel / timeout / close — cut question audio immediately.
         if read_ack_allowed() is None:
             snapshot_ack_allowed_and_invalidate()
         stop_speak()
         _release_session_duck()
+        _log_decision(
+            cancelled=True,
+            cancel_reason=getattr(exc, "reason", None) or str(exc),
+        )
         raise
     except Exception:
         # Dialog failed to launch / run — never leave audio running.
@@ -886,6 +938,7 @@ def ask_zenity(
                         break
             except (OSError, json.JSONDecodeError):
                 meta = {}
+        _log_decision(result=payload, cancelled=bool(payload.get("cancelled")))
         lean = _lean_mcq_result(payload, voice_meta=meta, caps=caps)
         # One-shot nudge when host is not on the README verified matrix.
         try:

@@ -21,6 +21,8 @@ Repository = "https://github.com/DynamicDevices/ask-question-mcp"
 [project.scripts]
 ask-question-mcp = "ask_question_mcp.server:main"
 ask-question-install = "ask_question_mcp.install:main"
+ask-mcq = "ask_question_mcp.cli_ask:main"
+ask-mcq-eod = "ask_question_mcp.cli_eod:main"
 
 [build-system]
 requires = ["hatchling"]
