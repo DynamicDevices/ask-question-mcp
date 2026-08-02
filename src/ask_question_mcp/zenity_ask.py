@@ -24,6 +24,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from ask_question_mcp.mcq_images import normalize_mcq_images
 from ask_question_mcp.voice_acks import (
     read_ack_allowed,
     resolve_agent,
@@ -447,6 +448,7 @@ def _ask_list(
     voice_answer: bool = False,
     audio_mode: str = "text_only",
     capability_notes: list[str] | None = None,
+    images: list[str] | None = None,
 ) -> tuple[list[str], dict[str, Any], str | None]:
     """Radiolist/checklist via Gtk (Linux) or tkinter (Windows).
 
@@ -454,6 +456,7 @@ def _ask_list(
     dialog already confirmed a spoken/typed freeform answer, ``freeform_text``
     is set and the entry step is skipped.
     """
+    image_paths = [str(p) for p in (images or []) if str(p).strip()]
     if _is_windows():
         if not _WIN_LIST_ASK.is_file():
             raise RuntimeError(f"missing Windows list dialog: {_WIN_LIST_ASK}")
@@ -475,6 +478,8 @@ def _ask_list(
             "voice_answer": False,
             "audio_mode": audio_mode or "text_only",
             "capability_notes": list(capability_notes or []),
+            # Preview is Linux Gtk-only for now; paths ignored on Windows.
+            "images": image_paths,
         }
         try:
             proc = subprocess.run(
@@ -547,6 +552,7 @@ def _ask_list(
         "voice_answer": listen_on,
         "audio_mode": audio_mode,
         "capability_notes": list(capability_notes or []),
+        "images": image_paths,
     }
     env = {**os.environ, "DISPLAY": display}
     try:
@@ -617,6 +623,8 @@ def ask_zenity(
     agent: str | None = None,
     timeout_sec: int = 300,
     entry_seed: str | None = None,
+    image: str | None = None,
+    images: list[str] | None = None,
 ) -> dict[str, Any]:
     """Block until the user picks. Mark recommended only in option labels.
 
@@ -631,6 +639,8 @@ def ask_zenity(
     ``ASK_QUESTION_SPEAK=0`` to mute.
     ``agent`` (or LANE.id / ``ASK_QUESTION_AGENT``) is prefixed in the window
     title so multi-agent sessions stay distinguishable.
+    ``image`` / ``images``: optional local PNG/JPEG (etc.) path or ``file://``
+    URI for a Gtk preview above the question (Linux; skipped if missing).
 
     ``allow_other`` is accepted for API compatibility but ignored — Something
     else is always appended when missing (unless already present / no room).
@@ -661,6 +671,7 @@ def ask_zenity(
     do_listen = caps.listen_active
 
     who = resolve_agent(agent)
+    image_paths = normalize_mcq_images(image=image, images=images)
 
     ids: list[str] = []
     labels: dict[str, str] = {}
@@ -803,6 +814,7 @@ def ask_zenity(
             voice_answer=do_listen,
             audio_mode=caps.audio_mode,
             capability_notes=caps.notes,
+            images=image_paths,
         )
     except AskCancelled:
         # Cancel / timeout / close — cut question audio immediately.

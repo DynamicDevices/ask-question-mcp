@@ -234,7 +234,8 @@ def _main() -> int:
 
     gi.require_version("Gtk", "4.0")
     gi.require_version("Adw", "1")
-    from gi.repository import Adw, Gdk, GLib, Gtk, Pango
+    gi.require_version("GdkPixbuf", "2.0")
+    from gi.repository import Adw, Gdk, GdkPixbuf, GLib, Gtk, Pango
 
     question = str(payload.get("question") or "").strip()
     title = str(payload.get("title") or "Decide")
@@ -247,6 +248,11 @@ def _main() -> int:
     dangerous = bool(payload.get("dangerous"))
     allow_multiple = bool(payload.get("allow_multiple"))
     timeout_sec = int(payload.get("timeout_sec") or 0)
+    image_paths = [
+        str(x).strip()
+        for x in (payload.get("images") or [])
+        if str(x).strip()
+    ]
     speak_pgid_file = payload.get("speak_pgid_file")
     speak_pgid_file_s = str(speak_pgid_file) if speak_pgid_file else None
     speak_enabled = bool(payload.get("speak_enabled"))
@@ -308,8 +314,12 @@ def _main() -> int:
         # Confirm dialog — that left a huge empty band under Cancel/OK.
         geom_w = min(max(geom_w, 420), 900)
         geom_h = min(max(geom_h, 360), 560)
-        if len(question) < 200 and len(ids) <= 6:
+        if len(question) < 200 and len(ids) <= 6 and not image_paths:
             geom_h = min(geom_h, 480)
+        if image_paths:
+            # Room for ~320px preview + question + options without crushing OK.
+            geom_w = min(max(geom_w, 640), 1100)
+            geom_h = min(max(geom_h, 640), 900)
         win.set_default_size(geom_w, geom_h)
         win.set_modal(True)
 
@@ -544,6 +554,53 @@ def _main() -> int:
             header_replay.connect("clicked", on_replay)
             header.pack_end(header_replay)
         root.append(header)
+
+        def _append_image_previews(parent: Gtk.Box) -> None:
+            """Scaled PNG/JPEG preview above the question (max height ~320px)."""
+            if not image_paths:
+                return
+            max_h, max_w = 320, 720
+            box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+            box.set_margin_top(8)
+            box.set_margin_start(16)
+            box.set_margin_end(16)
+            box.set_margin_bottom(4)
+            box.set_hexpand(True)
+            shown = 0
+            for path in image_paths:
+                try:
+                    pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(
+                        path, max_w, max_h, True
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    print(
+                        f"ask-question: skip image {path}: {exc}",
+                        file=sys.stderr,
+                    )
+                    continue
+                if pixbuf is None:
+                    continue
+                try:
+                    texture = Gdk.Texture.new_for_pixbuf(pixbuf)
+                    picture = Gtk.Picture.new_for_paintable(texture)
+                except Exception:  # noqa: BLE001
+                    picture = Gtk.Picture.new_for_filename(path)
+                picture.set_can_shrink(True)
+                try:
+                    picture.set_content_fit(Gtk.ContentFit.CONTAIN)
+                except AttributeError:
+                    pass
+                picture.set_halign(Gtk.Align.CENTER)
+                picture.set_size_request(-1, min(max_h, int(pixbuf.get_height())))
+                picture.set_tooltip_text(path)
+                frame = Gtk.Frame()
+                frame.set_child(picture)
+                box.append(frame)
+                shown += 1
+            if shown:
+                parent.append(box)
+
+        _append_image_previews(root)
 
         # Confirm / question body: title (danger) stays fixed; body scrolls inside
         # a height cap so tall self-contained referents cannot crush Cancel/OK.

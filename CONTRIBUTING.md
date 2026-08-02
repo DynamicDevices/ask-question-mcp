@@ -15,6 +15,7 @@ uv run python scripts/test_install.py
 uv run python scripts/test_dialog_ergonomics.py
 uv run python scripts/test_windows_backend.py
 uv run python scripts/test_contracts.py
+uv run python scripts/test_mcq_images.py
 ```
 
 Optional voice: set `ASK_QUESTION_TTS_URL` and `ASK_QUESTION_STT_URL` to your
