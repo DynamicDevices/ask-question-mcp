@@ -34,6 +34,10 @@ try:
 except ImportError:  # pragma: no cover
     _prefs = None  # type: ignore[assignment]
 try:
+    import window_placement as _window_placement
+except ImportError:  # pragma: no cover
+    _window_placement = None  # type: ignore[assignment]
+try:
     import audio_duck as _audio_duck
 except ImportError:  # pragma: no cover
     _audio_duck = None  # type: ignore[assignment]
@@ -538,6 +542,14 @@ def main() -> int:
             GLib.timeout_add_seconds(timeout_sec, on_timeout)
 
         win.present()
+        if _window_placement is not None:
+            try:
+                mon = _window_placement.resolve_target_monitor(win.get_display())
+                _window_placement.place_window_on_monitor(
+                    win, mon, width=560, height=440, glib=GLib
+                )
+            except Exception:  # noqa: BLE001
+                pass
         view.grab_focus()
         if voice_on:
             if auto_listen:

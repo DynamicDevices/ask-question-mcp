@@ -17,6 +17,8 @@ Env overrides:
 - ``ASK_QUESTION_ACK=0|1`` — spoken ack after OK (``ack_enabled``; default off)
 - ``ASK_QUESTION_ALWAYS_LISTEN=0|1`` — auto mic after speak (default off)
 - ``ASK_QUESTION_SPEAK_VOLUME`` / ``ASK_QUESTION_ACK_VOLUME`` (linear 0.01–1.0)
+- ``ASK_QUESTION_WINDOW_PLACEMENT`` — ``primary`` (default) | ``current`` | ``remember``
+- ``ASK_QUESTION_WINDOW_MONITOR`` — optional connector override (e.g. ``DP-2``)
 """
 
 from __future__ import annotations
@@ -41,6 +43,10 @@ _DEFAULTS: dict[str, Any] = {
     "ack_volume": 0.55,
     # Last dialog size/position (x/y may be ignored on Wayland).
     "window": {"w": 520, "h": 480},
+    # Open MCQs on the OS primary display (not whichever screen has focus).
+    "window_placement": "primary",
+    # Optional connector override, e.g. "DP-2" / "eDP-1" (null = use primary).
+    "window_monitor": None,
 }
 
 

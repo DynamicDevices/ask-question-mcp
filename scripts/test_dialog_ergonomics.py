@@ -55,14 +55,54 @@ def test_window_geometry(tmp_path: Path | None = None) -> None:
             assert data["window"]["x"] == 10
             g2 = prefs_mod.get_window_geometry()
             assert g2 == {"w": 640, "h": 500, "x": 10, "y": 20}
+            assert prefs_mod.defaults().get("window_placement") == "primary"
         finally:
             prefs_mod._PREFS_PATH = old
+
+
+def test_window_placement_prefs() -> None:
+    import json
+    import os
+    import tempfile
+
+    from ask_question_mcp import prefs as prefs_mod
+    from ask_question_mcp import window_placement as place_mod
+
+    with tempfile.TemporaryDirectory() as td:
+        path = Path(td) / "prefs.json"
+        old = prefs_mod._PREFS_PATH
+        prefs_mod._PREFS_PATH = path
+        env_p = os.environ.pop("ASK_QUESTION_WINDOW_PLACEMENT", None)
+        env_m = os.environ.pop("ASK_QUESTION_WINDOW_MONITOR", None)
+        try:
+            assert place_mod.get_window_placement() == "primary"
+            path.write_text(
+                json.dumps({"window_placement": "current", "window_monitor": "DP-2"}),
+                encoding="utf-8",
+            )
+            assert place_mod.get_window_placement() == "current"
+            assert place_mod.get_window_monitor_connector() == "DP-2"
+            os.environ["ASK_QUESTION_WINDOW_PLACEMENT"] = "remember"
+            assert place_mod.get_window_placement() == "remember"
+            os.environ["ASK_QUESTION_WINDOW_MONITOR"] = "eDP-1"
+            assert place_mod.get_window_monitor_connector() == "eDP-1"
+        finally:
+            prefs_mod._PREFS_PATH = old
+            if env_p is None:
+                os.environ.pop("ASK_QUESTION_WINDOW_PLACEMENT", None)
+            else:
+                os.environ["ASK_QUESTION_WINDOW_PLACEMENT"] = env_p
+            if env_m is None:
+                os.environ.pop("ASK_QUESTION_WINDOW_MONITOR", None)
+            else:
+                os.environ["ASK_QUESTION_WINDOW_MONITOR"] = env_m
 
 
 def main() -> None:
     test_hotkeys()
     test_window_geometry()
-    print("OK dialog ergonomics (hotkeys + window geometry)")
+    test_window_placement_prefs()
+    print("OK dialog ergonomics (hotkeys + window geometry + placement)")
 
 
 if __name__ == "__main__":

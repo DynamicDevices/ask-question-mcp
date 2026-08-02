@@ -63,7 +63,7 @@ def ask_multiple_choice(
     entry_seed: str | None = None,
     timeout_sec: int = 300,
 ) -> str:
-    """Desktop MCQ for every decision fork — never markdown A/B/C when available. agent=LANE.id; recommended in label + recommended_id; Something else always; dangerous arms OK ~4s. On cancel/errors → check_setup once."""
+    """Desktop MCQ for every decision fork — never markdown A/B/C when available. agent=LANE.id; recommended in label + recommended_id; Something else always; dangerous arms OK ~1s. On cancel/errors → check_setup once."""
     try:
         result = ask_zenity(
             question,

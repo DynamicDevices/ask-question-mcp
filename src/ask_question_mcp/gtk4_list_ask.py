@@ -31,6 +31,10 @@ try:
 except ImportError:  # pragma: no cover
     _prefs = None  # type: ignore[assignment]
 try:
+    import window_placement as _window_placement
+except ImportError:  # pragma: no cover
+    _window_placement = None  # type: ignore[assignment]
+try:
     import session_ipc as _session_ipc
 except ImportError:  # pragma: no cover
     _session_ipc = None  # type: ignore[assignment]
@@ -306,10 +310,17 @@ def _main() -> int:
                 pass
         # Never reopen at a near-fullscreen height left by a previous tall
         # Confirm dialog — that left a huge empty band under Cancel/OK.
-        geom_w = min(max(geom_w, 420), 900)
-        geom_h = min(max(geom_h, 360), 560)
-        if len(question) < 200 and len(ids) <= 6:
+        # Long questions (dangerous confirms carrying a plan) need room: a
+        # 560px cap forced Alex to read a revocation plan through a slot.
+        q_len = len(question)
+        long_q = q_len >= 200
+        geom_w = min(max(geom_w, 760 if long_q else 420), 1100)
+        geom_h = min(max(geom_h, 360), 900)
+        if not long_q and len(ids) <= 6:
             geom_h = min(geom_h, 480)
+        elif long_q:
+            wanted = 520 + min(320, (q_len - 200) // 3) + 26 * max(0, len(ids) - 4)
+            geom_h = min(max(geom_h, wanted), 900)
         win.set_default_size(geom_w, geom_h)
         win.set_modal(True)
 
@@ -335,7 +346,8 @@ def _main() -> int:
             label.ask-q-banner-body {
               color: #37474f;
               margin-top: 6px;
-              line-height: 1.35;
+              line-height: 1.45;
+              font-size: 1.06em;
             }
             button.suggested-action.ask-q-danger-ok {
               background: #c62828;
@@ -567,7 +579,14 @@ def _main() -> int:
             lbl.set_tooltip_text(question)
             return lbl
 
-        def _capped_body_scroll(child: Gtk.Widget, *, max_body: int = 180) -> Gtk.ScrolledWindow:
+        # Scale the readable area with the text: 180px is fine for one line but
+        # hides most of a multi-paragraph confirm behind a scrollbar.
+        body_cap = 180 if len(body_text) < 200 else min(460, 200 + len(body_text) // 3)
+
+        def _capped_body_scroll(
+            child: Gtk.Widget, *, max_body: int = 0
+        ) -> Gtk.ScrolledWindow:
+            max_body = max_body or body_cap
             # Short text keeps natural height; tall text gets an inner scrollbar.
             body_scroll = Gtk.ScrolledWindow()
             body_scroll.set_policy(
@@ -934,7 +953,7 @@ def _main() -> int:
         if _danger_arm is not None:
             arm_ms = int(_danger_arm.danger_arm_ms(dangerous=dangerous))
         else:
-            arm_ms = 4000 if dangerous else 1000
+            arm_ms = 1000
         armed = {"v": arm_ms <= 0}
 
         def _arm_confirm() -> None:
@@ -1648,6 +1667,16 @@ def _main() -> int:
             GLib.timeout_add_seconds(timeout_sec, on_timeout)
 
         win.present()
+        if _window_placement is not None:
+            try:
+                from gi.repository import GLib as _GLib
+
+                mon = _window_placement.resolve_target_monitor(win.get_display())
+                _window_placement.place_window_on_monitor(
+                    win, mon, width=geom_w, height=geom_h, glib=_GLib
+                )
+            except Exception:  # noqa: BLE001 — placement must never block MCQ
+                pass
         # Focus an option row — never OK — so Space toggles/selects, Return confirms.
         # Prefer focusing the ListBoxRow (not the CheckButton): grab_focus on the
         # button can clear radio active state on some Gtk 4 builds.
