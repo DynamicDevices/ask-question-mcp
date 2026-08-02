@@ -62,8 +62,10 @@ def ask_multiple_choice(
     agent: str | None = None,
     entry_seed: str | None = None,
     timeout_sec: int = 300,
+    image: str | None = None,
+    images: list[str] | None = None,
 ) -> str:
-    """Desktop MCQ for every decision fork — never markdown A/B/C when available. agent=LANE.id; recommended in label + recommended_id; Something else always; dangerous arms OK ~4s. On cancel/errors → check_setup once."""
+    """Desktop MCQ for every decision fork — never markdown A/B/C when available. agent=LANE.id; recommended in label + recommended_id; Something else always; optional image/images (local path or file://) for Gtk preview; dangerous arms OK ~4s. On cancel/errors → check_setup once."""
     try:
         result = ask_zenity(
             question,
@@ -78,6 +80,8 @@ def ask_multiple_choice(
             agent=agent,
             entry_seed=entry_seed,
             timeout_sec=timeout_sec,
+            image=image,
+            images=images,
         )
         return json.dumps(result, ensure_ascii=False)
     except AskCancelled as exc:

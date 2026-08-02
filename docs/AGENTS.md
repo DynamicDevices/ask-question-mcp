@@ -76,6 +76,13 @@ skill via `ask-question-install --skill` (`~/.cursor/skills/ask-multiple-choice`
 | `agent` | string \| null | **strongly yes** | Window title prefix `[agent]` |
 | `timeout_sec` | int | no | default `300`; `0` = no timeout |
 | `entry_seed` | string \| null | no | Prefill Something else / entry |
+| `image` | string \| null | no | Local PNG/JPEG (etc.) path or `file://` URI — Gtk preview above the question (Linux). Missing/unsupported files are skipped. |
+| `images` | string[] \| null | no | Same as `image`, up to 4 paths (combined with `image`, deduped). Prefer one clear still when possible. |
+
+**Images in the dialog (Linux Gtk):** pass an absolute path or `file://` URI so
+Alex sees the still *inside* the MCQ (not only in chat). Chat `Read` of a PNG
+does not put pixels in the dialog — use `image` / `images`. Windows Phase 1
+ignores these args (text-only). Pattern: `mcq-with-image`.
 
 ### Example (single choice)
 
@@ -104,6 +111,22 @@ Routine forks stay short (no referent dump):
   "options": [
     { "id": "signoff", "label": "Sign off (recommended)" },
     { "id": "amend", "label": "Amend" }
+  ]
+}
+```
+
+### Example (with image preview)
+
+```json
+{
+  "question": "Does this rear I/O still look clear enough?",
+  "title": "Visual check",
+  "agent": "enclosure-review",
+  "recommended_id": "ok",
+  "image": "/abs/path/to/eth-rear-io.png",
+  "options": [
+    { "id": "ok", "label": "Looks good (recommended)" },
+    { "id": "redo", "label": "Re-capture" }
   ]
 }
 ```
