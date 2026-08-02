@@ -58,13 +58,14 @@ def ask_multiple_choice(
     allow_other: bool = True,
     dangerous: bool = False,
     policy: bool = False,
+    delete: bool = False,
     speak: bool = True,
     title: str = "Decide",
     agent: str | None = None,
     entry_seed: str | None = None,
     timeout_sec: int = 300,
 ) -> str:
-    """Desktop MCQ for every decision fork — never markdown A/B/C when available. agent=LANE.id; recommended in label + recommended_id; Something else always; dangerous arms OK ~1s. policy=true for rule/gate/MCP posture changes (forces dangerous + POLICY title + EOD flag). On cancel/errors → check_setup once."""
+    """Desktop MCQ for every decision fork — never markdown A/B/C when available. agent=LANE.id; recommended in label + recommended_id; Something else always; dangerous arms OK ~1s. policy=true / delete=true are peer TOP-TIER (forces dangerous + POLICY/DELETE title + EOD flag). On cancel/errors → check_setup once."""
     try:
         result = ask_zenity(
             question,
@@ -75,6 +76,7 @@ def ask_multiple_choice(
             allow_other=True,
             dangerous=dangerous,
             policy=policy,
+            delete=delete,
             speak=speak,
             title=title,
             agent=agent,

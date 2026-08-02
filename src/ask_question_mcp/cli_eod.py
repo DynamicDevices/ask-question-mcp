@@ -51,10 +51,14 @@ def main(argv: list[str] | None = None) -> int:
                 "cancelled_count",
                 "unexpected_count",
                 "policy_count",
+                "delete_count",
+                "top_tier_count",
                 "freeform",
                 "cancelled",
                 "unexpected",
                 "policy",
+                "delete",
+                "top_tier",
             )
         }
         if not args.freeform_only:
@@ -67,12 +71,16 @@ def main(argv: list[str] | None = None) -> int:
         f"total={summary['total']}  freeform={summary['freeform_count']}  "
         f"cancelled={summary['cancelled_count']}  "
         f"unexpected={summary['unexpected_count']}  "
-        f"policy={summary.get('policy_count', 0)}"
+        f"policy={summary.get('policy_count', 0)}  "
+        f"delete={summary.get('delete_count', 0)}  "
+        f"top_tier={summary.get('top_tier_count', 0)}"
     )
-    policy_rows = summary.get("policy") or []
-    if policy_rows and not args.freeform_only:
-        print("\nPOLICY decisions (highest risk — review in EOD Hansei):")
-        for r in policy_rows:
+    top_tier = summary.get("top_tier") or []
+    if top_tier and not args.freeform_only:
+        print(
+            "\nTOP-TIER (POLICY / DELETE non-temp — peer risk; review in EOD Hansei):"
+        )
+        for r in top_tier:
             ts = r.get("ts", "?")
             agent = r.get("agent") or "-"
             title = r.get("title") or "-"
@@ -82,7 +90,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"- {ts} [{agent}] {title} → {chosen}")
     focus = summary["unexpected"] if args.freeform_only else summary["unexpected"]
     if not focus:
-        if not policy_rows:
+        if not top_tier:
             print("(no freeform/cancel/unexpected rows)")
         return 0
     print("\nFreeform / cancel / unexpected (review in EOD Hansei):")

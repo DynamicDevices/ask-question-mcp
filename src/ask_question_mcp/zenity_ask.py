@@ -621,16 +621,16 @@ def _opt_truthy(value: Any) -> bool:
     return False
 
 
-def _normalize_policy_title(title: str, *, policy: bool) -> str:
-    """Ensure policy decisions are labelled POLICY — … for chrome + logs."""
+def _normalize_tier_title(title: str, *, prefix: str, force: bool) -> str:
+    """Canonicalise TOP-TIER titles: ``POLICY — …`` / ``DELETE — …``."""
     t = (title or "Decide").strip() or "Decide"
-    if not policy and not t.upper().startswith("POLICY"):
+    up = prefix.upper()
+    if not force and not t.upper().startswith(up):
         return t
-    if t.upper().startswith("POLICY"):
-        # Canonicalise "POLICY:" / "POLICY -" → "POLICY —"
-        rest = t[6:].lstrip(" \t:-—–")
-        return f"POLICY — {rest}" if rest else "POLICY — change"
-    return f"POLICY — {t}"
+    if t.upper().startswith(up):
+        rest = t[len(prefix) :].lstrip(" \t:-—–")
+        return f"{prefix} — {rest}" if rest else f"{prefix} — change"
+    return f"{prefix} — {t}"
 
 
 def ask_zenity(
@@ -643,6 +643,7 @@ def ask_zenity(
     allow_other: bool = True,
     dangerous: bool = False,
     policy: bool = False,
+    delete: bool = False,
     speak: bool = True,
     title: str = "Decide",
     agent: str | None = None,
@@ -659,7 +660,9 @@ def ask_zenity(
     Pass ``dangerous=True`` to flag the whole decision.
     Pass ``policy=True`` for durable gate/rule/MCP posture changes — forces
     dangerous chrome, ``POLICY —`` title, and ``policy`` in the decision log
-    (Alex 2026-08-02).
+    (Alex 2026-08-02). Peer TOP-TIER with ``delete=True`` (non-temporary data).
+    Pass ``delete=True`` for deleting non-temporary data — forces dangerous
+    chrome, ``DELETE —`` title, and ``delete`` in the decision log.
     ``speak`` defaults True (local TTS). Pass ``speak=False``, uncheck dialog
     **Audio** (prefs ``audio_enabled``), or set ``ASK_QUESTION_AUDIO=0`` /
     ``ASK_QUESTION_SPEAK=0`` to mute.
@@ -681,10 +684,18 @@ def ask_zenity(
     ensure_session()
     prune_stale_sessions()
 
-    is_policy = bool(policy) or (title or "").lstrip().upper().startswith("POLICY")
-    if is_policy:
+    title_raw = title or "Decide"
+    is_policy = bool(policy) or title_raw.lstrip().upper().startswith("POLICY")
+    is_delete = bool(delete) or title_raw.lstrip().upper().startswith("DELETE")
+    if is_policy or is_delete:
         dangerous = True
-    title = _normalize_policy_title(title, policy=is_policy)
+    # Prefer explicit prefix already present; else POLICY then DELETE.
+    if is_policy:
+        title = _normalize_tier_title(title_raw, prefix="POLICY", force=True)
+    elif is_delete:
+        title = _normalize_tier_title(title_raw, prefix="DELETE", force=True)
+    else:
+        title = title_raw.strip() or "Decide"
 
     if _falsy_env("ASK_QUESTION_SPEAK"):
         do_speak = False
@@ -847,6 +858,7 @@ def ask_zenity(
                 cancel_reason=cancel_reason,
                 dangerous=whole_danger,
                 policy=is_policy,
+                delete=is_delete,
             )
         except Exception:
             pass

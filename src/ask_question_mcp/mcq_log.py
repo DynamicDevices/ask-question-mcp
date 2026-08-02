@@ -74,6 +74,11 @@ def title_looks_policy(title: str | None) -> bool:
     return t.upper().startswith("POLICY")
 
 
+def title_looks_delete(title: str | None) -> bool:
+    t = (title or "").lstrip()
+    return t.upper().startswith("DELETE")
+
+
 def log_mcq_result(
     *,
     question: str,
@@ -87,6 +92,7 @@ def log_mcq_result(
     cancel_reason: str | None = None,
     dangerous: bool = False,
     policy: bool = False,
+    delete: bool = False,
 ) -> Path | None:
     """Build and append a lean decision record."""
     opt_ids = [str(o.get("id") or "") for o in options if o.get("id")]
@@ -106,6 +112,8 @@ def log_mcq_result(
         or (chosen_id and str(chosen_id).lower() in {"other", "something_else", "something-else"})
     )
     is_policy = bool(policy) or title_looks_policy(title)
+    is_delete = bool(delete) or title_looks_delete(title)
+    top_tier = is_policy or is_delete
 
     rec: dict[str, Any] = {
         "ts": datetime.now().astimezone().isoformat(timespec="seconds"),
@@ -116,8 +124,10 @@ def log_mcq_result(
         "option_ids": opt_ids[:8],
         "recommended_id": recommended_id,
         "recommended_ids": recommended_ids,
-        "dangerous": bool(dangerous) or is_policy,
+        "dangerous": bool(dangerous) or top_tier,
         "policy": is_policy,
+        "delete": is_delete,
+        "top_tier": top_tier,
         "cancelled": bool(cancelled),
         "chosen_id": chosen_id,
         "freeform": freeform,
@@ -155,6 +165,20 @@ def summarize_day(day: datetime | None = None) -> dict[str, Any]:
         for r in rows
         if r.get("policy") or title_looks_policy(str(r.get("title") or ""))
     ]
+    delete_rows = [
+        r
+        for r in rows
+        if r.get("delete") or title_looks_delete(str(r.get("title") or ""))
+    ]
+    top_tier = [
+        r
+        for r in rows
+        if r.get("top_tier")
+        or r.get("policy")
+        or r.get("delete")
+        or title_looks_policy(str(r.get("title") or ""))
+        or title_looks_delete(str(r.get("title") or ""))
+    ]
     return {
         "path": str(path),
         "total": len(rows),
@@ -162,9 +186,13 @@ def summarize_day(day: datetime | None = None) -> dict[str, Any]:
         "cancelled_count": len(cancelled),
         "unexpected_count": len(unexpected),
         "policy_count": len(policy_rows),
+        "delete_count": len(delete_rows),
+        "top_tier_count": len(top_tier),
         "freeform": freeform,
         "cancelled": cancelled,
         "unexpected": unexpected,
         "policy": policy_rows,
+        "delete": delete_rows,
+        "top_tier": top_tier,
         "all": rows,
     }

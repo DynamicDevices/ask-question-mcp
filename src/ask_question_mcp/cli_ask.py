@@ -83,6 +83,7 @@ def main(argv: list[str] | None = None) -> int:
             allow_other=True,
             dangerous=bool(payload.get("dangerous", False)),
             policy=bool(payload.get("policy", False)),
+            delete=bool(payload.get("delete", False)),
             speak=bool(payload.get("speak", False)),
             title=str(payload.get("title") or "Decide"),
             agent=payload.get("agent"),
