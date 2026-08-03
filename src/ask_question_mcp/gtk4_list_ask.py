@@ -77,9 +77,10 @@ def _pick_sizing_monitor_wh(
 ) -> tuple[int, int]:
     """Pick width/height for dialog defaults / clamps.
 
-    Dual-monitor: size against the host monitor when known, otherwise the
-    *smallest* connected display — never the largest (a 4K panel must not
-    drive defaults that overflow a laptop eDP).
+    Dual-monitor: size against the *primary* (or explicit preferred) panel
+    when known, otherwise the *smallest* connected display — never the
+    largest (a 4K secondary must not drive defaults that overflow a laptop
+    eDP primary).
     """
     if preferred is not None:
         pw, ph = int(preferred[0]), int(preferred[1])
@@ -96,8 +97,9 @@ def _monitor_wh_under_pointer(
 ) -> tuple[int, int] | None:
     """Return (w, h) of the monitor containing the pointer, if known.
 
-    ``rects`` are ``(x, y, w, h)`` in the same coordinate space as the pointer
-    query (X11 / XWayland via ``xdotool`` when available).
+    Kept for diagnostics / tests. Opening image-MCQ geometry prefers the OS
+    *primary* panel (not pointer) so a cursor parked on a 4K secondary cannot
+    oversized the dialog past the laptop eDP.
     """
     if not rects:
         return None
@@ -137,6 +139,9 @@ _IMAGE_MCQ_CHROME_H = 400
 # GdkWaylandMonitor has no get_workarea — reserve for GNOME top panel / margins.
 _PANEL_RESERVE_H = 48
 _EDGE_MARGIN_W = 48
+# Vertical gap between stacked multi-image frames (matches Gtk.Box spacing=8).
+_IMAGE_STACK_GAP = 8
+_IMAGE_HINT_RESERVE_H = 28
 
 
 def _usable_monitor_wh(monitor_wh: tuple[int, int]) -> tuple[int, int]:
@@ -147,17 +152,25 @@ def _usable_monitor_wh(monitor_wh: tuple[int, int]) -> tuple[int, int]:
     return max(320, w - _EDGE_MARGIN_W), max(280, h - _PANEL_RESERVE_H)
 
 
-def _preview_max_wh(
+def _clamp_n_images(n_images: int) -> int:
+    """Normalize preview count (MCQ allows at most 4)."""
+    try:
+        n = int(n_images)
+    except (TypeError, ValueError):
+        n = 1
+    return max(1, min(4, n))
+
+
+def _preview_stack_max_wh(
     monitor_wh: tuple[int, int],
     *,
     maximized: bool,
     expanded: bool,
 ) -> tuple[int, int]:
-    """Return (max_w, max_h) for the image preview under current mode.
+    """Total (max_w, max_h) for the entire preview stack (all images together).
 
-    Expanded defaults stay inside a chrome budget so preview + question +
-    options + footer fit the usable host/smallest monitor. Maximized uses
-    nearly the *host* panel (dialog monitor), not the opening clamp.
+    Multi-image MCQs must share this budget — never give each still the full
+    single-image height (that summed past primary usable and blew the window).
     """
     raw_w, raw_h = int(monitor_wh[0]), int(monitor_wh[1])
     if raw_w <= 0 or raw_h <= 0:
@@ -170,8 +183,8 @@ def _preview_max_wh(
     budget_h = max(160, uh - _IMAGE_MCQ_CHROME_H)
     budget_w = max(320, uw - 32)
     if expanded:
-        # ~50% of usable height, never past chrome budget (old 62% overflowed
-        # Framework eDP once header/options/footer were added).
+        # ~50% of usable height for the whole stack, never past chrome budget
+        # (old 62% overflowed Framework eDP once header/options/footer added).
         return (
             max(320, min(int(uw * 0.90), budget_w)),
             max(160, min(int(uh * 0.50), budget_h)),
@@ -179,19 +192,61 @@ def _preview_max_wh(
     return min(640, budget_w), min(280, budget_h)
 
 
+def _preview_max_wh(
+    monitor_wh: tuple[int, int],
+    *,
+    maximized: bool,
+    expanded: bool,
+    n_images: int = 1,
+) -> tuple[int, int]:
+    """Return (max_w, max_h) for *one* image under current mode.
+
+    ``n_images`` > 1 divides the stack budget so N vertical ``size_request``
+    mins cannot sum past primary usable height.
+    """
+    stack_w, stack_h = _preview_stack_max_wh(
+        monitor_wh, maximized=maximized, expanded=expanded
+    )
+    n = _clamp_n_images(n_images)
+    gap = _IMAGE_STACK_GAP * (n - 1)
+    per_h = max(64, (int(stack_h) - gap) // n)
+    return int(stack_w), int(per_h)
+
+
+def _multi_image_stack_request_h(
+    monitor_wh: tuple[int, int],
+    *,
+    maximized: bool,
+    expanded: bool,
+    n_images: int,
+) -> int:
+    """Sum of per-image size_request heights (+ gaps) for N stacked previews."""
+    n = _clamp_n_images(n_images)
+    _pw, per_h = _preview_max_wh(
+        monitor_wh,
+        maximized=maximized,
+        expanded=expanded,
+        n_images=n,
+    )
+    return int(per_h) * n + _IMAGE_STACK_GAP * (n - 1)
+
+
 def _image_mcq_default_size(
     monitor_wh: tuple[int, int],
     *,
     prefs_w: int = 520,
     prefs_h: int = 480,
+    n_images: int = 1,
 ) -> tuple[int, int]:
-    """Default image-MCQ window size — fits usable host/smallest monitor."""
+    """Default image-MCQ window size — fits usable *primary* monitor."""
     uw, uh = _usable_monitor_wh(monitor_wh)
-    prev_w, prev_h = _preview_max_wh(
+    prev_w, stack_h = _preview_stack_max_wh(
         monitor_wh, maximized=False, expanded=True
     )
+    # Multi-image still uses the same stack budget (not N× single height).
+    _ = _clamp_n_images(n_images)
     need_w = min(uw, prev_w + _EDGE_MARGIN_W)
-    need_h = min(uh, prev_h + _IMAGE_MCQ_CHROME_H)
+    need_h = min(uh, stack_h + _IMAGE_MCQ_CHROME_H)
     # Soft target ~88×90% usable; never exceed usable; no absolute 720×700
     # floors that can outgrow a small panel.
     geom_w = min(uw, max(int(prefs_w), int(uw * 0.88), need_w))
@@ -254,11 +309,12 @@ def _workarea_wh_for_window(win: object) -> tuple[int, int] | None:
 def _display_size_px(display: object | None = None) -> tuple[int, int]:
     """Best-effort monitor size for image-MCQ window defaults (Gtk4).
 
-    Prefer the monitor under the pointer; else the smallest connected output.
-    Maximize remains compositor-local to whichever monitor hosts the window.
+    Prefer the OS *primary* panel (Framework eDP when marked primary), else the
+    smallest connected output — never the largest / never pointer-on-4K.
+    Soft-fill maximize stays within the dialog host's usable workarea.
     """
     sizes: list[tuple[int, int]] = []
-    rects: list[tuple[int, int, int, int]] = []
+    primary_wh: tuple[int, int] | None = None
     try:
         import gi
 
@@ -287,14 +343,22 @@ def _display_size_px(display: object | None = None) -> tuple[int, int]:
                 w, h = int(geom.width), int(geom.height)
                 if w > 0 and h > 0:
                     sizes.append((w, h))
-                    rects.append((int(geom.x), int(geom.y), w, h))
+                    is_pri = getattr(mon, "is_primary", None)
+                    if primary_wh is None and callable(is_pri):
+                        try:
+                            if bool(is_pri()):
+                                primary_wh = (w, h)
+                        except Exception:  # noqa: BLE001
+                            pass
     except Exception:  # noqa: BLE001
         pass
+    if sizes and primary_wh is not None:
+        return _pick_sizing_monitor_wh(sizes, preferred=primary_wh)
     if sizes:
-        preferred = _monitor_wh_under_pointer(rects)
-        return _pick_sizing_monitor_wh(sizes, preferred=preferred)
-    # Gdk sometimes has no monitors early; prefer a single connected output
-    # (xrandr) over xdpyinfo's combined virtual desktop on multi-head.
+        # Gdk often lacks is_primary on Wayland — fall through to xrandr
+        # primary, then smallest among Gdk sizes.
+        pass
+    # Gdk sometimes has no monitors early; also used to learn xrandr primary.
     try:
         import re
 
@@ -306,23 +370,28 @@ def _display_size_px(display: object | None = None) -> tuple[int, int]:
             stderr=subprocess.DEVNULL,
         )
         x_sizes: list[tuple[int, int]] = []
-        x_rects: list[tuple[int, int, int, int]] = []
+        x_primary: tuple[int, int] | None = None
         for line in out.splitlines():
-            # e.g. "DP-2 connected primary 3840x2160+1803+0 ..."
+            # e.g. "eDP-1 connected primary 1803x1202+0+1386 ..."
+            #      "DP-2 connected 3840x2160+1803+0 ..."
             m = re.search(
-                r" connected(?: primary)? (\d+)x(\d+)\+(\d+)\+(\d+)",
+                r" connected( primary)? (\d+)x(\d+)\+(\d+)\+(\d+)",
                 line,
             )
             if not m:
                 continue
-            w, h = int(m.group(1)), int(m.group(2))
+            w, h = int(m.group(2)), int(m.group(3))
             x_sizes.append((w, h))
-            x_rects.append((int(m.group(3)), int(m.group(4)), w, h))
-        if x_sizes:
-            preferred = _monitor_wh_under_pointer(x_rects)
-            return _pick_sizing_monitor_wh(x_sizes, preferred=preferred)
+            if m.group(1) is not None:
+                x_primary = (w, h)
+        preferred = primary_wh or x_primary
+        pool = sizes or x_sizes
+        if pool:
+            return _pick_sizing_monitor_wh(pool, preferred=preferred)
     except Exception:  # noqa: BLE001
         pass
+    if sizes:
+        return _pick_sizing_monitor_wh(sizes, preferred=primary_wh)
     return 1280, 800
 
 
@@ -568,10 +637,14 @@ def _main() -> int:
                 pass
         scr_w, scr_h = _display_size_px(win.get_display())
         if image_paths:
-            # Image MCQs open large but must fit usable host/smallest monitor
-            # (preview + chrome). Absolute 720×700 floors overflowed eDP.
+            # Image MCQs open large but must fit usable *primary* monitor
+            # (preview stack + chrome). Absolute 720×700 floors overflowed eDP;
+            # multi-image must share one stack budget (not N× single height).
             geom_w, geom_h = _image_mcq_default_size(
-                (scr_w, scr_h), prefs_w=geom_w, prefs_h=geom_h
+                (scr_w, scr_h),
+                prefs_w=geom_w,
+                prefs_h=geom_h,
+                n_images=len(image_paths),
             )
         else:
             # Never reopen at a near-fullscreen height left by a previous tall
@@ -829,11 +902,23 @@ def _main() -> int:
         max_btn: Gtk.Button | None = None
 
         def _preview_limits() -> tuple[int, int]:
-            """Return (max_w, max_h) for compact / expanded / maximized mode."""
+            """Return per-image (max_w, max_h) for compact/expanded/maximized."""
             host = None
             if win.is_maximized() or soft_maximized["v"]:
                 host = _workarea_wh_for_window(win)
             return _preview_max_wh(
+                host or (scr_w, scr_h),
+                maximized=bool(win.is_maximized() or soft_maximized["v"]),
+                expanded=bool(preview_expanded["v"]),
+                n_images=max(1, len(image_paths)),
+            )
+
+        def _stack_budget() -> tuple[int, int]:
+            """Total preview-stack (max_w, max_h) — never N× per-image."""
+            host = None
+            if win.is_maximized() or soft_maximized["v"]:
+                host = _workarea_wh_for_window(win)
+            return _preview_stack_max_wh(
                 host or (scr_w, scr_h),
                 maximized=bool(win.is_maximized() or soft_maximized["v"]),
                 expanded=bool(preview_expanded["v"]),
@@ -920,17 +1005,19 @@ def _main() -> int:
 
             def _after_maximize() -> bool:
                 host = _workarea_wh_for_window(win) or (scr_w, scr_h)
-                hw, hh = int(host[0]), int(host[1])
+                # Soft-fill only within usable host workarea (primary/eDP when
+                # that is where the dialog lives) — never a raw 4K geometry.
+                uw, uh = _usable_monitor_wh((int(host[0]), int(host[1])))
                 cur_w = int(win.get_width() or 0)
                 cur_h = int(win.get_height() or 0)
                 # Compositor maximize sometimes only grows one axis (seen on
                 # dual-head Wayland). set_default_size is ignored while
-                # is_maximized — unmaximize then size to the host panel.
-                grew = cur_w >= int(hw * 0.92) and cur_h >= int(hh * 0.90)
-                if hw > 0 and hh > 0 and not grew:
+                # is_maximized — unmaximize then size to usable host.
+                grew = cur_w >= int(uw * 0.92) and cur_h >= int(uh * 0.90)
+                if uw > 0 and uh > 0 and not grew:
                     if win.is_maximized():
                         win.unmaximize()
-                    win.set_default_size(hw, hh)
+                    win.set_default_size(uw, uh)
                 _apply_preview_scale()
                 _sync_max_btn()
                 return False
@@ -953,11 +1040,19 @@ def _main() -> int:
         root.append(header)
 
         def _append_image_previews(parent: Gtk.Box) -> None:
-            """PNG/JPEG preview above the question; click toggles large/compact."""
+            """PNG/JPEG preview above the question; click toggles large/compact.
+
+            Multi-image: each still shares the stack height budget and the
+            stack lives in a scrolled viewport so size_request mins cannot
+            force a window taller than primary usable.
+            """
             if not image_paths:
                 return
             max_w, max_h = _preview_limits()
-            box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+            stack_w, stack_h = _stack_budget()
+            box = Gtk.Box(
+                orientation=Gtk.Orientation.VERTICAL, spacing=_IMAGE_STACK_GAP
+            )
             box.set_margin_top(8)
             box.set_margin_start(16)
             box.set_margin_end(16)
@@ -995,6 +1090,7 @@ def _main() -> int:
                 except AttributeError:
                     pass
                 picture.set_halign(Gtk.Align.CENTER)
+                # Cap each still; N× this height stays ≤ stack_h (+ gaps).
                 picture.set_size_request(
                     -1, min(max_h, int(pixbuf.get_height()))
                 )
@@ -1021,8 +1117,25 @@ def _main() -> int:
                 frame.set_child(picture)
                 box.append(frame)
                 shown += 1
-            if shown:
-                parent.append(box)
+            if not shown:
+                return
+            # Viewport capped to stack budget (+ hint). ScrolledWindow keeps
+            # child size_request mins from forcing the outer window past
+            # primary usable; per-image heights already share stack_h.
+            max_scroll_h = int(stack_h) + _IMAGE_HINT_RESERVE_H
+            scroll = Gtk.ScrolledWindow()
+            scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+            scroll.set_vexpand(False)
+            scroll.set_hexpand(True)
+            scroll.set_propagate_natural_height(True)
+            try:
+                scroll.set_max_content_height(max_scroll_h)
+            except AttributeError:
+                # Older Gtk: hard-cap only when multiple stills would stack tall.
+                if shown > 1:
+                    scroll.set_size_request(min(int(stack_w), max_w), max_scroll_h)
+            scroll.set_child(box)
+            parent.append(scroll)
 
         _append_image_previews(root)
 

@@ -82,11 +82,15 @@ skill via `ask-question-install --skill` (`~/.cursor/skills/ask-multiple-choice`
 **Images in the dialog (Linux Gtk):** pass an absolute path or `file://` URI so
 Alex sees the still *inside* the MCQ (not only in chat). Chat `Read` of a PNG
 does not put pixels in the dialog — use `image` / `images`. When images are
-present the window opens large (~70%+ of the monitor); click the preview to
-toggle compact (~320px) vs large, and use the header maximize button or **F**
-for a near-fullscreen window. Text-only MCQs stay compact. Windows Phase 1
-ignores these args (text-only). Pattern: `mcq-with-image` (signed-off —
-agents **must** pass `image=`/`images=` when the human must judge a still).
+present the window opens large on the **primary** usable workarea (not the
+largest / secondary 4K); click the preview to toggle compact (~320px) vs large,
+and use the header maximize button or **F** for a soft-fill on the host panel.
+**Multi-image (`images=`, max 4): the whole stack must fit ≤ primary usable
+resolution** — previews share one height budget and scroll inside; never open a
+window taller/wider than the primary (or smaller host) display. Text-only MCQs
+stay compact. Windows Phase 1 ignores these args (text-only). Pattern:
+`mcq-with-image` (signed-off — agents **must** pass `image=`/`images=` when the
+human must judge a still).
 
 ### Example (single choice)
 

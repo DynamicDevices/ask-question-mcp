@@ -70,19 +70,23 @@ def test_window_geometry(tmp_path: Path | None = None) -> None:
 
 
 def test_pick_sizing_monitor_wh() -> None:
-    """Dual-monitor: defaults follow host or smallest panel, not 4K."""
+    """Dual-monitor: defaults follow primary or smallest panel, not 4K."""
     mod = _load_gtk4_list_ask()
 
     laptop = (1803, 1202)
     external = (3840, 2160)
     assert mod._pick_sizing_monitor_wh([laptop, external]) == laptop
     assert mod._pick_sizing_monitor_wh([external, laptop]) == laptop
+    # Explicit preferred = primary (even if not the smallest).
+    assert mod._pick_sizing_monitor_wh(
+        [laptop, external], preferred=laptop
+    ) == laptop
     assert mod._pick_sizing_monitor_wh(
         [laptop, external], preferred=external
     ) == external
     assert mod._pick_sizing_monitor_wh([], preferred=None) == (1280, 800)
 
-    # Pointer on eDP vs DP-2 (Alex Framework + Samsung layout).
+    # Pointer helper still works for diagnostics; sizing no longer uses it.
     rects = [(0, 1386, 1803, 1202), (1803, 0, 3840, 2160)]
     import subprocess as sp
 
@@ -121,18 +125,27 @@ def test_image_mcq_sizing_fits_laptop() -> None:
     assert uw == 1803 - mod._EDGE_MARGIN_W
     assert uh == 1202 - mod._PANEL_RESERVE_H
 
-    exp_w, exp_h = mod._preview_max_wh(laptop, maximized=False, expanded=True)
-    assert exp_h + mod._IMAGE_MCQ_CHROME_H <= uh
-    assert exp_w <= uw
-    assert exp_h < int(uh * 0.55)  # ~50% usable, not old 62% raw
+    stack_w, stack_h = mod._preview_stack_max_wh(
+        laptop, maximized=False, expanded=True
+    )
+    assert stack_h + mod._IMAGE_MCQ_CHROME_H <= uh
+    assert stack_w <= uw
+    assert stack_h < int(uh * 0.55)  # ~50% usable, not old 62% raw
 
-    compact = mod._preview_max_wh(laptop, maximized=False, expanded=False)
+    exp_w, exp_h = mod._preview_max_wh(
+        laptop, maximized=False, expanded=True, n_images=1
+    )
+    assert exp_w == stack_w and exp_h == stack_h
+
+    compact = mod._preview_max_wh(
+        laptop, maximized=False, expanded=False, n_images=1
+    )
     assert compact[1] <= 280
     assert compact[0] <= 640
 
     geom_w, geom_h = mod._image_mcq_default_size(laptop)
     assert geom_w <= uw and geom_h <= uh
-    assert geom_h >= exp_h + mod._IMAGE_MCQ_CHROME_H - 1
+    assert geom_h >= stack_h + mod._IMAGE_MCQ_CHROME_H - 1
     # Must not use absolute floors that exceed a small panel.
     tiny = (800, 600)
     tw, th = mod._image_mcq_default_size(tiny)
@@ -144,12 +157,16 @@ def test_image_mcq_sizing_fits_laptop() -> None:
     assert g4k[0] > geom_w  # larger host → larger default
     # But pick_sizing prefers laptop when both present (covered elsewhere).
 
-    max_w, max_h = mod._preview_max_wh(laptop, maximized=True, expanded=True)
+    max_w, max_h = mod._preview_max_wh(
+        laptop, maximized=True, expanded=True, n_images=1
+    )
     assert max_w > exp_w and max_h > exp_h
     assert max_h == 1202 - mod._IMAGE_MCQ_CHROME_H
 
     # Maximize on host 4K while defaults were laptop-sized.
-    big_w, big_h = mod._preview_max_wh(external, maximized=True, expanded=True)
+    big_w, big_h = mod._preview_max_wh(
+        external, maximized=True, expanded=True, n_images=1
+    )
     assert big_w == 3840 - mod._EDGE_MARGIN_W
     assert big_h == 2160 - mod._IMAGE_MCQ_CHROME_H
     assert big_w > max_w
@@ -160,11 +177,52 @@ def test_image_mcq_sizing_fits_laptop() -> None:
     assert text_w <= 900 and text_h <= 480
 
 
+def test_multi_image_stack_fits_primary() -> None:
+    """Fake primary 1803×1202 + 2–3 large stills → window/stack ≤ usable.
+
+    Regression: each preview used the full single-image height size_request,
+    so N stacked images summed past the Framework eDP primary.
+    """
+    mod = _load_gtk4_list_ask()
+    primary = (1803, 1202)
+    uw, uh = mod._usable_monitor_wh(primary)
+    stack_w, stack_h = mod._preview_stack_max_wh(
+        primary, maximized=False, expanded=True
+    )
+
+    for n in (2, 3, 4):
+        per_w, per_h = mod._preview_max_wh(
+            primary, maximized=False, expanded=True, n_images=n
+        )
+        assert per_w <= stack_w <= uw
+        req_h = mod._multi_image_stack_request_h(
+            primary, maximized=False, expanded=True, n_images=n
+        )
+        assert req_h <= stack_h
+        assert per_h * n + mod._IMAGE_STACK_GAP * (n - 1) == req_h
+        # Old bug: N × ~50% usable ≫ primary height.
+        assert n * per_h < uh
+        geom_w, geom_h = mod._image_mcq_default_size(primary, n_images=n)
+        assert geom_w <= uw and geom_h <= uh
+        assert geom_h <= uh
+
+    # Compact multi-image also divides — 3×280 must not win.
+    c_req = mod._multi_image_stack_request_h(
+        primary, maximized=False, expanded=False, n_images=3
+    )
+    _cw, c_stack = mod._preview_stack_max_wh(
+        primary, maximized=False, expanded=False
+    )
+    assert c_req <= c_stack <= 280
+    assert c_req + mod._IMAGE_MCQ_CHROME_H <= uh
+
+
 def main() -> None:
     test_hotkeys()
     test_window_geometry()
     test_pick_sizing_monitor_wh()
     test_image_mcq_sizing_fits_laptop()
+    test_multi_image_stack_fits_primary()
     print("OK dialog ergonomics (hotkeys + window geometry + sizing)")
 
 

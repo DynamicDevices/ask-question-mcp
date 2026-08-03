@@ -34,10 +34,12 @@ choose among options the human must decide.
 7. **Images the human must judge** (Alex loves this — signed-off 2026-08-03):
    pass **`image=`** (one path / `file://` URI) or **`images=`** (list, max 4).
    Chat `Read` of a PNG does **not** put pixels in the MCQ — agents **must**
-   pass the path into the dialog. Linux Gtk: opens large (~70%+ monitor);
-   human can **click the preview** (large ↔ compact ~320px) and **maximize**
-   (header button or **F**). Text-only MCQs stay compact. Pattern:
-   `mcq-with-image`.
+   pass the path into the dialog. Linux Gtk: opens large on the **primary**
+   usable workarea (not the largest secondary); human can **click the preview**
+   (large ↔ compact ~320px) and **maximize** (header button or **F**).
+   **P0 — multi-image must never exceed primary usable resolution** (stack
+   shares one height budget / scrolls inside). Text-only MCQs stay compact.
+   Pattern: `mcq-with-image`.
 8. Wait for the JSON result. On cancel → stop. On freeform → use **`freeform_text`**.
 
 Humans use the dialog keyboard (**1–8**, Enter, Esc; **F** maximize when images);
