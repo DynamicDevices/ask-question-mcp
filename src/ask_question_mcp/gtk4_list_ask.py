@@ -70,6 +70,64 @@ def _ipc_root() -> Path:
     return Path.home() / ".cache" / "ask-question-mcp"
 
 
+def _display_size_px(display: object | None = None) -> tuple[int, int]:
+    """Best-effort monitor size for image-MCQ window defaults (Gtk4)."""
+    best_w, best_h = 0, 0
+    try:
+        import gi
+
+        gi.require_version("Gdk", "4.0")
+        from gi.repository import Gdk
+
+        disp = display if display is not None else Gdk.Display.get_default()
+        if disp is not None:
+            monitors = disp.get_monitors()
+            n = int(monitors.get_n_items()) if monitors is not None else 0
+            for i in range(n):
+                mon = monitors.get_item(i)
+                if mon is None:
+                    continue
+                geom = mon.get_geometry()
+                w, h = int(geom.width), int(geom.height)
+                if w * h > best_w * best_h:
+                    best_w, best_h = w, h
+    except Exception:  # noqa: BLE001
+        pass
+    if best_w >= 800 and best_h >= 600:
+        return best_w, best_h
+    # Gdk sometimes has no monitors early; prefer a single connected output
+    # (xrandr) over xdpyinfo's combined virtual desktop on multi-head.
+    try:
+        import re
+
+        out = subprocess.check_output(
+            ["xrandr", "--current"],
+            env=os.environ,
+            text=True,
+            timeout=2,
+            stderr=subprocess.DEVNULL,
+        )
+        # Prefer the largest connected mode (laptop "primary" is often a
+        # scaled eDP while the big external panel is where stills are judged).
+        largest = (0, 0)
+        for line in out.splitlines():
+            # e.g. "DP-2 connected primary 3840x2160+1803+0 ..."
+            m = re.search(
+                r" connected(?: primary)? (\d+)x(\d+)\+",
+                line,
+            )
+            if not m:
+                continue
+            w, h = int(m.group(1)), int(m.group(2))
+            if w * h > largest[0] * largest[1]:
+                largest = (w, h)
+        if largest[0] >= 800:
+            return largest
+    except Exception:  # noqa: BLE001
+        pass
+    return 1280, 800
+
+
 def _stop_question_audio(pgid_file: str | None) -> None:
     """Kill question playback as soon as OK/Cancel is pressed."""
     path = Path(pgid_file) if pgid_file else (_ipc_root() / "speak.pgid")
@@ -310,16 +368,26 @@ def _main() -> int:
                 geom_h = int(g.get("h") or geom_h)
             except Exception:  # noqa: BLE001
                 pass
-        # Never reopen at a near-fullscreen height left by a previous tall
-        # Confirm dialog — that left a huge empty band under Cancel/OK.
-        geom_w = min(max(geom_w, 420), 900)
-        geom_h = min(max(geom_h, 360), 560)
-        if len(question) < 200 and len(ids) <= 6 and not image_paths:
-            geom_h = min(geom_h, 480)
+        scr_w, scr_h = _display_size_px(win.get_display())
         if image_paths:
-            # Room for ~320px preview + question + options without crushing OK.
-            geom_w = min(max(geom_w, 640), 1100)
-            geom_h = min(max(geom_h, 640), 900)
+            # Image MCQs open large (~72×78% of the monitor) so stills are
+            # readable; text-only stays compact below. Persisted prefs are
+            # capped on save, so they only seed a floor here.
+            geom_w = min(
+                max(geom_w, int(scr_w * 0.72), 720),
+                max(scr_w - 48, 720),
+            )
+            geom_h = min(
+                max(geom_h, int(scr_h * 0.78), 700),
+                max(scr_h - 72, 700),
+            )
+        else:
+            # Never reopen at a near-fullscreen height left by a previous tall
+            # Confirm dialog — that left a huge empty band under Cancel/OK.
+            geom_w = min(max(geom_w, 420), 900)
+            geom_h = min(max(geom_h, 360), 560)
+            if len(question) < 200 and len(ids) <= 6:
+                geom_h = min(geom_h, 480)
         win.set_default_size(geom_w, geom_h)
         win.set_modal(True)
 
@@ -409,6 +477,9 @@ def _main() -> int:
               min-height: 0;
               padding-top: 4px;
               padding-bottom: 4px;
+            }
+            picture.ask-q-image-preview {
+              cursor: pointer;
             }
             """
         )
@@ -553,19 +624,85 @@ def _main() -> int:
             header_replay.add_css_class("flat")
             header_replay.connect("clicked", on_replay)
             header.pack_end(header_replay)
+
+        def toggle_window_maximize(*_args: object) -> None:
+            if win.is_maximized():
+                win.unmaximize()
+            else:
+                win.maximize()
+
+        if image_paths:
+            # Maximize / restore so large stills can use most of the screen.
+            max_btn = Gtk.Button()
+            max_btn.set_icon_name("window-maximize-symbolic")
+            max_btn.set_tooltip_text("Maximize / restore window (F)")
+            max_btn.set_focusable(False)
+            max_btn.add_css_class("flat")
+            max_btn.connect("clicked", toggle_window_maximize)
+            header.pack_end(max_btn)
         root.append(header)
 
+        # Preview scale state shared with click-toggle + keyboard (F = maximize).
+        preview_expanded = {"v": True}
+        preview_pictures: list[tuple[str, Gtk.Picture]] = []
+
+        def _preview_limits() -> tuple[int, int]:
+            """Return (max_w, max_h) for the current compact/expanded mode."""
+            if preview_expanded["v"]:
+                # Leave room for question + options + footer (~280px chrome).
+                max_h = max(420, min(int(scr_h * 0.62), scr_h - 280))
+                max_w = max(720, min(int(scr_w * 0.85), scr_w - 80))
+                return max_w, max_h
+            return 720, 320
+
+        def _apply_preview_scale() -> None:
+            max_w, max_h = _preview_limits()
+            for path, picture in preview_pictures:
+                try:
+                    pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(
+                        path, max_w, max_h, True
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    print(
+                        f"ask-question: skip image {path}: {exc}",
+                        file=sys.stderr,
+                    )
+                    continue
+                if pixbuf is None:
+                    continue
+                try:
+                    texture = Gdk.Texture.new_for_pixbuf(pixbuf)
+                    picture.set_paintable(texture)
+                except Exception:  # noqa: BLE001
+                    pass
+                picture.set_size_request(
+                    -1, min(max_h, int(pixbuf.get_height()))
+                )
+                tip = (
+                    f"{path}\nClick: compact preview"
+                    if preview_expanded["v"]
+                    else f"{path}\nClick: larger preview"
+                )
+                picture.set_tooltip_text(tip)
+
         def _append_image_previews(parent: Gtk.Box) -> None:
-            """Scaled PNG/JPEG preview above the question (max height ~320px)."""
+            """PNG/JPEG preview above the question; click toggles large/compact."""
             if not image_paths:
                 return
-            max_h, max_w = 320, 720
+            max_w, max_h = _preview_limits()
             box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
             box.set_margin_top(8)
             box.set_margin_start(16)
             box.set_margin_end(16)
             box.set_margin_bottom(4)
             box.set_hexpand(True)
+            hint = Gtk.Label(
+                label="Click image to enlarge/shrink · header button or F maximizes"
+            )
+            hint.add_css_class("dim-label")
+            hint.set_xalign(0.0)
+            hint.set_wrap(True)
+            box.append(hint)
             shown = 0
             for path in image_paths:
                 try:
@@ -591,8 +728,28 @@ def _main() -> int:
                 except AttributeError:
                     pass
                 picture.set_halign(Gtk.Align.CENTER)
-                picture.set_size_request(-1, min(max_h, int(pixbuf.get_height())))
-                picture.set_tooltip_text(path)
+                picture.set_size_request(
+                    -1, min(max_h, int(pixbuf.get_height()))
+                )
+                picture.add_css_class("ask-q-image-preview")
+                picture.set_tooltip_text(
+                    f"{path}\nClick: compact preview"
+                )
+                preview_pictures.append((path, picture))
+
+                def _on_preview_click(
+                    _gesture: Gtk.GestureClick,
+                    _n: int,
+                    _x: float,
+                    _y: float,
+                    *_rest: object,
+                ) -> None:
+                    preview_expanded["v"] = not preview_expanded["v"]
+                    _apply_preview_scale()
+
+                click = Gtk.GestureClick()
+                click.connect("released", _on_preview_click)
+                picture.add_controller(click)
                 frame = Gtk.Frame()
                 frame.set_child(picture)
                 box.append(frame)
@@ -1688,6 +1845,9 @@ def _main() -> int:
                 Gdk.KEY_L,
             ):
                 on_listen()
+                return True
+            if image_paths and keyval in (Gdk.KEY_f, Gdk.KEY_F):
+                toggle_window_maximize()
                 return True
             # Explicitly do not treat Space as confirm (GTK would activate a
             # focused button; we keep focus on options instead).

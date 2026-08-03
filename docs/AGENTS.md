@@ -81,8 +81,12 @@ skill via `ask-question-install --skill` (`~/.cursor/skills/ask-multiple-choice`
 
 **Images in the dialog (Linux Gtk):** pass an absolute path or `file://` URI so
 Alex sees the still *inside* the MCQ (not only in chat). Chat `Read` of a PNG
-does not put pixels in the dialog — use `image` / `images`. Windows Phase 1
-ignores these args (text-only). Pattern: `mcq-with-image`.
+does not put pixels in the dialog — use `image` / `images`. When images are
+present the window opens large (~70%+ of the monitor); click the preview to
+toggle compact (~320px) vs large, and use the header maximize button or **F**
+for a near-fullscreen window. Text-only MCQs stay compact. Windows Phase 1
+ignores these args (text-only). Pattern: `mcq-with-image` (signed-off —
+agents **must** pass `image=`/`images=` when the human must judge a still).
 
 ### Example (single choice)
 
@@ -162,6 +166,8 @@ footer hint. Useful when coaching a human or writing host docs:
 | **Enter** | Confirm OK after the arm delay (same as clicking OK). |
 | **Esc** / window close | Cancel. |
 | **R** / **L** | Replay question / Listen (Linux voice only, when configured). |
+| **Click preview** (image MCQs) | Toggle large vs compact (~320px) image scale. |
+| **F** / header maximize (image MCQs) | Maximize / restore the window so the still can use most of the screen. |
 
 Long `question` text is shown in a calm Confirm **card** when `dangerous`
 (soft pink, title + body). All question bodies (danger and normal) height-cap
