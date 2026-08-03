@@ -59,9 +59,59 @@ def test_window_geometry(tmp_path: Path | None = None) -> None:
             prefs_mod._PREFS_PATH = old
 
 
+def test_pick_sizing_monitor_wh() -> None:
+    """Dual-monitor: defaults follow host or smallest panel, not 4K."""
+    # Import helpers without running the Gtk dialog entrypoint.
+    import importlib.util
+
+    path = ROOT / "src" / "ask_question_mcp" / "gtk4_list_ask.py"
+    spec = importlib.util.spec_from_file_location("gtk4_list_ask_under_test", path)
+    assert spec is not None and spec.loader is not None
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+
+    laptop = (1803, 1202)
+    external = (3840, 2160)
+    assert mod._pick_sizing_monitor_wh([laptop, external]) == laptop
+    assert mod._pick_sizing_monitor_wh([external, laptop]) == laptop
+    assert mod._pick_sizing_monitor_wh(
+        [laptop, external], preferred=external
+    ) == external
+    assert mod._pick_sizing_monitor_wh([], preferred=None) == (1280, 800)
+
+    # Pointer on eDP vs DP-2 (Alex Framework + Samsung layout).
+    rects = [(0, 1386, 1803, 1202), (1803, 0, 3840, 2160)]
+    import subprocess as sp
+
+    real_check = sp.check_output
+
+    def fake_check(cmd, **kwargs):  # type: ignore[no-untyped-def]
+        if cmd and cmd[0] == "xdotool":
+            return "X=200\nY=1500\nSCREEN=0\nWINDOW=0\n"
+        return real_check(cmd, **kwargs)
+
+    sp.check_output = fake_check  # type: ignore[assignment]
+    try:
+        assert mod._monitor_wh_under_pointer(rects) == laptop
+    finally:
+        sp.check_output = real_check  # type: ignore[assignment]
+
+    def fake_check_big(cmd, **kwargs):  # type: ignore[no-untyped-def]
+        if cmd and cmd[0] == "xdotool":
+            return "X=2500\nY=500\nSCREEN=0\nWINDOW=0\n"
+        return real_check(cmd, **kwargs)
+
+    sp.check_output = fake_check_big  # type: ignore[assignment]
+    try:
+        assert mod._monitor_wh_under_pointer(rects) == external
+    finally:
+        sp.check_output = real_check  # type: ignore[assignment]
+
+
 def main() -> None:
     test_hotkeys()
     test_window_geometry()
+    test_pick_sizing_monitor_wh()
     print("OK dialog ergonomics (hotkeys + window geometry)")
 
 

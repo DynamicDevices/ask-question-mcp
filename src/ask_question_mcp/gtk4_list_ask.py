@@ -70,9 +70,75 @@ def _ipc_root() -> Path:
     return Path.home() / ".cache" / "ask-question-mcp"
 
 
+def _pick_sizing_monitor_wh(
+    sizes: list[tuple[int, int]],
+    *,
+    preferred: tuple[int, int] | None = None,
+) -> tuple[int, int]:
+    """Pick width/height for dialog defaults / clamps.
+
+    Dual-monitor: size against the host monitor when known, otherwise the
+    *smallest* connected display — never the largest (a 4K panel must not
+    drive defaults that overflow a laptop eDP).
+    """
+    if preferred is not None:
+        pw, ph = int(preferred[0]), int(preferred[1])
+        if pw > 0 and ph > 0:
+            return pw, ph
+    usable = [(int(w), int(h)) for w, h in sizes if int(w) > 0 and int(h) > 0]
+    if not usable:
+        return 1280, 800
+    return min(usable, key=lambda wh: wh[0] * wh[1])
+
+
+def _monitor_wh_under_pointer(
+    rects: list[tuple[int, int, int, int]],
+) -> tuple[int, int] | None:
+    """Return (w, h) of the monitor containing the pointer, if known.
+
+    ``rects`` are ``(x, y, w, h)`` in the same coordinate space as the pointer
+    query (X11 / XWayland via ``xdotool`` when available).
+    """
+    if not rects:
+        return None
+    try:
+        out = subprocess.check_output(
+            ["xdotool", "getmouselocation", "--shell"],
+            env=os.environ,
+            text=True,
+            timeout=1,
+            stderr=subprocess.DEVNULL,
+        )
+    except Exception:  # noqa: BLE001
+        return None
+    px = py = None
+    for line in out.splitlines():
+        if line.startswith("X="):
+            try:
+                px = int(line.split("=", 1)[1])
+            except ValueError:
+                return None
+        elif line.startswith("Y="):
+            try:
+                py = int(line.split("=", 1)[1])
+            except ValueError:
+                return None
+    if px is None or py is None:
+        return None
+    for x, y, w, h in rects:
+        if x <= px < x + w and y <= py < y + h:
+            return w, h
+    return None
+
+
 def _display_size_px(display: object | None = None) -> tuple[int, int]:
-    """Best-effort monitor size for image-MCQ window defaults (Gtk4)."""
-    best_w, best_h = 0, 0
+    """Best-effort monitor size for image-MCQ window defaults (Gtk4).
+
+    Prefer the monitor under the pointer; else the smallest connected output.
+    Maximize remains compositor-local to whichever monitor hosts the window.
+    """
+    sizes: list[tuple[int, int]] = []
+    rects: list[tuple[int, int, int, int]] = []
     try:
         import gi
 
@@ -87,14 +153,26 @@ def _display_size_px(display: object | None = None) -> tuple[int, int]:
                 mon = monitors.get_item(i)
                 if mon is None:
                     continue
-                geom = mon.get_geometry()
+                # Prefer workarea (excludes panels) when the backend exposes it;
+                # GdkWaylandMonitor often only has full geometry.
+                geom = None
+                get_wa = getattr(mon, "get_workarea", None)
+                if callable(get_wa):
+                    try:
+                        geom = get_wa()
+                    except Exception:  # noqa: BLE001
+                        geom = None
+                if geom is None:
+                    geom = mon.get_geometry()
                 w, h = int(geom.width), int(geom.height)
-                if w * h > best_w * best_h:
-                    best_w, best_h = w, h
+                if w > 0 and h > 0:
+                    sizes.append((w, h))
+                    rects.append((int(geom.x), int(geom.y), w, h))
     except Exception:  # noqa: BLE001
         pass
-    if best_w >= 800 and best_h >= 600:
-        return best_w, best_h
+    if sizes:
+        preferred = _monitor_wh_under_pointer(rects)
+        return _pick_sizing_monitor_wh(sizes, preferred=preferred)
     # Gdk sometimes has no monitors early; prefer a single connected output
     # (xrandr) over xdpyinfo's combined virtual desktop on multi-head.
     try:
@@ -107,22 +185,22 @@ def _display_size_px(display: object | None = None) -> tuple[int, int]:
             timeout=2,
             stderr=subprocess.DEVNULL,
         )
-        # Prefer the largest connected mode (laptop "primary" is often a
-        # scaled eDP while the big external panel is where stills are judged).
-        largest = (0, 0)
+        x_sizes: list[tuple[int, int]] = []
+        x_rects: list[tuple[int, int, int, int]] = []
         for line in out.splitlines():
             # e.g. "DP-2 connected primary 3840x2160+1803+0 ..."
             m = re.search(
-                r" connected(?: primary)? (\d+)x(\d+)\+",
+                r" connected(?: primary)? (\d+)x(\d+)\+(\d+)\+(\d+)",
                 line,
             )
             if not m:
                 continue
             w, h = int(m.group(1)), int(m.group(2))
-            if w * h > largest[0] * largest[1]:
-                largest = (w, h)
-        if largest[0] >= 800:
-            return largest
+            x_sizes.append((w, h))
+            x_rects.append((int(m.group(3)), int(m.group(4)), w, h))
+        if x_sizes:
+            preferred = _monitor_wh_under_pointer(x_rects)
+            return _pick_sizing_monitor_wh(x_sizes, preferred=preferred)
     except Exception:  # noqa: BLE001
         pass
     return 1280, 800
