@@ -70,7 +70,7 @@ skill via `ask-question-install --skill` (`~/.cursor/skills/ask-multiple-choice`
 | `recommended_ids` | string[] \| null | no | Multi-select preferred ids |
 | `allow_multiple` | bool | no | default `false` (radio); `true` = checklist |
 | `allow_other` | bool | no | **Ignored** — Something else is always appended when missing |
-| `dangerous` | bool | no | Danger chrome; OK/Enter armed ~4s (`ASK_QUESTION_DANGER_ARM_MS`). Normal MCQs arm ~1s (`ASK_QUESTION_ARM_MS`). |
+| `dangerous` | bool | no | Danger chrome; OK/Enter armed ~1s (`ASK_QUESTION_DANGER_ARM_MS`, same default as normal). Normal MCQs arm ~1s (`ASK_QUESTION_ARM_MS`). |
 | `speak` | bool | no | default `true` (honours mute env / missing TTS) |
 | `title` | string | no | default `"Decide"` — short noun phrase |
 | `agent` | string \| null | **strongly yes** | Window title prefix `[agent]` |
@@ -151,9 +151,10 @@ Routine forks stay short (no referent dump):
 }
 ```
 
-OK and Enter stay locked briefly after open (countdown on OK): **~1s** normal
-(`ASK_QUESTION_ARM_MS`), **~4s** when `dangerous` (`ASK_QUESTION_DANGER_ARM_MS`).
-Set either env to `0` to disable. Cancel / Escape always work immediately.
+OK and Enter stay locked briefly after open (countdown on OK): **~1s** for both
+normal (`ASK_QUESTION_ARM_MS`) and `dangerous` (`ASK_QUESTION_DANGER_ARM_MS`).
+(Dangerous used to be ~4s; shortened 2026-08-01.) Set either env to `0` to
+disable. Cancel / Escape always work immediately.
 
 ## Dialog UX (humans)
 

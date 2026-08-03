@@ -26,7 +26,7 @@ Canonical install steps: this file (and a one-line pointer from the
 9. Smoke **dangerous** — ask for an irreversible choice (`dangerous=true`). Expect:
    - Window title / options prefixed with **⛔** (no-entry)
    - Pink **Confirm** banner with the question
-   - Red **OK** that stays disabled ~4s (`OK (Ns)`) before confirm
+   - Red **OK** that stays disabled ~1s (`OK (Ns)`) before confirm
 10. Resize the dialog, OK, reopen — size (and position) should roughly match.
 11. When nudged for platform feedback: choose **works** (or open a GitHub issue) so
     maintainers can flip the README matrix row to **Verified**.

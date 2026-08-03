@@ -321,7 +321,7 @@ def main() -> int:
     if _danger_arm is not None:
         arm_ms = int(_danger_arm.danger_arm_ms(dangerous=show_danger))
     else:
-        arm_ms = 4000 if show_danger else 1000
+        arm_ms = 1000
     armed = {"v": arm_ms <= 0}
 
     def _arm_confirm() -> None:

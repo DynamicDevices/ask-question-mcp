@@ -1411,11 +1411,11 @@ def _main() -> int:
         root.append(footer)
 
         win.set_content(root)
-        # Dangerous dialogs arm for a few seconds so a stray Return cannot OK.
+        # Arm briefly so a stray Return cannot OK (default 1s; see danger_arm).
         if _danger_arm is not None:
             arm_ms = int(_danger_arm.danger_arm_ms(dangerous=dangerous))
         else:
-            arm_ms = 4000 if dangerous else 1000
+            arm_ms = 1000
         armed = {"v": arm_ms <= 0}
 
         def _arm_confirm() -> None:
