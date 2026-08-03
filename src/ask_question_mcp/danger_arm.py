@@ -4,9 +4,8 @@ Blocks OK / Enter until the countdown finishes so a stray Return from the
 previous keystroke (or mid-typing) cannot dismiss the dialog.
 
 - Normal MCQs: ``ASK_QUESTION_ARM_MS`` (default **1000**). Set ``0`` to disable.
-- Dangerous (no-entry mark): ``ASK_QUESTION_DANGER_ARM_MS`` (default **4000**).
-  Set ``0`` to disable the danger-only longer arm (safe arm still applies
-  unless also 0).
+- Dangerous (no-entry mark): ``ASK_QUESTION_DANGER_ARM_MS`` (default **1000**,
+  same as safe — Alex 2026-08-01; was 4000). Set ``0`` to disable.
 """
 
 from __future__ import annotations
@@ -17,7 +16,7 @@ import os
 DANGER_MARK = "⛔"
 
 DEFAULT_SAFE_ARM_MS = 1000
-DEFAULT_DANGER_ARM_MS = 4000
+DEFAULT_DANGER_ARM_MS = 1000
 ENV_SAFE_ARM_MS = "ASK_QUESTION_ARM_MS"
 ENV_DANGER_ARM_MS = "ASK_QUESTION_DANGER_ARM_MS"
 _MAX_ARM_MS = 60_000
@@ -56,9 +55,9 @@ def _parse_arm_ms(env_name: str, default: int) -> int:
 def danger_arm_ms(*, dangerous: bool = True) -> int:
     """Milliseconds to block OK / Enter after the dialog opens.
 
-    Dangerous dialogs use the longer danger arm (default 4s). Normal dialogs
-    use the safe arm (default 1s) so accidental Return while typing does not
-    confirm.
+    Dangerous and normal dialogs both default to 1s so accidental Return
+    while typing does not confirm. Override with ``ASK_QUESTION_DANGER_ARM_MS``
+    / ``ASK_QUESTION_ARM_MS`` if a longer danger arm is wanted.
     """
     if dangerous:
         return _parse_arm_ms(ENV_DANGER_ARM_MS, DEFAULT_DANGER_ARM_MS)

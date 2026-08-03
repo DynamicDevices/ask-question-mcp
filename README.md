@@ -90,7 +90,7 @@ Full env / prefs: [SETUP.md](SETUP.md). Never commit tokens.
 - Remembers last dialog size (`prefs.window`; position on Windows; size-only
   on typical Wayland)
 - Windows: scrollable option list
-- Danger chrome; OK/Enter briefly armed (~1s / ~4s)
+- Danger chrome; OK/Enter briefly armed (~1s)
 - Something else is always available (type, or Speak→STT when configured)
 - Works text-only without TTS/STT; lean JSON results by default
 - Optional TTS / mic answers / acks (auto-listen and acks **off** until opted in)
