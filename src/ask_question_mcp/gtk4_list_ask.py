@@ -131,6 +131,126 @@ def _monitor_wh_under_pointer(
     return None
 
 
+# Image-MCQ layout budget (header + hint + question + options floor + footer).
+# Preview height must leave this much room or Cancel/OK get crushed off-screen.
+_IMAGE_MCQ_CHROME_H = 400
+# GdkWaylandMonitor has no get_workarea — reserve for GNOME top panel / margins.
+_PANEL_RESERVE_H = 48
+_EDGE_MARGIN_W = 48
+
+
+def _usable_monitor_wh(monitor_wh: tuple[int, int]) -> tuple[int, int]:
+    """Usable px after edge/panel reserve (Wayland often lacks workarea)."""
+    w, h = int(monitor_wh[0]), int(monitor_wh[1])
+    if w <= 0 or h <= 0:
+        return 1280, 800
+    return max(320, w - _EDGE_MARGIN_W), max(280, h - _PANEL_RESERVE_H)
+
+
+def _preview_max_wh(
+    monitor_wh: tuple[int, int],
+    *,
+    maximized: bool,
+    expanded: bool,
+) -> tuple[int, int]:
+    """Return (max_w, max_h) for the image preview under current mode.
+
+    Expanded defaults stay inside a chrome budget so preview + question +
+    options + footer fit the usable host/smallest monitor. Maximized uses
+    nearly the *host* panel (dialog monitor), not the opening clamp.
+    """
+    raw_w, raw_h = int(monitor_wh[0]), int(monitor_wh[1])
+    if raw_w <= 0 or raw_h <= 0:
+        raw_w, raw_h = 1280, 800
+    if maximized:
+        budget_h = max(160, raw_h - _IMAGE_MCQ_CHROME_H)
+        budget_w = max(320, raw_w - _EDGE_MARGIN_W)
+        return budget_w, budget_h
+    uw, uh = _usable_monitor_wh((raw_w, raw_h))
+    budget_h = max(160, uh - _IMAGE_MCQ_CHROME_H)
+    budget_w = max(320, uw - 32)
+    if expanded:
+        # ~50% of usable height, never past chrome budget (old 62% overflowed
+        # Framework eDP once header/options/footer were added).
+        return (
+            max(320, min(int(uw * 0.90), budget_w)),
+            max(160, min(int(uh * 0.50), budget_h)),
+        )
+    return min(640, budget_w), min(280, budget_h)
+
+
+def _image_mcq_default_size(
+    monitor_wh: tuple[int, int],
+    *,
+    prefs_w: int = 520,
+    prefs_h: int = 480,
+) -> tuple[int, int]:
+    """Default image-MCQ window size — fits usable host/smallest monitor."""
+    uw, uh = _usable_monitor_wh(monitor_wh)
+    prev_w, prev_h = _preview_max_wh(
+        monitor_wh, maximized=False, expanded=True
+    )
+    need_w = min(uw, prev_w + _EDGE_MARGIN_W)
+    need_h = min(uh, prev_h + _IMAGE_MCQ_CHROME_H)
+    # Soft target ~88×90% usable; never exceed usable; no absolute 720×700
+    # floors that can outgrow a small panel.
+    geom_w = min(uw, max(int(prefs_w), int(uw * 0.88), need_w))
+    geom_h = min(uh, max(int(prefs_h), int(uh * 0.90), need_h))
+    return max(320, geom_w), max(280, geom_h)
+
+
+def _text_mcq_default_size(
+    monitor_wh: tuple[int, int],
+    *,
+    prefs_w: int = 520,
+    prefs_h: int = 480,
+    question_len: int = 0,
+    n_options: int = 0,
+) -> tuple[int, int]:
+    """Compact text-only MCQ size, clamped to usable monitor."""
+    uw, uh = _usable_monitor_wh(monitor_wh)
+    geom_w = min(max(int(prefs_w), 420), min(900, uw))
+    geom_h = min(max(int(prefs_h), 360), min(560, uh))
+    if question_len < 200 and n_options <= 6:
+        geom_h = min(geom_h, 480, uh)
+    return max(320, geom_w), max(280, geom_h)
+
+
+def _workarea_wh_for_window(win: object) -> tuple[int, int] | None:
+    """Return workarea (w, h) of the monitor currently hosting ``win``.
+
+    Used when maximizing so the preview tracks the *host* panel (eDP vs 4K),
+    not the opening-time sizing monitor.
+    """
+    try:
+        display = win.get_display()  # type: ignore[attr-defined]
+        surface = win.get_surface()  # type: ignore[attr-defined]
+        if display is None:
+            return None
+        mon = None
+        if surface is not None:
+            get_at = getattr(display, "get_monitor_at_surface", None)
+            if callable(get_at):
+                mon = get_at(surface)
+        if mon is None:
+            return None
+        geom = None
+        get_wa = getattr(mon, "get_workarea", None)
+        if callable(get_wa):
+            try:
+                geom = get_wa()
+            except Exception:  # noqa: BLE001
+                geom = None
+        if geom is None:
+            geom = mon.get_geometry()
+        w, h = int(geom.width), int(geom.height)
+        if w > 0 and h > 0:
+            return w, h
+    except Exception:  # noqa: BLE001
+        return None
+    return None
+
+
 def _display_size_px(display: object | None = None) -> tuple[int, int]:
     """Best-effort monitor size for image-MCQ window defaults (Gtk4).
 
@@ -448,24 +568,21 @@ def _main() -> int:
                 pass
         scr_w, scr_h = _display_size_px(win.get_display())
         if image_paths:
-            # Image MCQs open large (~72×78% of the monitor) so stills are
-            # readable; text-only stays compact below. Persisted prefs are
-            # capped on save, so they only seed a floor here.
-            geom_w = min(
-                max(geom_w, int(scr_w * 0.72), 720),
-                max(scr_w - 48, 720),
-            )
-            geom_h = min(
-                max(geom_h, int(scr_h * 0.78), 700),
-                max(scr_h - 72, 700),
+            # Image MCQs open large but must fit usable host/smallest monitor
+            # (preview + chrome). Absolute 720×700 floors overflowed eDP.
+            geom_w, geom_h = _image_mcq_default_size(
+                (scr_w, scr_h), prefs_w=geom_w, prefs_h=geom_h
             )
         else:
             # Never reopen at a near-fullscreen height left by a previous tall
             # Confirm dialog — that left a huge empty band under Cancel/OK.
-            geom_w = min(max(geom_w, 420), 900)
-            geom_h = min(max(geom_h, 360), 560)
-            if len(question) < 200 and len(ids) <= 6:
-                geom_h = min(geom_h, 480)
+            geom_w, geom_h = _text_mcq_default_size(
+                (scr_w, scr_h),
+                prefs_w=geom_w,
+                prefs_h=geom_h,
+                question_len=len(question),
+                n_options=len(ids),
+            )
         win.set_default_size(geom_w, geom_h)
         win.set_modal(True)
 
@@ -703,35 +820,24 @@ def _main() -> int:
             header_replay.connect("clicked", on_replay)
             header.pack_end(header_replay)
 
-        def toggle_window_maximize(*_args: object) -> None:
-            if win.is_maximized():
-                win.unmaximize()
-            else:
-                win.maximize()
-
-        if image_paths:
-            # Maximize / restore so large stills can use most of the screen.
-            max_btn = Gtk.Button()
-            max_btn.set_icon_name("window-maximize-symbolic")
-            max_btn.set_tooltip_text("Maximize / restore window (F)")
-            max_btn.set_focusable(False)
-            max_btn.add_css_class("flat")
-            max_btn.connect("clicked", toggle_window_maximize)
-            header.pack_end(max_btn)
-        root.append(header)
-
-        # Preview scale state shared with click-toggle + keyboard (F = maximize).
+        # Preview / maximize state (image MCQs). Defined before the header
+        # maximize control so click handlers can reflow the still.
         preview_expanded = {"v": True}
         preview_pictures: list[tuple[str, Gtk.Picture]] = []
+        soft_maximized = {"v": False}
+        restore_geom: dict[str, tuple[int, int] | None] = {"wh": None}
+        max_btn: Gtk.Button | None = None
 
         def _preview_limits() -> tuple[int, int]:
-            """Return (max_w, max_h) for the current compact/expanded mode."""
-            if preview_expanded["v"]:
-                # Leave room for question + options + footer (~280px chrome).
-                max_h = max(420, min(int(scr_h * 0.62), scr_h - 280))
-                max_w = max(720, min(int(scr_w * 0.85), scr_w - 80))
-                return max_w, max_h
-            return 720, 320
+            """Return (max_w, max_h) for compact / expanded / maximized mode."""
+            host = None
+            if win.is_maximized() or soft_maximized["v"]:
+                host = _workarea_wh_for_window(win)
+            return _preview_max_wh(
+                host or (scr_w, scr_h),
+                maximized=bool(win.is_maximized() or soft_maximized["v"]),
+                expanded=bool(preview_expanded["v"]),
+            )
 
         def _apply_preview_scale() -> None:
             max_w, max_h = _preview_limits()
@@ -762,6 +868,89 @@ def _main() -> int:
                     else f"{path}\nClick: larger preview"
                 )
                 picture.set_tooltip_text(tip)
+
+        def _sync_max_btn() -> None:
+            if max_btn is None:
+                return
+            on = bool(win.is_maximized() or soft_maximized["v"])
+            max_btn.set_icon_name(
+                "window-restore-symbolic" if on else "window-maximize-symbolic"
+            )
+            max_btn.set_tooltip_text(
+                "Restore window (F)" if on else "Maximize / restore window (F)"
+            )
+
+        def toggle_window_maximize(*_args: object) -> None:
+            """Maximize / restore on the host monitor and reflow the still.
+
+            Compositor ``maximize()`` alone is easy to miss: image MCQs already
+            size-request near-full height on a laptop, and the preview never
+            reloaded larger. Soft-size to the host workarea when needed.
+            """
+            if win.is_maximized() or soft_maximized["v"]:
+                soft_maximized["v"] = False
+                prev = restore_geom["wh"]
+                restore_geom["wh"] = None
+                # Shrink preview min-size *before* restore size — otherwise
+                # set_default_size cannot beat a maximized size_request.
+                _apply_preview_scale()
+                _sync_max_btn()
+                if win.is_maximized():
+                    win.unmaximize()
+
+                def _restore_size() -> bool:
+                    if prev is not None:
+                        pw, ph = int(prev[0]), int(prev[1])
+                        if pw > 0 and ph > 0:
+                            # Re-apply preview in case notify::maximized raced.
+                            _apply_preview_scale()
+                            win.set_default_size(pw, ph)
+                    return False
+
+                # Two passes: first after unmaximize, second after allocate.
+                GLib.timeout_add(50, _restore_size)
+                GLib.timeout_add(200, _restore_size)
+                return
+            restore_geom["wh"] = (
+                max(1, int(win.get_width() or geom_w)),
+                max(1, int(win.get_height() or geom_h)),
+            )
+            win.maximize()
+            soft_maximized["v"] = True
+
+            def _after_maximize() -> bool:
+                host = _workarea_wh_for_window(win) or (scr_w, scr_h)
+                hw, hh = int(host[0]), int(host[1])
+                cur_w = int(win.get_width() or 0)
+                cur_h = int(win.get_height() or 0)
+                # Compositor maximize sometimes only grows one axis (seen on
+                # dual-head Wayland). set_default_size is ignored while
+                # is_maximized — unmaximize then size to the host panel.
+                grew = cur_w >= int(hw * 0.92) and cur_h >= int(hh * 0.90)
+                if hw > 0 and hh > 0 and not grew:
+                    if win.is_maximized():
+                        win.unmaximize()
+                    win.set_default_size(hw, hh)
+                _apply_preview_scale()
+                _sync_max_btn()
+                return False
+
+            GLib.timeout_add(50, _after_maximize)
+
+        if image_paths:
+            # Maximize / restore so large stills can use most of the screen.
+            max_btn = Gtk.Button()
+            max_btn.set_icon_name("window-maximize-symbolic")
+            max_btn.set_tooltip_text("Maximize / restore window (F)")
+            max_btn.set_focusable(False)
+            max_btn.add_css_class("flat")
+            max_btn.connect("clicked", toggle_window_maximize)
+            header.pack_end(max_btn)
+            win.connect(
+                "notify::maximized",
+                lambda *_a: (_apply_preview_scale(), _sync_max_btn()),
+            )
+        root.append(header)
 
         def _append_image_previews(parent: Gtk.Box) -> None:
             """PNG/JPEG preview above the question; click toggles large/compact."""
