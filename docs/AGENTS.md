@@ -175,10 +175,11 @@ footer hint. Useful when coaching a human or writing host docs:
 | **F** / header maximize (image MCQs) | Maximize / restore the window so the still can use most of the screen. |
 
 Long `question` text is shown in a calm Confirm **card** when `dangerous`
-(soft pink, title + body). All question bodies (danger and normal) height-cap
-with an inner scrollbar so tall self-contained referents cannot push Cancel/OK
-off-screen. Dense ` · `-separated fields become separate lines. Option rows
-stay in the middle scroll.
+(soft pink, title + body). The **first line** (decision ask) stays fully
+visible; remaining lines (command / To+body / meta) height-cap with an inner
+scrollbar so tall self-contained referents cannot push Cancel/OK off-screen.
+Dense ` · `-separated fields become separate lines. Option rows stay in the
+middle scroll.
 
 Size (and on Windows, position) is remembered in
 `~/.config/ask-question-mcp/prefs.json` under `"window": { "w", "h", … }`.

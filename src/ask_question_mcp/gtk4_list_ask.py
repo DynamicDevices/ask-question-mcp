@@ -142,6 +142,11 @@ _EDGE_MARGIN_W = 48
 # Vertical gap between stacked multi-image frames (matches Gtk.Box spacing=8).
 _IMAGE_STACK_GAP = 8
 _IMAGE_HINT_RESERVE_H = 28
+# Confirm / question detail: cap so Cancel/OK stay on-screen. 180px was too
+# tight for shell-gate (ask + meta + Command) and Gtk Label wrap under-measure
+# clipped the last line without a usable scrollbar.
+_QUESTION_BODY_MAX_H = 280
+_QUESTION_BODY_FUDGE_PX = 8
 
 
 def _usable_monitor_wh(monitor_wh: tuple[int, int]) -> tuple[int, int]:
@@ -678,9 +683,15 @@ def _main() -> int:
               font-weight: 700;
               font-size: 1.05em;
             }
+            label.ask-q-banner-lead {
+              color: #263238;
+              font-weight: 600;
+              margin-top: 4px;
+              line-height: 1.35;
+            }
             label.ask-q-banner-body {
               color: #37474f;
-              margin-top: 6px;
+              margin-top: 4px;
               line-height: 1.35;
             }
             button.suggested-action.ask-q-danger-ok {
@@ -1139,11 +1150,20 @@ def _main() -> int:
 
         _append_image_previews(root)
 
-        # Confirm / question body: title (danger) stays fixed; body scrolls inside
-        # a height cap so tall self-contained referents cannot crush Cancel/OK.
+        # Confirm / question body: lead (decision ask) stays fully visible;
+        # detail (command / To+body / meta) scrolls under a height cap so
+        # Cancel/OK cannot be crushed. Remeasure after width is known —
+        # Gtk Label wrap + propagate_natural_height often under-reports by
+        # ~1 line and clips the last line without a usable scrollbar.
         body_text = question
         if _dialog_keys is not None:
             body_text = _dialog_keys.format_confirm_body(question)
+        if _dialog_keys is not None:
+            lead_text, detail_text = _dialog_keys.split_lead_detail(body_text)
+        else:
+            _parts = body_text.split("\n", 1)
+            lead_text = _parts[0]
+            detail_text = _parts[1] if len(_parts) > 1 else ""
 
         def _margins(widget: Gtk.Widget) -> None:
             widget.set_margin_top(12)
@@ -1151,18 +1171,20 @@ def _main() -> int:
             widget.set_margin_end(16)
             widget.set_margin_bottom(8)
 
-        def _question_body_label() -> Gtk.Label:
-            lbl = Gtk.Label(label=body_text)
+        def _question_label(text: str, *, css: str = "ask-q-banner-body") -> Gtk.Label:
+            lbl = Gtk.Label(label=text)
             lbl.set_wrap(True)
             lbl.set_wrap_mode(Pango.WrapMode.WORD_CHAR)
             lbl.set_xalign(0.0)
             lbl.set_yalign(0.0)
             lbl.set_selectable(True)
             lbl.set_tooltip_text(question)
+            lbl.add_css_class(css)
             return lbl
 
-        def _capped_body_scroll(child: Gtk.Widget, *, max_body: int = 180) -> Gtk.ScrolledWindow:
-            # Short text keeps natural height; tall text gets an inner scrollbar.
+        def _capped_body_scroll(
+            child: Gtk.Widget, *, max_body: int = _QUESTION_BODY_MAX_H
+        ) -> Gtk.ScrolledWindow:
             body_scroll = Gtk.ScrolledWindow()
             body_scroll.set_policy(
                 Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC
@@ -1172,10 +1194,62 @@ def _main() -> int:
             body_scroll.set_propagate_natural_height(True)
             try:
                 body_scroll.set_max_content_height(max_body)
+                body_scroll.set_min_content_height(36)
             except AttributeError:
                 body_scroll.set_size_request(-1, max_body)
             body_scroll.set_child(child)
+
+            last_min = {"h": -1}
+
+            def _remeasure(*_args: object) -> bool:
+                w = int(body_scroll.get_width() or 0)
+                if w <= 1:
+                    return False
+                try:
+                    _min_h, nat_h, *_rest = child.measure(
+                        Gtk.Orientation.VERTICAL, w
+                    )
+                except Exception:  # noqa: BLE001
+                    return False
+                need = min(
+                    max(int(nat_h) + _QUESTION_BODY_FUDGE_PX, 36),
+                    max_body,
+                )
+                if need == last_min["h"]:
+                    return False
+                last_min["h"] = need
+                try:
+                    body_scroll.set_min_content_height(need)
+                    body_scroll.set_max_content_height(max_body)
+                except AttributeError:
+                    body_scroll.set_size_request(-1, need)
+                body_scroll.queue_resize()
+                return False
+
+            def _on_map(*_args: object) -> None:
+                GLib.idle_add(_remeasure)
+                # Second pass after allocate settles (wrap width known).
+                GLib.timeout_add(50, _remeasure)
+
+            body_scroll.connect("map", _on_map)
+            body_scroll.connect("notify::width", lambda *_a: GLib.idle_add(_remeasure))
             return body_scroll
+
+        def _append_question_block(parent: Gtk.Widget) -> None:
+            """Lead always natural; detail (or long single body) height-capped."""
+            if detail_text.strip():
+                lead_lbl = _question_label(
+                    lead_text, css="ask-q-banner-lead"
+                )
+                parent.append(lead_lbl)
+                detail_lbl = _question_label(detail_text)
+                parent.append(_capped_body_scroll(detail_lbl))
+            else:
+                # Single block — still remeasure so wrap under-count cannot clip.
+                body_lbl = _question_label(
+                    lead_text or body_text, css="ask-q-banner-lead"
+                )
+                parent.append(_capped_body_scroll(body_lbl))
 
         if dangerous:
             mark = (
@@ -1192,19 +1266,17 @@ def _main() -> int:
             )
             title_lbl.add_css_class("ask-q-banner-title")
             title_lbl.set_tooltip_text(question)
-            body_lbl = _question_body_label()
-            body_lbl.add_css_class("ask-q-banner-body")
             card.append(title_lbl)
-            card.append(_capped_body_scroll(body_lbl))
+            _append_question_block(card)
             _margins(card)
             root.append(card)
         else:
-            # Same height cap as danger Confirm — ellipsize alone still let tall
-            # multi-line referents push Cancel/OK below the window edge.
-            body_lbl = _question_body_label()
-            body_scroll = _capped_body_scroll(body_lbl)
-            _margins(body_scroll)
-            root.append(body_scroll)
+            block = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+            block.set_hexpand(True)
+            block.set_vexpand(False)
+            _append_question_block(block)
+            _margins(block)
+            root.append(block)
 
         # ListBox must be the direct child of ScrolledWindow — nesting it in a
         # Box made option rows disappear (Gtk allocation quirk).

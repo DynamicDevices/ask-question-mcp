@@ -81,3 +81,27 @@ def format_confirm_body(question: str) -> str:
             return "\n".join(parts)
     return q
 
+
+def split_lead_detail(body: str) -> tuple[str, str]:
+    """Split a confirm body into always-visible lead + optional detail.
+
+    The first non-empty line is the decision ask (lead). Remaining lines
+    (command, To/Body, meta) are detail that may scroll under a height cap.
+    Keeps the ask readable even when referents are tall.
+    """
+    text = (body or "").strip("\n")
+    if not text.strip():
+        return "", ""
+    lines = text.split("\n")
+    i = 0
+    while i < len(lines) and not lines[i].strip():
+        i += 1
+    if i >= len(lines):
+        return "", ""
+    lead = lines[i]
+    rest = lines[i + 1 :]
+    while rest and not rest[0].strip():
+        rest = rest[1:]
+    detail = "\n".join(rest).rstrip("\n")
+    return lead, detail
+

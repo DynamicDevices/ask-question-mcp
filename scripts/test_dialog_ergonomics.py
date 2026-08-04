@@ -15,6 +15,7 @@ from ask_question_mcp.dialog_keys import (  # noqa: E402
     format_confirm_body,
     label_with_hotkey,
     option_hotkey_index,
+    split_lead_detail,
 )
 
 
@@ -43,6 +44,22 @@ def test_hotkeys() -> None:
         "From: a\nTo: b\nBody: hi"
     )
     assert format_confirm_body("Already\nmultiline") == "Already\nmultiline"
+    assert split_lead_detail(
+        "GATE: Preloop Shell — may Briar RUN this command?\n"
+        "This is NOT the content decision.\n"
+        "Command: sudo apt update"
+    ) == (
+        "GATE: Preloop Shell — may Briar RUN this command?",
+        "This is NOT the content decision.\nCommand: sudo apt update",
+    )
+    assert split_lead_detail("One line only") == ("One line only", "")
+    assert split_lead_detail("") == ("", "")
+
+
+def test_question_body_cap() -> None:
+    mod = _load_gtk4_list_ask()
+    assert mod._QUESTION_BODY_MAX_H >= 240
+    assert mod._QUESTION_BODY_FUDGE_PX >= 4
 
 
 def test_window_geometry(tmp_path: Path | None = None) -> None:
@@ -219,6 +236,7 @@ def test_multi_image_stack_fits_primary() -> None:
 
 def main() -> None:
     test_hotkeys()
+    test_question_body_cap()
     test_window_geometry()
     test_pick_sizing_monitor_wh()
     test_image_mcq_sizing_fits_laptop()
