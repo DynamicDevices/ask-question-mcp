@@ -23,6 +23,8 @@ choose among options the human must decide.
 3. **`question`:** short colleague sentence by default. **Only when confirming
    content** (send/ship/approve a draft) put the **referent** in `question`
    (To + body, or path + what changes) — dialog often appears before chat.
+   **Readable-first** (`mcq-question-readable-first`): lead line = the ask
+   (always fully visible); put Command/To+body/path **before** meta notes.
    Do **not** dump process templates, PATTERN blocks, or long meta into routine
    forks. No meta about dialogs/voice.
 4. **Permission / action asks (Alex 2026-07-30):** state **what** Briar will do

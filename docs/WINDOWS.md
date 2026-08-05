@@ -25,7 +25,8 @@ Canonical install steps: this file (and a one-line pointer from the
    should submit as Something else (digits while typing go to the entry, not options).
 9. Smoke **dangerous** — ask for an irreversible choice (`dangerous=true`). Expect:
    - Window title / options prefixed with **⛔** (no-entry)
-   - Pink **Confirm** banner with the question
+   - Pink **Confirm** banner; **first line** (ask) fully visible; extra lines
+     (e.g. `Command: …`) under it, scrollable if tall
    - Red **OK** that stays disabled ~1s (`OK (Ns)`) before confirm
 10. Resize the dialog, OK, reopen — size (and position) should roughly match.
 11. When nudged for platform feedback: choose **works** (or open a GitHub issue) so
@@ -42,9 +43,11 @@ Shared path (`zenity_ask` → `win_list_ask.py`):
 | --- | --- |
 | Something else always offered | Yes (same as Linux; `allow_other` ignored) |
 | Danger mark **⛔** + confirm arm | Yes (`danger_arm.py`) |
-| Danger banner wording | **⛔ Confirm** + question (pink banner) |
+| Danger banner wording | **⛔ Confirm** + lead ask (pink banner) |
+| Lead / detail (ask visible; tall referent scrolls) | Yes (`split_lead_detail`) |
 | Red OK on danger | Yes |
 | Voice / duck / STT | No (text-only) |
+| Image / images preview | No (ignored; text-only) |
 | Gtk footer / scroll layout fixes | N/A (tkinter layout) |
 | 1–8 hotkeys + Enter / Esc | Yes |
 | Remember size/position | Yes (`prefs.window`) |

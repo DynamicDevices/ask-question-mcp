@@ -2,7 +2,9 @@
 
 Deep dive for **MCP registration**, prefs, and **optional** TTS/STT. Dialogs
 work with no audio configured. For install + quick start, see
-[README.md](README.md). Agent call contract: [docs/AGENTS.md](docs/AGENTS.md).
+[README.md](README.md). How humans read the dialog (lead/detail, hotkeys,
+Audio): [docs/AGENTS.md — Dialog UX](docs/AGENTS.md#dialog-ux-humans). Agent
+call contract: same [docs/AGENTS.md](docs/AGENTS.md).
 
 **Voice backend detail (Qwen3-TTS + faster-whisper):** [docs/VOICE-BACKENDS.md](docs/VOICE-BACKENDS.md).
 
