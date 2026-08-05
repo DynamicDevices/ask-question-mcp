@@ -107,6 +107,12 @@ def main() -> int:
         body_text = question
         if _dialog_keys is not None:
             body_text = _dialog_keys.format_confirm_body(question)
+        if _dialog_keys is not None:
+            lead_text, detail_text = _dialog_keys.split_lead_detail(body_text)
+        else:
+            _parts = body_text.split("\n", 1)
+            lead_text = _parts[0]
+            detail_text = _parts[1] if len(_parts) > 1 else ""
         banner = tk.Frame(
             outer,
             bg="#fff5f5",
@@ -125,27 +131,38 @@ def main() -> int:
             font=("", 11, "bold"),
             anchor="w",
         ).pack(fill="x")
-        # Cap tall danger questions so Cancel/OK stay visible (scroll the body).
-        q_frame = tk.Frame(banner, bg="#fff5f5")
-        q_frame.pack(fill="both", expand=True, pady=(6, 0))
-        q_scroll = tk.Scrollbar(q_frame)
-        q_scroll.pack(side="right", fill="y")
-        q_text = tk.Text(
-            q_frame,
-            height=min(8, max(3, body_text.count("\n") + 2)),
-            wrap="word",
+        # Lead (decision ask) always visible; detail scrolls when tall.
+        tk.Label(
+            banner,
+            text=lead_text or body_text,
+            fg="#263238",
             bg="#fff5f5",
-            fg="#37474f",
-            font=("", 10),
-            relief="flat",
-            highlightthickness=0,
-            borderwidth=0,
-            yscrollcommand=q_scroll.set,
-        )
-        q_text.pack(side="left", fill="both", expand=True)
-        q_scroll.config(command=q_text.yview)
-        q_text.insert("1.0", body_text)
-        q_text.configure(state="disabled")
+            font=("", 10, "bold"),
+            wraplength=480,
+            justify="left",
+            anchor="w",
+        ).pack(fill="x", pady=(6, 0))
+        if detail_text.strip():
+            q_frame = tk.Frame(banner, bg="#fff5f5")
+            q_frame.pack(fill="both", expand=True, pady=(4, 0))
+            q_scroll = tk.Scrollbar(q_frame)
+            q_scroll.pack(side="right", fill="y")
+            q_text = tk.Text(
+                q_frame,
+                height=min(8, max(2, detail_text.count("\n") + 2)),
+                wrap="word",
+                bg="#fff5f5",
+                fg="#37474f",
+                font=("", 10),
+                relief="flat",
+                highlightthickness=0,
+                borderwidth=0,
+                yscrollcommand=q_scroll.set,
+            )
+            q_text.pack(side="left", fill="both", expand=True)
+            q_scroll.config(command=q_text.yview)
+            q_text.insert("1.0", detail_text)
+            q_text.configure(state="disabled")
     else:
         q_lbl = ttk.Label(outer, text=question, wraplength=480, justify="left")
         q_lbl.grid(row=1, column=0, sticky="ew", pady=(0, 8))
