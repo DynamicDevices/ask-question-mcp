@@ -109,10 +109,11 @@ def resolve_voice_capabilities(*, speak_requested: bool) -> VoiceCapabilities:
     tts = bool(tts_base_url())
     stt = bool(stt_transcribe_url())
 
-    # Windows Phase 1: tkinter text MCQ only — no duck / STT / local speak path.
+    # Windows: Nebula WebView2 text MCQ — no duck / STT / local speak path yet.
     if sys.platform == "win32":
         win_notes = [
-            "Windows Phase 1: text-only MCQ (tkinter) — speak/listen not supported yet.",
+            "Windows: text-only MCQ (frameless Nebula WebView2; tk/Edge fallback) "
+            "— speak/listen not supported yet.",
         ]
         if tts or stt:
             win_notes.append(

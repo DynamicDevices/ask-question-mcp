@@ -11,6 +11,7 @@ authors = [
 ]
 dependencies = [
   "mcp[cli]>=1.9.0",
+  "pywebview>=5.0",
 ]
 
 [project.urls]

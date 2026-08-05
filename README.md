@@ -127,7 +127,8 @@ Full table: [Dialog UX (humans)](docs/AGENTS.md#dialog-ux-humans).
 |-------|------|----|-------|--------|
 | Ubuntu 24.04 + GNOME + PipeWire | Cursor | Yes | Yes | **Verified** (2026-07) |
 | Same stack | Claude Code | Yes | Text-only | **Verified** (2026-07) — [@jackghx](https://github.com/jackghx) |
-| Windows 10/11 + tkinter | Cursor | Text | No | Phase 1 — **not yet reported** |
+| Windows 10/11 + WebView2 | Cursor | Text (Nebula UI) | No | Phase 2 UI — **Anthony laptop** |
+| Windows 10/11 + tkinter | Cursor | Text | No | Fallback if pywebview missing |
 | macOS / headless CI | — | No | No | Unsupported / N/A |
 
 More rows & how to report: [CONTRIBUTING.md](CONTRIBUTING.md).

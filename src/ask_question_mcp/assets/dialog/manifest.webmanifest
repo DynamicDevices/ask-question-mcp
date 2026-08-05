@@ -1,0 +1,10 @@
+{
+  "name": "Decide",
+  "short_name": "Decide",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
+  "background_color": "#100d1c",
+  "theme_color": "#100d1c",
+  "start_url": "/",
+  "icons": []
+}

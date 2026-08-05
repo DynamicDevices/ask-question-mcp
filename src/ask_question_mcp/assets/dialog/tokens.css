@@ -1,0 +1,102 @@
+/* Nebula dialog tokens — Ethereal glass base + theme overrides. */
+:root,
+[data-theme="glass"],
+[data-theme="hybrid"] {
+  --ground: #0c0a14;
+  --panel: #12101f;
+  --card-core: #16122a;
+  --raised: #241e44;
+  --accent: #9b8cff;
+  --accent-text: #c9bfff;
+  --ember: #ff5c7a;
+  --text: #f7f5ff;
+  --text-secondary: #a39bc9;
+  --text-tertiary: #8b84b8;
+  --text-eyebrow: #7a72ad;
+  --ground-deep: #07050e;
+  --ground-rgb: 12 10 20;
+  --accent-rgb: 155 140 255;
+  --ember-rgb: 255 92 122;
+  --card-core-rgb: 22 18 42;
+  --panel-rgb: 18 16 31;
+  --raised-rgb: 36 30 68;
+  --hairline-rgb: 245 243 255;
+  --orb-a: 120 90 255;
+  --orb-b: 60 180 200;
+  --font-ui: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "Cascadia Mono", Consolas, monospace;
+  --r-shell: 0px;
+  --r-core: 0px;
+  --r-tile: 16px;
+  --r-tile-inner: 13px;
+  --r-control: 12px;
+  --pad-shell: 0px;
+  --ease: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-spring: cubic-bezier(0.22, 1, 0.36, 1);
+  --hover-ms: 480ms;
+  --press-ms: 140ms;
+  --enter-ms: 780ms;
+  --leave-ms: 280ms;
+  --press-scale: 0.985;
+  --danger-bg: rgb(255 92 122 / 0.14);
+  --danger-border: rgb(255 92 122 / 0.35);
+  --danger-text: #ffb3c1;
+}
+
+/* Hybrid = glass colour + slightly sharper question weight */
+[data-theme="hybrid"] {
+  --orb-a: 110 95 255;
+  --orb-b: 70 160 210;
+}
+
+/* Quiet ink — less glow, sharper type, denser calm. */
+[data-theme="ink"] {
+  --ground: #0e0e12;
+  --panel: #14141a;
+  --card-core: #18181f;
+  --raised: #22222c;
+  --accent: #d4d0e8;
+  --accent-text: #eeeaf8;
+  --ember: #ff6b81;
+  --text: #f2f2f5;
+  --text-secondary: #9a9aa8;
+  --text-tertiary: #7a7a88;
+  --text-eyebrow: #6a6a78;
+  --ground-deep: #08080c;
+  --ground-rgb: 14 14 18;
+  --accent-rgb: 212 208 232;
+  --ember-rgb: 255 107 129;
+  --card-core-rgb: 24 24 31;
+  --panel-rgb: 20 20 26;
+  --raised-rgb: 34 34 44;
+  --orb-a: 80 80 100;
+  --orb-b: 40 40 55;
+  --r-tile: 10px;
+  --r-tile-inner: 8px;
+}
+
+/* Signal — accent-forward selection bloom. */
+[data-theme="signal"] {
+  --ground: #100818;
+  --panel: #1a1028;
+  --card-core: #1e1432;
+  --raised: #2e1f4e;
+  --accent: #a78bfa;
+  --accent-text: #ddd6fe;
+  --ember: #fb7185;
+  --text: #faf5ff;
+  --text-secondary: #c4b5fd;
+  --text-tertiary: #a78bfa;
+  --text-eyebrow: #8b5cf6;
+  --ground-deep: #0a0410;
+  --ground-rgb: 16 8 24;
+  --accent-rgb: 167 139 250;
+  --ember-rgb: 251 113 133;
+  --card-core-rgb: 30 20 50;
+  --panel-rgb: 26 16 40;
+  --raised-rgb: 46 31 78;
+  --orb-a: 168 85 247;
+  --orb-b: 236 72 153;
+  --r-tile: 18px;
+  --r-tile-inner: 15px;
+}

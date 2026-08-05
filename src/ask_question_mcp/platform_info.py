@@ -212,7 +212,7 @@ def classify_platform(host: dict[str, Any] | None = None) -> dict[str, Any]:
             "matched": None,
             "host": host,
             "summary": (
-                "Unverified platform (Windows + tkinter text MCQ). "
+                "Unverified platform (Windows + WebView2 Nebula MCQ). "
                 "Please tell us if the dialog works — GitHub issue or README table PR."
             ),
             "docs": [README_PLATFORMS],

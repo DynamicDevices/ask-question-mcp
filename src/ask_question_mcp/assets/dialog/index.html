@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#100d1c" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <title>Decide</title>
+    <link rel="stylesheet" href="tokens.css" />
+    <link rel="stylesheet" href="dialog.css" />
+  </head>
+  <body>
+    <div class="app" id="app" data-theme="glass">
+      <div class="aura" aria-hidden="true">
+        <div class="stars far" id="stars-far"></div>
+        <div class="stars near" id="stars-near"></div>
+      </div>
+      <div class="aura-grain" aria-hidden="true"></div>
+      <div class="core">
+        <header class="chrome pywebview-drag-region">
+          <div class="chrome-left">
+            <span class="eyebrow" id="eyebrow">Decide</span>
+            <span class="agent" id="title-agent"></span>
+          </div>
+          <button type="button" class="close-btn" id="close-btn" aria-label="Cancel">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </button>
+        </header>
+
+        <main class="body">
+          <div class="banner" id="banner">
+            <div class="banner-inner">
+              <div class="banner-accent"></div>
+              <div class="banner-copy" id="banner-copy"></div>
+            </div>
+          </div>
+          <h1 class="question" id="question"></h1>
+          <div class="options" id="options" role="listbox"></div>
+        </main>
+
+        <div class="freeform" id="freeform">
+          <label class="freeform-label" for="freeform-input">Or type something else</label>
+          <div class="freeform-shell">
+            <textarea
+              id="freeform-input"
+              class="freeform-input"
+              rows="2"
+              placeholder="Something else…"
+              autocomplete="off"
+              spellcheck="false"
+            ></textarea>
+          </div>
+        </div>
+
+        <footer class="footer">
+          <div class="hint" id="hint">Select · Enter OK · Esc cancel</div>
+          <div class="actions">
+            <button type="button" class="btn btn-ghost" id="cancel-btn">Cancel</button>
+            <button type="button" class="btn btn-primary" id="ok-btn" disabled>OK</button>
+          </div>
+        </footer>
+      </div>
+    </div>
+    <script src="dialog.js"></script>
+  </body>
+</html>
