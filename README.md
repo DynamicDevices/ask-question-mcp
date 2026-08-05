@@ -87,10 +87,16 @@ Full env / prefs: [SETUP.md](SETUP.md). Never commit tokens.
 - Radiolist / checklist; recommended option first; options capped at **8**
 - Keyboard: **1–8** select · **Enter** OK · **Esc** cancel (footer hint;
   see [docs/AGENTS.md — Dialog UX](docs/AGENTS.md#dialog-ux-humans))
+- **Readable Confirm bodies:** first line (the ask) always fully visible;
+  Command / To+body / notes scroll underneath — so tall gates do not hide the
+  payload or push Cancel/OK off-screen
+- Optional **image / images** preview in the dialog (Linux Gtk; click to
+  enlarge, **F** / header to maximize; primary monitor only)
 - Remembers last dialog size (`prefs.window`; position on Windows; size-only
   on typical Wayland)
-- Windows: scrollable option list
+- Windows: scrollable option list + same lead/detail Confirm layout
 - Danger chrome; OK/Enter briefly armed (~1s)
+- Footer **Audio** checkbox (persistent) plus env mutes
 - Something else is always available (type, or Speak→STT when configured)
 - Works text-only without TTS/STT; lean JSON results by default
 - Optional TTS / mic answers / acks (auto-listen and acks **off** until opted in)
@@ -99,6 +105,19 @@ Full env / prefs: [SETUP.md](SETUP.md). Never commit tokens.
 - One-shot wiring: `uv run ask-question-install --host cursor --skill`
 
 Packages & audio matrix: [DEPENDENCIES.md](DEPENDENCIES.md).
+
+### Using the dialog (humans)
+
+You do not need the agent to explain the chrome — the footer shows hotkeys.
+
+1. Read the **first line** of the question (the ask). On dangerous prompts it
+   sits in a pink **Confirm** card.
+2. If there is a **Command:** / **To:** / path block under it, that is the
+   payload — scroll inside the card if needed; Cancel/OK stay pinned.
+3. Pick **1–8** (or click), then **Enter** once OK is armed (~1s). **Esc**
+   cancels. Uncheck **Audio** to mute TTS/STT for later dialogs.
+
+Full table: [Dialog UX (humans)](docs/AGENTS.md#dialog-ux-humans).
 
 ---
 

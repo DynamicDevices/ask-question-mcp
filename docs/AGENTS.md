@@ -46,9 +46,11 @@ skill via `ask-question-install --skill` (`~/.cursor/skills/ask-multiple-choice`
 - **`question`:** short colleague sentence by default. **Only when confirming
   content** (send message, ship doc, approve a draft) include the **referent**
   in `question` (To + body/excerpt, or path + what changes) — the dialog often
-  appears before chat. Do **not** paste process templates / PATTERN walls into
-  routine forks. No meta about dialogs or voice. Tall referents scroll inside
-  the body height cap.
+  appears before chat. **Readable-first:** put the decision ask on the **first
+  line**; put Command / To+body / path **before** meta notes. The dialog keeps
+  that lead fully visible; detail lines scroll under a height cap. Do **not**
+  paste process templates / PATTERN walls into routine forks. No meta about
+  dialogs or voice.
 - Mark recommended **only** in the option label (`Foo (recommended)`) **and**
   pass **`recommended_id`** / `recommended_ids`. Never put “Recommended: …”
   inside `question`.
@@ -163,23 +165,37 @@ disable. Cancel / Escape always work immediately.
 ## Dialog UX (humans)
 
 Agents do not need to document these in `question` text — the dialog shows a
-footer hint. Useful when coaching a human or writing host docs:
+footer hint. Useful when coaching a human or writing host docs.
+
+### Keyboard / controls
 
 | Input | Behaviour |
 |-------|-----------|
 | **1–8** (top row or keypad) | Select that option (1-based). Labels show `1 · …`. Multi-select **toggles**. Ignored while the Something else entry is focused. |
 | **Enter** | Confirm OK after the arm delay (same as clicking OK). |
 | **Esc** / window close | Cancel. |
+| **Audio** (footer checkbox) | Persistent mute for TTS/STT (`prefs.audio_enabled`). Env `ASK_QUESTION_AUDIO=0` also mutes. |
 | **R** / **L** | Replay question / Listen (Linux voice only, when configured). |
 | **Click preview** (image MCQs) | Toggle large vs compact (~320px) image scale. |
 | **F** / header maximize (image MCQs) | Maximize / restore the window so the still can use most of the screen. |
 
-Long `question` text is shown in a calm Confirm **card** when `dangerous`
-(soft pink, title + body). The **first line** (decision ask) stays fully
-visible; remaining lines (command / To+body / meta) height-cap with an inner
-scrollbar so tall self-contained referents cannot push Cancel/OK off-screen.
-Dense ` · `-separated fields become separate lines. Option rows stay in the
-middle scroll.
+### Reading the question (lead + detail)
+
+Multi-line `question` text (and dense ` · `-separated fields, which become
+separate lines) uses a **lead / detail** layout on Linux and Windows:
+
+1. **Lead** — the first non-empty line (the decision ask) stays **fully
+   visible** — never clipped under the pink border or options.
+2. **Detail** — remaining lines (Command / To+body / path / notes) sit under a
+   height cap with an inner scrollbar when tall, so Cancel/OK stay on-screen.
+
+When `dangerous=true`, the lead+detail sit in a calm pink **Confirm** card
+(title **Confirm** + body). Normal MCQs use the same lead/detail split without
+the pink chrome. Option rows stay in the middle scroll.
+
+**Authors:** put the ask first; put the referent (command, To+body, path)
+before meta notes such as “not a policy decision” — otherwise the human sees
+chrome and has to scroll for the payload.
 
 Size (and on Windows, position) is remembered in
 `~/.config/ask-question-mcp/prefs.json` under `"window": { "w", "h", … }`.
