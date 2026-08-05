@@ -152,7 +152,7 @@ def run_checks(*, want_voice: bool | None = None) -> list[Check]:
                 "display",
                 "Desktop",
                 "ok",
-                "Windows desktop (tkinter Phase 1 text-only)",
+                "Windows desktop (Nebula via Edge --app; tkinter fallback)",
                 docs=[DOCS_README, DOCS_DEPS],
             )
         )
@@ -160,23 +160,40 @@ def run_checks(*, want_voice: bool | None = None) -> list[Check]:
             os.environ.get("ASK_QUESTION_WIN_PYTHON", "").strip()
             or sys.executable
         )
-        try:
-            r = subprocess.run(
-                [win_py, "-c", "import tkinter; print('ok')"],
-                capture_output=True,
-                text=True,
-                timeout=8,
-                check=False,
+        # Prefer importlib presence checks — full import probes hang when
+        # spawned as subprocesses under Cursor's MCP stdio host on Windows.
+        import importlib.util
+
+        wv_ok = importlib.util.find_spec("webview") is not None
+        wv_detail = (
+            f"{win_py} has pywebview"
+            if wv_ok
+            else f"pywebview not installed for {win_py}"
+        )
+        if wv_ok:
+            checks.append(
+                Check("webview", "pywebview", "ok", wv_detail, docs=[DOCS_DEPS])
             )
-            tk_ok = r.returncode == 0 and "ok" in (r.stdout or "")
-            tk_detail = (
-                f"{win_py} has tkinter"
-                if tk_ok
-                else ((r.stderr or r.stdout or "").strip()[:200] or f"exit {r.returncode}")
+        else:
+            checks.append(
+                Check(
+                    "webview",
+                    "pywebview",
+                    "fail",
+                    f"pywebview missing on {win_py}: {wv_detail}",
+                    fix="From the ask-question-mcp checkout: uv sync "
+                    "(pywebview is a dependency). Edge WebView2 runtime is "
+                    "usually already on Windows 11.",
+                    docs=[DOCS_DEPS, "docs/WINDOWS.md"],
+                )
             )
-        except Exception as exc:  # noqa: BLE001
-            tk_ok = False
-            tk_detail = str(exc)
+
+        tk_ok = importlib.util.find_spec("tkinter") is not None
+        tk_detail = (
+            f"{win_py} has tkinter (fallback)"
+            if tk_ok
+            else f"tkinter not importable on {win_py}"
+        )
         if tk_ok:
             checks.append(
                 Check("tkinter", "tkinter", "ok", tk_detail, docs=[DOCS_DEPS])
@@ -186,26 +203,56 @@ def run_checks(*, want_voice: bool | None = None) -> list[Check]:
                 Check(
                     "tkinter",
                     "tkinter",
-                    "fail",
+                    "warn" if wv_ok else "fail",
                     f"tkinter missing on {win_py}: {tk_detail}",
-                    fix="Install Python from https://www.python.org/downloads/ "
-                    "with tcl/tk enabled (not a Store build without Tk). "
-                    "Optional: set ASK_QUESTION_WIN_PYTHON.",
+                    fix="Optional fallback. Install Python from "
+                    "https://www.python.org/downloads/ with tcl/tk, or rely "
+                    "on pywebview. Optional: set ASK_QUESTION_WIN_PYTHON.",
                     docs=[DOCS_DEPS],
                 )
             )
+
+        win_wv = Path(__file__).resolve().with_name("win_webview_ask.py")
+        if win_wv.is_file():
+            checks.append(
+                Check(
+                    "win_webview_script",
+                    "win_webview_ask.py",
+                    "ok",
+                    str(win_wv),
+                    docs=[DOCS_DEPS, "docs/WINDOWS.md"],
+                )
+            )
+        else:
+            checks.append(
+                Check(
+                    "win_webview_script",
+                    "win_webview_ask.py",
+                    "fail",
+                    f"Missing dialog script: {win_wv}",
+                    fix="Re-clone or repair the ask-question-mcp checkout.",
+                    docs=[DOCS_README, DOCS_DEPS],
+                )
+            )
+
         win_list = Path(__file__).resolve().with_name("win_list_ask.py")
         if win_list.is_file():
             checks.append(
-                Check("win_script", "win_list_ask.py", "ok", str(win_list), docs=[DOCS_DEPS])
+                Check(
+                    "win_script",
+                    "win_list_ask.py",
+                    "ok",
+                    f"{win_list} (tk fallback)",
+                    docs=[DOCS_DEPS],
+                )
             )
         else:
             checks.append(
                 Check(
                     "win_script",
                     "win_list_ask.py",
-                    "fail",
-                    f"Missing dialog script: {win_list}",
+                    "warn" if win_wv.is_file() else "fail",
+                    f"Missing tk fallback script: {win_list}",
                     fix="Re-clone or repair the ask-question-mcp checkout; "
                     "MCP --directory must point at the repo root.",
                     docs=[DOCS_README, DOCS_DEPS],
@@ -487,7 +534,15 @@ def summarize(checks: list[Check]) -> dict[str, Any]:
     ok = not fails
     soft_fail_ids = {c.id for c in checks if c.severity == "fail"}
     if sys.platform == "win32":
-        ready_software = not soft_fail_ids.intersection({"tkinter", "win_script"})
+        # Ready when WebView2 path works, or tk fallback is intact.
+        webview_ready = (
+            "webview" not in soft_fail_ids
+            and "win_webview_script" not in soft_fail_ids
+        )
+        tk_ready = (
+            "tkinter" not in soft_fail_ids and "win_script" not in soft_fail_ids
+        )
+        ready_software = webview_ready or tk_ready
     else:
         ready_software = not soft_fail_ids.intersection({"gtk_python", "gtk_script"})
     ready_host = not soft_fail_ids.intersection({"uv", "python"})
@@ -509,13 +564,25 @@ def summarize(checks: list[Check]) -> dict[str, Any]:
     if sys.platform == "win32":
         b_ui = {
             "required": True,
-            "items": ["Windows desktop", "tkinter", "win_list_ask.py"],
+            "items": [
+                "Windows desktop",
+                "pywebview + WebView2 (preferred)",
+                "win_webview_ask.py",
+                "tkinter fallback optional",
+            ],
             "windows_note": (
-                "Install Python 3.12+ from python.org with tcl/tk enabled "
-                "(avoid Store builds without Tk)."
+                "uv sync installs pywebview. Edge WebView2 is standard on "
+                "Windows 11. tkinter remains an optional fallback "
+                "(ASK_QUESTION_WIN_UI=tk)."
             ),
             "status": {
                 "display": by_id["display"].severity if "display" in by_id else "skip",
+                "webview": by_id["webview"].severity if "webview" in by_id else "skip",
+                "win_webview_script": (
+                    by_id["win_webview_script"].severity
+                    if "win_webview_script" in by_id
+                    else "skip"
+                ),
                 "tkinter": by_id["tkinter"].severity if "tkinter" in by_id else "skip",
                 "win_script": by_id["win_script"].severity if "win_script" in by_id else "skip",
             },
@@ -580,8 +647,8 @@ def summarize(checks: list[Check]) -> dict[str, Any]:
             "debian_ubuntu_audio": apt_audio,
             "python_package": "uv sync",
             "windows_ui": (
-                "Install Python 3.12+ from https://www.python.org/downloads/ "
-                "with tcl/tk; then: winget install astral-sh.uv  (or uv install script)"
+                "uv sync (installs pywebview). Edge WebView2 is standard on "
+                "Windows 11. Optional tk fallback: python.org build with tcl/tk."
             ),
         },
     }
@@ -780,12 +847,12 @@ def setup_guide(topic: str) -> dict[str, Any]:
             "debian_ubuntu_ui": "sudo apt install -y python3 python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 zenity",
             "debian_ubuntu_audio": "sudo apt install -y pipewire pipewire-pulse pipewire-audio-client-libraries",
             "windows_ui": (
-                "Install Python 3.12+ from python.org with tcl/tk; "
-                "winget install astral-sh.uv"
+                "uv sync (pywebview). Edge WebView2 on Windows 11; "
+                "tkinter optional fallback."
             ),
         },
         "verify": (
-            "check_setup: display + tkinter + win_script ok; ready.text_mcq true."
+            "check_setup: display + webview + win_webview_script ok; ready.text_mcq true."
             if sys.platform == "win32"
             else "check_setup: display + gtk_python + gtk_script ok; ready.text_mcq true."
         ),

@@ -15,6 +15,8 @@ from ask_question_mcp.platform_info import classify_platform
 from ask_question_mcp.zenity_ask import (
     _WIN_ENTRY_ASK,
     _WIN_LIST_ASK,
+    _WIN_WEBVIEW_ASK,
+    _WIN_WEBVIEW_ENTRY_ASK,
     ui_backend,
 )
 
@@ -22,6 +24,8 @@ from ask_question_mcp.zenity_ask import (
 def main() -> None:
     assert _WIN_LIST_ASK.is_file(), _WIN_LIST_ASK
     assert _WIN_ENTRY_ASK.is_file(), _WIN_ENTRY_ASK
+    assert _WIN_WEBVIEW_ASK.is_file(), _WIN_WEBVIEW_ASK
+    assert _WIN_WEBVIEW_ENTRY_ASK.is_file(), _WIN_WEBVIEW_ENTRY_ASK
 
     if sys.platform == "win32":
         assert ui_backend() == "win"
@@ -75,7 +79,10 @@ def main() -> None:
         assert caps.audio_mode == "text_only"
         assert caps.speak_active is False
         assert caps.listen_active is False
-        assert any("Windows Phase 1" in n for n in caps.notes)
+        assert any(
+            "Windows" in n and ("WebView2" in n or "Phase 1" in n or "tkinter" in n)
+            for n in caps.notes
+        )
 
     # Ensure Linux UI-ready still requires DISPLAY when not Windows.
     if sys.platform != "win32":

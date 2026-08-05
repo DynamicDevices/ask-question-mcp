@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Something else</title>
+    <link rel="stylesheet" href="tokens.css" />
+    <link rel="stylesheet" href="dialog.css" />
+    <style>
+      .entry-body {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 14px;
+        padding: 8px 16px 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app" id="app">
+      <div class="core">
+        <header class="chrome pywebview-drag-region">
+          <div class="chrome-left">
+            <span class="eyebrow">Something else</span>
+            <span class="agent" id="title-agent"></span>
+          </div>
+          <button type="button" class="close-btn" id="close-btn" aria-label="Cancel">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </button>
+        </header>
+        <main class="entry-body">
+          <h1 class="question" id="prompt"></h1>
+            <div class="freeform-shell">
+              <textarea
+                id="entry-input"
+                class="freeform-input"
+                rows="4"
+                placeholder="Type here…"
+                autocomplete="off"
+                spellcheck="false"
+              ></textarea>
+            </div>
+        </main>
+        <footer class="footer">
+          <div class="hint" id="hint">Enter OK · Esc cancel · Shift+Enter newline</div>
+          <div class="actions">
+            <button type="button" class="btn btn-ghost" id="cancel-btn">Cancel</button>
+            <button type="button" class="btn btn-primary" id="ok-btn">
+              OK
+              <span class="btn-icon">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M7 17L17 7M17 7H9M17 7v8" />
+                </svg>
+              </span>
+            </button>
+          </div>
+        </footer>
+      </div>
+    </div>
+    <script>
+      (() => {
+        const esc = (s) =>
+          String(s)
+            .replaceAll("&", "&amp;")
+            .replaceAll("<", "&lt;")
+            .replaceAll(">", "&gt;");
+
+        async function api(name, ...args) {
+          const a = window.pywebview && window.pywebview.api;
+          if (!a || typeof a[name] !== "function") throw new Error(name);
+          return a[name](...args);
+        }
+
+        async function boot() {
+          await new Promise((resolve) => {
+            const ready = () =>
+              window.pywebview && window.pywebview.api && resolve();
+            if (window.pywebview && window.pywebview.api) return resolve();
+            window.addEventListener("pywebviewready", ready);
+            const iv = setInterval(() => {
+              if (window.pywebview && window.pywebview.api) {
+                clearInterval(iv);
+                resolve();
+              }
+            }, 40);
+          });
+
+          const payload = (await api("get_payload")) || {};
+          document.getElementById("title-agent").textContent = payload.title || "";
+          document.getElementById("prompt").textContent =
+            payload.prompt || "Type your answer";
+          const input = document.getElementById("entry-input");
+          input.value = payload.initial_text || "";
+          input.focus();
+          input.select();
+
+          const submit = () => api("submit", input.value);
+          const cancel = (r) => api("cancel", r || "entry cancelled");
+
+          document.getElementById("ok-btn").onclick = () => submit();
+          document.getElementById("cancel-btn").onclick = () => cancel();
+          document.getElementById("close-btn").onclick = () => cancel();
+          document.getElementById("hint").textContent =
+            "Enter OK · Esc cancel · Shift+Enter newline";
+          document.addEventListener("keydown", (e) => {
+            if (e.key === "Escape") {
+              e.preventDefault();
+              cancel();
+            } else if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              submit();
+            }
+          });
+
+          document.getElementById("app").classList.add("is-ready");
+          api("content_ready").catch(() => {});
+          if (payload.timeout_sec > 0) {
+            setTimeout(() => cancel("timeout"), payload.timeout_sec * 1000);
+          }
+        }
+
+        boot().catch((err) => {
+          document.body.innerHTML = `<pre style="color:#ff5c7a;padding:16px">${esc(
+            String(err),
+          )}</pre>`;
+        });
+      })();
+    </script>
+  </body>
+</html>
