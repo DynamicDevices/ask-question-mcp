@@ -234,6 +234,23 @@ def test_multi_image_carousel_uses_full_single_budget() -> None:
     assert c_req + mod._IMAGE_MCQ_CHROME_H <= uh
 
 
+def test_preview_click_action_and_title_dblclick() -> None:
+    """Carousel left/right halves + title-bar double-click helpers."""
+    mod = _load_gtk4_list_ask()
+    assert mod._preview_click_action(10, 200, multi=False) == "toggle_expand"
+    assert mod._preview_click_action(190, 200, multi=False) == "toggle_expand"
+    assert mod._preview_click_action(0, 200, multi=True) == "prev"
+    assert mod._preview_click_action(99, 200, multi=True) == "prev"
+    assert mod._preview_click_action(100, 200, multi=True) == "next"
+    assert mod._preview_click_action(199, 200, multi=True) == "next"
+    assert mod._preview_click_action(1, 0, multi=True) == "next"
+    assert mod._is_titlebar_double_click(2) is True
+    assert mod._is_titlebar_double_click(1) is False
+    assert mod._is_titlebar_double_click(0) is False
+    assert mod._is_titlebar_double_click("2") is True
+    assert mod._is_titlebar_double_click("x") is False
+
+
 def main() -> None:
     test_hotkeys()
     test_question_body_cap()
@@ -241,6 +258,7 @@ def main() -> None:
     test_pick_sizing_monitor_wh()
     test_image_mcq_sizing_fits_laptop()
     test_multi_image_carousel_uses_full_single_budget()
+    test_preview_click_action_and_title_dblclick()
     print("OK dialog ergonomics (hotkeys + window geometry + sizing)")
 
 

@@ -38,9 +38,11 @@ choose among options the human must decide.
    Chat `Read` of a PNG does **not** put pixels in the MCQ — agents **must**
    pass the path into the dialog. Linux Gtk: opens large on the **primary**
    usable workarea (not the largest secondary); human can **click the preview**
-   (large ↔ compact ~320px) and **maximize** (header button or **F**).
-   **Multi-image:** Gtk shows a **carousel** (one still at a time; Prev/Next or
-   ←/→) — never tiny stacked stills. Prefer one clear still when possible;
+   (large ↔ compact ~320px) and **maximize** (header button, **F**, or
+   **double-click the title bar**).
+   **Multi-image:** Gtk shows a **carousel** (one still at a time; click
+   left/right of the still, Prev/Next, or ←/→) — never tiny stacked stills.
+   Prefer one clear still when possible;
    `images=` is fine for related stills the human must flip through.
    Pattern: `mcq-with-image` + `mcq-images-one-at-a-time`.
 8. Wait for the JSON result. On cancel → stop. On freeform → use **`freeform_text`**.

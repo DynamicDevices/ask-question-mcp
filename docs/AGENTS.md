@@ -79,19 +79,20 @@ skill via `ask-question-install --skill` (`~/.cursor/skills/ask-multiple-choice`
 | `timeout_sec` | int | no | default `300`; `0` = no timeout |
 | `entry_seed` | string \| null | no | Prefill Something else / entry |
 | `image` | string \| null | no | Local PNG/JPEG (etc.) path or `file://` URI — Gtk preview above the question (Linux). Missing/unsupported files are skipped. |
-| `images` | string[] \| null | no | Same as `image`, up to 4 paths (combined with `image`, deduped). Gtk shows a **carousel** (one still at a time; Prev/Next or ←/→). Prefer one clear still when possible. |
+| `images` | string[] \| null | no | Same as `image`, up to 4 paths (combined with `image`, deduped). Gtk shows a **carousel** (one still at a time; click left/right of the still, Prev/Next, or ←/→). Prefer one clear still when possible. |
 
 **Images in the dialog (Linux Gtk):** pass an absolute path or `file://` URI so
 Alex sees the still *inside* the MCQ (not only in chat). Chat `Read` of a PNG
 does not put pixels in the dialog — use `image` / `images`. When images are
 present the window opens large on the **primary** usable workarea (not the
 largest / secondary 4K); click the preview to toggle compact (~320px) vs large,
-and use the header maximize button or **F** for a soft-fill on the host panel.
+and use the header maximize button, **F**, or **double-click the title bar**
+for a soft-fill on the host panel.
 **Multi-image (`images=`, max 4): carousel — one still visible at a time**
-(Prev/Next buttons or ←/→); each still uses the full single-image height
-budget. Do **not** dump several tiny stacked previews. Text-only MCQs stay
-compact. Windows Phase 1 ignores these args (text-only). Patterns:
-`mcq-with-image` + `mcq-images-one-at-a-time` (agents **must** pass
+(click left/right of the still, Prev/Next, or ←/→); each still uses the full
+single-image height budget. Do **not** dump several tiny stacked previews.
+Text-only MCQs stay compact. Windows Phase 1 ignores these args (text-only).
+Patterns: `mcq-with-image` + `mcq-images-one-at-a-time` (agents **must** pass
 `image=`/`images=` when the human must judge a still; multi via carousel or
 sequential single-image MCQs — never rely on reading chat pixels).
 
@@ -177,8 +178,8 @@ footer hint. Useful when coaching a human or writing host docs.
 | **Esc** / window close | Cancel. |
 | **Audio** (footer checkbox) | Persistent mute for TTS/STT (`prefs.audio_enabled`). Env `ASK_QUESTION_AUDIO=0` also mutes. |
 | **R** / **L** | Replay question / Listen (Linux voice only, when configured). |
-| **Click preview** (image MCQs) | Toggle large vs compact (~320px) image scale. |
-| **F** / header maximize (image MCQs) | Maximize / restore the window so the still can use most of the screen. |
+| **Click preview** (image MCQs) | Single still: toggle large vs compact (~320px). Multi-image: **left half → previous**, **right half → next**. |
+| **F** / header maximize / **double-click title bar** (image MCQs) | Maximize / restore the window so the still can use most of the screen. |
 | **← / →** or **Prev / Next** (multi-image) | Carousel: show previous / next still (one visible at a time). |
 
 ### Reading the question (lead + detail)

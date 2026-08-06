@@ -280,6 +280,34 @@ def _text_mcq_default_size(
     return max(320, geom_w), max(280, geom_h)
 
 
+def _preview_click_action(
+    x: float,
+    width: float,
+    *,
+    multi: bool,
+) -> str:
+    """Map a still click to an action name (no Gtk — unit-tested).
+
+    Single-image: any click toggles compact ↔ large preview.
+    Multi-image carousel: left half → previous, right half → next
+    (Prev/Next buttons and ←/→ remain).
+    """
+    if not multi:
+        return "toggle_expand"
+    w = float(width)
+    if w <= 0.0:
+        return "next"
+    return "prev" if float(x) < (w * 0.5) else "next"
+
+
+def _is_titlebar_double_click(n_press: int) -> bool:
+    """True when a GestureClick reports a title-bar double-click."""
+    try:
+        return int(n_press) == 2
+    except (TypeError, ValueError):
+        return False
+
+
 def _workarea_wh_for_window(win: object) -> tuple[int, int] | None:
     """Return workarea (w, h) of the monitor currently hosting ``win``.
 
@@ -898,6 +926,13 @@ def _main() -> int:
                 start_voice_listen_thread()
 
         header = Adw.HeaderBar()
+        # Explicit title widget so CSD / undecorated hosts still have a clear
+        # drag + double-click target (not only the compositor chrome).
+        header_title = Gtk.Label(label=title)
+        header_title.set_ellipsize(Pango.EllipsizeMode.END)
+        header_title.set_single_line_mode(True)
+        header_title.add_css_class("title")
+        header.set_title_widget(header_title)
         if speak_enabled:
             header_replay = Gtk.Button()
             header_replay.set_icon_name("media-playlist-repeat-symbolic")
@@ -970,7 +1005,10 @@ def _main() -> int:
                     else f"{path}\nClick: larger preview"
                 )
                 if len(image_paths) > 1:
-                    tip += "\n← → or Prev/Next to change still"
+                    tip = (
+                        f"{path}\nClick left: previous · Click right: next"
+                        "\n← → or Prev/Next also work"
+                    )
                 picture.set_tooltip_text(tip)
 
         def _set_carousel_index(idx: int) -> None:
@@ -1068,6 +1106,34 @@ def _main() -> int:
 
             GLib.timeout_add(50, _after_maximize)
 
+        def _on_titlebar_click(
+            gesture: Gtk.GestureClick,
+            n_press: int,
+            _x: float,
+            _y: float,
+            *_rest: object,
+        ) -> None:
+            """Double-click title / drag region → soft maximize / restore."""
+            if not _is_titlebar_double_click(n_press):
+                return
+            toggle_window_maximize()
+            try:
+                gesture.set_state(Gtk.EventSequenceState.CLAIMED)
+            except Exception:  # noqa: BLE001
+                pass
+
+        # Wire double-click on HeaderBar (CSD title / drag region), including
+        # hosts where the window is undecorated — same soft-fill as F / button.
+        title_dbl = Gtk.GestureClick()
+        title_dbl.set_button(1)
+        title_dbl.connect("pressed", _on_titlebar_click)
+        header.add_controller(title_dbl)
+        # Also on the title label so clicks on the text hit the handler.
+        title_lbl_dbl = Gtk.GestureClick()
+        title_lbl_dbl.set_button(1)
+        title_lbl_dbl.connect("pressed", _on_titlebar_click)
+        header_title.add_controller(title_lbl_dbl)
+
         if image_paths:
             # Maximize / restore so large stills can use most of the screen.
             max_btn = Gtk.Button()
@@ -1086,8 +1152,9 @@ def _main() -> int:
         def _append_image_previews(parent: Gtk.Box) -> None:
             """PNG/JPEG preview above the question; click toggles large/compact.
 
-            Multi-image: carousel — one still visible; Prev/Next or ←/→ to move.
-            Full single-image height budget (never N tiny stacked stills).
+            Multi-image: carousel — one still visible; left/right click on the
+            still (or Prev/Next / ←/→) to move. Full single-image height budget
+            (never N tiny stacked stills).
             """
             if not image_paths:
                 return
@@ -1102,9 +1169,13 @@ def _main() -> int:
             box.set_margin_bottom(4)
             box.set_hexpand(True)
             multi = len(image_paths) > 1
-            hint_bits = ["Click image to enlarge/shrink", "F maximizes"]
             if multi:
-                hint_bits.insert(0, "← → or Prev/Next")
+                hint_bits = [
+                    "Click left/right of image for prev/next",
+                    "F maximizes",
+                ]
+            else:
+                hint_bits = ["Click image to enlarge/shrink", "F maximizes"]
             hint = Gtk.Label(label=" · ".join(hint_bits))
             hint.add_css_class("dim-label")
             hint.set_xalign(0.0)
@@ -1168,9 +1239,13 @@ def _main() -> int:
             picture.set_halign(Gtk.Align.CENTER)
             picture.set_size_request(-1, first_h)
             picture.add_css_class("ask-q-image-preview")
-            tip = f"{path0}\nClick: compact preview"
             if multi:
-                tip += "\n← → or Prev/Next to change still"
+                tip = (
+                    f"{path0}\nClick left: previous · Click right: next"
+                    "\n← → or Prev/Next also work"
+                )
+            else:
+                tip = f"{path0}\nClick: compact preview"
             picture.set_tooltip_text(tip)
             preview_pictures.append((path0, picture))
             carousel_idx["v"] = start_i
@@ -1182,12 +1257,19 @@ def _main() -> int:
             def _on_preview_click(
                 _gesture: Gtk.GestureClick,
                 _n: int,
-                _x: float,
+                x: float,
                 _y: float,
                 *_rest: object,
             ) -> None:
-                preview_expanded["v"] = not preview_expanded["v"]
-                _apply_preview_scale()
+                width = float(picture.get_width() or 0)
+                action = _preview_click_action(x, width, multi=multi)
+                if action == "prev":
+                    carousel_prev()
+                elif action == "next":
+                    carousel_next()
+                else:
+                    preview_expanded["v"] = not preview_expanded["v"]
+                    _apply_preview_scale()
 
             click = Gtk.GestureClick()
             click.connect("released", _on_preview_click)

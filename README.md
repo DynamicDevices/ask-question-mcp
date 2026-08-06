@@ -91,8 +91,9 @@ Full env / prefs: [SETUP.md](SETUP.md). Never commit tokens.
   Command / To+body / notes scroll underneath — so tall gates do not hide the
   payload or push Cancel/OK off-screen
 - Optional **image / images** preview in the dialog (Linux Gtk; click to
-  enlarge, **F** / header to maximize; primary monitor only). Multi-image is a
-  **carousel** (one still at a time; Prev/Next or ←/→)
+  enlarge, **F** / header / **double-click title** to maximize; primary
+  monitor only). Multi-image is a **carousel** (one still at a time; click
+  left/right of the still, Prev/Next, or ←/→)
 - Remembers last dialog size (`prefs.window`; position on Windows; size-only
   on typical Wayland)
 - Windows: scrollable option list + same lead/detail Confirm layout
