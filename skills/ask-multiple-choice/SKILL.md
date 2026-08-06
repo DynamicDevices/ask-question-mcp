@@ -39,14 +39,15 @@ choose among options the human must decide.
    pass the path into the dialog. Linux Gtk: opens large on the **primary**
    usable workarea (not the largest secondary); human can **click the preview**
    (large ↔ compact ~320px) and **maximize** (header button or **F**).
-   **P0 — multi-image must never exceed primary usable resolution** (stack
-   shares one height budget / scrolls inside). Text-only MCQs stay compact.
-   Pattern: `mcq-with-image`.
+   **Multi-image:** Gtk shows a **carousel** (one still at a time; Prev/Next or
+   ←/→) — never tiny stacked stills. Prefer one clear still when possible;
+   `images=` is fine for related stills the human must flip through.
+   Pattern: `mcq-with-image` + `mcq-images-one-at-a-time`.
 8. Wait for the JSON result. On cancel → stop. On freeform → use **`freeform_text`**.
 
-Humans use the dialog keyboard (**1–8**, Enter, Esc; **F** maximize when images);
-do not put hotkey instructions in `question`. Detail: repo `docs/AGENTS.md`
-(Dialog UX).
+Humans use the dialog keyboard (**1–8**, Enter, Esc; **F** maximize when images;
+**←/→** when multi-image carousel); do not put hotkey instructions in
+`question`. Detail: repo `docs/AGENTS.md` (Dialog UX).
 
 ## Voice — who is “I”? (Alex 2026-07-30)
 
@@ -75,6 +76,8 @@ labels** stay role-named. Pattern: `mcq-named-roles-alex-briar`.
   may still use desktop MCQ.
 - Asking Alex to judge a still that exists only in chat when the dialog can take
   **`image=`** / **`images=`**
+- Expecting several `images=` to appear as a readable grid/stack — Gtk shows a
+  **carousel** (one at a time); use that, or sequential single-`image=` MCQs
 - “Send now?” / “Ship it?” with no body/path when the human has not seen the draft
 - Permission MCQs that name a tool/action but omit **why** (Task agents, long
   scans, enable MCP, restart services, etc.)
