@@ -103,7 +103,7 @@ def ask_multiple_choice(
     image: str | None = None,
     images: list[str] | None = None,
 ) -> str:
-    """Desktop MCQ for every decision fork — never markdown A/B/C when available. agent=LANE.id; recommended in label + recommended_id; action_class=file|secrets|comms|destructive|policy colours Confirm chrome; Something else always; optional image/images (local path or file://) for Gtk+Nebula preview; human Ctrl+V paste returns pasted_images base64 in JSON; default timeout_sec=0 (waits); dangerous arms OK ~1s. On cancel/errors → check_setup once."""
+    """Desktop MCQ for decision forks — not markdown A/B/C. agent=LANE.id; recommended_id; action_class=file|secrets|comms|destructive|policy; dangerous arms OK; Something else always; optional image/images; timeout_sec=0 waits. Cancel → check_setup once."""
     try:
         result = ask_zenity(
             question,
