@@ -891,9 +891,25 @@ def main() -> int:
         str(x) for x in (payload.get("recommended_ids") or [])
     ]
     ui_payload["danger_ids"] = [str(x) for x in (payload.get("danger_ids") or [])]
-    ui_payload["dangerous"] = bool(
-        payload.get("dangerous") or ui_payload["danger_ids"]
-    )
+    try:
+        from ask_question_mcp.action_class import ui_fields as _action_ui_fields
+
+        _band = _action_ui_fields(
+            action_class=payload.get("action_class"),
+            dangerous=bool(payload.get("dangerous") or ui_payload["danger_ids"]),
+        )
+        ui_payload["action_class"] = _band.get("action_class")
+        ui_payload["eyebrow"] = _band.get("eyebrow")
+        ui_payload["banner_prefix"] = _band.get("banner_prefix")
+        ui_payload["css_band"] = _band.get("css_band")
+        ui_payload["dangerous"] = bool(_band["dangerous"])
+    except Exception:
+        ui_payload["dangerous"] = bool(
+            payload.get("dangerous") or ui_payload["danger_ids"]
+        )
+        for key in ("action_class", "eyebrow", "banner_prefix", "css_band"):
+            if payload.get(key) is not None:
+                ui_payload[key] = payload.get(key)
     ui_payload["allow_multiple"] = bool(payload.get("allow_multiple"))
     ui_payload["allow_other"] = bool(payload.get("allow_other", True))
     timeout_sec = int(payload.get("timeout_sec") or 0)

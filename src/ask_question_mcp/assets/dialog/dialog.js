@@ -678,19 +678,37 @@
     state.focusIdx = Math.max(0, ids.indexOf(focusId));
 
     const dangerous = !!(payload.dangerous || (payload.danger_ids || []).length);
-    $("#eyebrow").textContent = dangerous ? "Confirm" : "Decide";
-    $("#eyebrow").classList.toggle("is-danger", dangerous);
+    const band =
+      String(payload.action_class || "").toLowerCase() ||
+      (dangerous ? "destructive" : "");
+    const bandClass = band ? `is-${band}` : "";
+    const eyebrowEl = $("#eyebrow");
+    const BANDS = ["file", "secrets", "comms", "destructive", "policy", "danger"];
+    eyebrowEl.textContent =
+      payload.eyebrow || (dangerous ? "Confirm" : "Decide");
+    for (const b of BANDS) eyebrowEl.classList.remove(`is-${b}`);
+    if (bandClass) eyebrowEl.classList.add(bandClass);
+    else if (dangerous) eyebrowEl.classList.add("is-danger");
     $("#title-agent").textContent = payload.agent_hint || payload.title || "";
     $("#question").textContent = payload.question || "";
 
     const banner = $("#banner");
     banner.classList.toggle("is-on", dangerous);
+    for (const b of BANDS) banner.classList.remove(`is-${b}`);
+    if (bandClass) banner.classList.add(bandClass);
+    else if (dangerous) banner.classList.add("is-danger");
+    const prefix =
+      payload.banner_prefix ||
+      (dangerous ? "⛔ Confirm — " : "");
     $("#banner-copy").textContent = dangerous
-      ? `⛔ Confirm — ${payload.question || ""}`
+      ? `${prefix}${payload.question || ""}`
       : "";
 
     const ok = $("#ok-btn");
-    ok.classList.toggle("is-danger", dangerous);
+    for (const b of BANDS) ok.classList.remove(`is-${b}`);
+    ok.classList.toggle("is-danger", dangerous && (!band || band === "destructive"));
+    if (bandClass && band !== "destructive") ok.classList.add(bandClass);
+    else if (dangerous) ok.classList.add("is-danger");
 
     const showOther = payload.allow_other !== false;
     $("#freeform").hidden = !showOther;
