@@ -11,6 +11,7 @@ Exit 0 on OK, 1 on cancel/timeout/error.
 
 from __future__ import annotations
 
+import base64
 import json
 import os
 import signal
@@ -19,6 +20,10 @@ import sys
 import threading
 from pathlib import Path
 from typing import Any
+
+_MAX_PASTED = 4
+_PASTE_MAX_EDGE = 1280
+_PASTE_MAX_BYTES = 1_800_000  # ~rough bridge / MCP soft cap after encode
 
 # Sibling helpers (system python — not the MCP venv package).
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -565,7 +570,7 @@ def _main() -> int:
     gi.require_version("Gtk", "4.0")
     gi.require_version("Adw", "1")
     gi.require_version("GdkPixbuf", "2.0")
-    from gi.repository import Adw, Gdk, GdkPixbuf, GLib, Gtk, Pango
+    from gi.repository import Adw, Gdk, GdkPixbuf, Gio, GLib, Gtk, Pango
 
     question = str(payload.get("question") or "").strip()
     title = str(payload.get("title") or "Decide")
@@ -578,6 +583,7 @@ def _main() -> int:
     dangerous = bool(payload.get("dangerous"))
     allow_multiple = bool(payload.get("allow_multiple"))
     timeout_sec = int(payload.get("timeout_sec") or 0)
+    engaged_path_s = str(payload.get("engaged_path") or "").strip()
     image_paths = [
         str(x).strip()
         for x in (payload.get("images") or [])
@@ -760,11 +766,50 @@ def _main() -> int:
             picture.ask-q-image-preview {
               cursor: pointer;
             }
+            box.ask-q-refs {
+              padding: 8px 16px;
+            }
+            label.ask-q-refs-label {
+              font-weight: 600;
+              letter-spacing: 0.08em;
+            }
+            box.ask-q-ref-tile {
+              border-radius: 10px;
+              border: 1px solid alpha(currentColor, 0.18);
+              padding: 2px;
+            }
+            button.ask-q-ref-remove {
+              min-width: 22px;
+              min-height: 22px;
+              padding: 0;
+            }
             """
         )
         Gtk.StyleContext.add_provider_for_display(
             win.get_display(), css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
         )
+        # Nebula glass (Windows WebView aesthetic) — force dark + overlay CSS.
+        try:
+            Adw.StyleManager.get_default().set_color_scheme(
+                Adw.ColorScheme.FORCE_DARK
+            )
+        except Exception:  # noqa: BLE001
+            pass
+        win.add_css_class("ask-q-nebula")
+        nebula_css_path = (
+            Path(__file__).resolve().parent / "assets" / "gtk" / "nebula.css"
+        )
+        if nebula_css_path.is_file():
+            try:
+                nebula = Gtk.CssProvider()
+                nebula.load_from_path(str(nebula_css_path))
+                Gtk.StyleContext.add_provider_for_display(
+                    win.get_display(),
+                    nebula,
+                    Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION + 1,
+                )
+            except Exception:  # noqa: BLE001
+                pass
         if dangerous:
             win.add_css_class("ask-q-danger")
 
@@ -774,6 +819,31 @@ def _main() -> int:
         listen_gen = {"n": 0}
         voice_retries = {"n": 0}
         closed = {"v": False}
+        # Idle auto-close source; cleared on first freeform keystroke / paste / select.
+        timeout_src: dict[str, int | None] = {"id": None}
+        # Human Ctrl+V reference stills (in-memory; returned as MCP images).
+        pasted_items: list[dict[str, Any]] = []
+
+        def hold_idle_timeout() -> None:
+            """Cancel idle auto-close after the human starts interacting."""
+            sid = timeout_src["id"]
+            if sid is None:
+                return
+            try:
+                GLib.source_remove(sid)
+            except Exception:  # noqa: BLE001
+                pass
+            timeout_src["id"] = None
+
+        def mark_engaged() -> None:
+            """Hold idle timeout + signal parent not to hard-kill the dialog."""
+            hold_idle_timeout()
+            if engaged_path_s:
+                try:
+                    Path(engaged_path_s).touch()
+                except OSError:
+                    pass
+
         # Unmatched speech → confirm as freeform (Something else / Use this).
         freeform_pending = {"text": ""}
         # Surfaced to MCP/chat so the agent sees what STT heard.
@@ -1294,7 +1364,7 @@ def _main() -> int:
 
         list_box = Gtk.ListBox()
         list_box.set_selection_mode(Gtk.SelectionMode.NONE)
-        list_box.add_css_class("boxed-list")
+        list_box.add_css_class("ask-q-options")
         list_box.set_valign(Gtk.Align.START)
         scroll.set_child(list_box)
         root.append(scroll)
@@ -1353,12 +1423,185 @@ def _main() -> int:
             child = activated.get_child()
             if not isinstance(child, Gtk.CheckButton):
                 return
+            mark_engaged()
             if allow_multiple:
                 child.set_active(not child.get_active())
             else:
                 child.set_active(True)
 
         list_box.connect("row-activated", on_row_activated)
+
+        # References strip (Ctrl+V clipboard images) — between options and freeform.
+        refs_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        refs_box.add_css_class("ask-q-refs")
+        refs_box.set_margin_start(0)
+        refs_box.set_margin_end(0)
+        refs_box.set_vexpand(False)
+        refs_box.set_visible(False)
+        refs_lbl = Gtk.Label(label="REFERENCES")
+        refs_lbl.set_xalign(0.0)
+        refs_lbl.add_css_class("ask-q-refs-label")
+        refs_lbl.add_css_class("dim-label")
+        refs_strip = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        refs_strip.set_hexpand(True)
+        refs_box.append(refs_lbl)
+        refs_box.append(refs_strip)
+        root.append(refs_box)
+
+        def _render_refs() -> None:
+            while True:
+                child = refs_strip.get_first_child()
+                if child is None:
+                    break
+                refs_strip.remove(child)
+            if not pasted_items:
+                refs_box.set_visible(False)
+                return
+            refs_box.set_visible(True)
+            for i, item in enumerate(list(pasted_items)):
+                tile = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+                tile.add_css_class("ask-q-ref-tile")
+                tile.set_size_request(96, 72)
+                overlay = Gtk.Overlay()
+                picture = Gtk.Picture()
+                picture.set_content_fit(Gtk.ContentFit.COVER)
+                picture.set_size_request(92, 68)
+                try:
+                    raw = base64.b64decode(item.get("data") or "", validate=False)
+                    loader = GdkPixbuf.PixbufLoader()
+                    loader.write(raw)
+                    loader.close()
+                    pix = loader.get_pixbuf()
+                    if pix is not None:
+                        picture.set_pixbuf(pix)
+                except Exception:  # noqa: BLE001
+                    pass
+                overlay.set_child(picture)
+                rm = Gtk.Button(label="×")
+                rm.add_css_class("ask-q-ref-remove")
+                rm.set_halign(Gtk.Align.END)
+                rm.set_valign(Gtk.Align.START)
+                rm.set_margin_top(2)
+                rm.set_margin_end(2)
+                rm.set_focusable(False)
+                rm.set_tooltip_text(f"Remove reference {i + 1}")
+
+                def _make_remove(idx: int):
+                    def _on_rm(*_a: object) -> None:
+                        if 0 <= idx < len(pasted_items):
+                            pasted_items.pop(idx)
+                            _render_refs()
+
+                    return _on_rm
+
+                rm.connect("clicked", _make_remove(i))
+                overlay.add_overlay(rm)
+                tile.append(overlay)
+                refs_strip.append(tile)
+
+        def _texture_to_pasted(texture: Gdk.Texture) -> dict[str, Any] | None:
+            """Compact clipboard texture → jpeg/png payload for MCP."""
+            try:
+                gbytes = texture.save_to_png_bytes()
+                png = bytes(gbytes.get_data())
+            except Exception:  # noqa: BLE001
+                return None
+            if not png:
+                return None
+            try:
+                loader = GdkPixbuf.PixbufLoader.new_with_type("png")
+                loader.write(png)
+                loader.close()
+                pix = loader.get_pixbuf()
+            except Exception:  # noqa: BLE001
+                if len(png) > _PASTE_MAX_BYTES:
+                    return None
+                return {
+                    "mime": "image/png",
+                    "data": base64.b64encode(png).decode("ascii"),
+                }
+            if pix is None:
+                return None
+            w, h = int(pix.get_width()), int(pix.get_height())
+            if w < 1 or h < 1:
+                return None
+            scale = min(1.0, float(_PASTE_MAX_EDGE) / float(max(w, h)))
+            if scale < 1.0:
+                nw = max(1, int(round(w * scale)))
+                nh = max(1, int(round(h * scale)))
+                pix = pix.scale_simple(nw, nh, GdkPixbuf.InterpType.BILINEAR)
+            mime = "image/jpeg"
+            try:
+                ok, buf = pix.save_to_bufferv("jpeg", ["quality"], ["82"])
+                data = bytes(buf) if ok else b""
+            except Exception:  # noqa: BLE001
+                data = b""
+            if not data:
+                try:
+                    ok, buf = pix.save_to_bufferv("png", [], [])
+                    data = bytes(buf) if ok else b""
+                    mime = "image/png"
+                except Exception:  # noqa: BLE001
+                    return None
+            if not data or len(data) > _PASTE_MAX_BYTES:
+                return None
+            return {
+                "mime": mime,
+                "data": base64.b64encode(data).decode("ascii"),
+            }
+
+        def _add_pasted_from_texture(texture: Gdk.Texture) -> bool:
+            if len(pasted_items) >= _MAX_PASTED:
+                set_status("error", f"References capped at {_MAX_PASTED}")
+                return False
+            payload_img = _texture_to_pasted(texture)
+            if not payload_img:
+                return False
+            pasted_items.append(payload_img)
+            mark_engaged()
+            _render_refs()
+            return True
+
+        def _try_paste_clipboard_image() -> bool:
+            """Return True when clipboard looks like an image (async consume)."""
+            display = win.get_display()
+            if display is None:
+                return False
+            clipboard = display.get_clipboard()
+            formats = clipboard.get_formats()
+            try:
+                has_tex = formats.contain_gtype(Gdk.Texture.__gtype__)
+            except Exception:  # noqa: BLE001
+                has_tex = False
+            has_img = False
+            try:
+                for mime in (
+                    "image/png",
+                    "image/jpeg",
+                    "image/jpg",
+                    "image/webp",
+                    "image/gif",
+                ):
+                    if formats.contain_mime_type(mime):
+                        has_img = True
+                        break
+            except Exception:  # noqa: BLE001
+                has_img = False
+            if not (has_tex or has_img):
+                return False
+
+            def _on_texture(clip: Gdk.Clipboard, result: Gio.AsyncResult) -> None:
+                try:
+                    texture = clip.read_texture_finish(result)
+                except Exception:  # noqa: BLE001
+                    return
+                if texture is None or closed["v"]:
+                    return
+                _add_pasted_from_texture(texture)
+
+            # Gio is pulled in via gi.repository below if needed.
+            clipboard.read_texture_async(None, _on_texture)
+            return True
 
         other_id = next(
             (i for i in ids if i in {"other", "something_else", "something-else"}),
@@ -1369,11 +1612,11 @@ def _main() -> int:
             freeform_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
             freeform_box.set_margin_top(4)
             freeform_box.set_margin_bottom(12)
-            freeform_lbl = Gtk.Label(label="Or type something else:")
+            freeform_lbl = Gtk.Label(label="Or type something else")
             freeform_lbl.set_xalign(0.0)
             freeform_lbl.add_css_class("dim-label")
             freeform_entry = Gtk.Entry()
-            freeform_entry.set_placeholder_text("Type a different answer…")
+            freeform_entry.set_placeholder_text("Something else… · Ctrl+V image")
             freeform_entry.set_hexpand(True)
             freeform_box.append(freeform_lbl)
             freeform_box.append(freeform_entry)
@@ -1401,6 +1644,7 @@ def _main() -> int:
                     _selecting_from_entry["v"] = False
 
             def on_freeform_changed(_entry: Gtk.Entry) -> None:
+                mark_engaged()
                 if (freeform_entry.get_text() or "").strip():
                     _select_other(from_entry=True)
 
@@ -1572,7 +1816,8 @@ def _main() -> int:
         hint.set_ellipsize(Pango.EllipsizeMode.END)
         hint.set_tooltip_text(
             "Number keys select an option (toggle in multi-select). "
-            "Enter confirms after the short arm delay. Escape cancels."
+            "Enter confirms after the short arm delay. Escape cancels. "
+            "Ctrl+V pastes clipboard images as References (max 4)."
         )
         btn_row.append(hint)
         cancel_btn = Gtk.Button(label="Cancel")
@@ -1729,6 +1974,12 @@ def _main() -> int:
                 voice_trace["transcript"] = freeform_text
                 voice_trace["matched_option_id"] = other_id
                 result["voice"] = _voice_payload()
+            if pasted_items:
+                result["pasted_images"] = [
+                    {"mime": p.get("mime"), "data": p.get("data")}
+                    for p in pasted_items
+                    if p.get("mime") and p.get("data")
+                ]
             quit_app()
 
         def finish_voice_freeform(text: str) -> None:
@@ -2246,8 +2497,14 @@ def _main() -> int:
             _c: Gtk.EventControllerKey,
             keyval: int,
             _keycode: int,
-            _state: object,
+            state: Gdk.ModifierType,
         ) -> bool:
+            ctrl = bool(state & Gdk.ModifierType.CONTROL_MASK)
+            if ctrl and keyval in (Gdk.KEY_v, Gdk.KEY_V):
+                # Image paste → References; text paste still reaches the Entry.
+                if _try_paste_clipboard_image():
+                    return True
+                return False
             if keyval == Gdk.KEY_Escape:
                 finish_cancel()
                 return True
@@ -2279,6 +2536,7 @@ def _main() -> int:
                 oid = ids[idx]
                 btn = checks.get(oid)
                 if btn is not None:
+                    mark_engaged()
                     if allow_multiple:
                         btn.set_active(not btn.get_active())
                     else:
@@ -2311,10 +2569,11 @@ def _main() -> int:
         if timeout_sec > 0:
 
             def on_timeout() -> bool:
+                timeout_src["id"] = None
                 finish_cancel("timed out")
                 return GLib.SOURCE_REMOVE
 
-            GLib.timeout_add_seconds(timeout_sec, on_timeout)
+            timeout_src["id"] = GLib.timeout_add_seconds(timeout_sec, on_timeout)
 
         win.present()
         # Focus an option row — never OK — so Space toggles/selects, Return confirms.

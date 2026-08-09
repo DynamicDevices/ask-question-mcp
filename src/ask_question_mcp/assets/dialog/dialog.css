@@ -316,13 +316,16 @@ body {
 }
 
 .body {
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 16px;
   padding: 6px 18px 0;
-  overflow: hidden;
+  /* Options scroll when References appear — footer/Cancel/OK stay pinned.
+     WebView ignores JS resize_to, so flex shrink is the only safe path. */
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .question {
@@ -417,6 +420,16 @@ body {
 .app.is-ready .option-shell {
   opacity: 1;
   transform: translateY(0);
+}
+
+.option-shell.is-focused:not(.is-selected) {
+  outline: 2px solid color-mix(in srgb, var(--accent, #7dd3fc) 70%, transparent);
+  outline-offset: 2px;
+}
+
+.option-shell.is-focused.is-selected {
+  outline: 2px solid color-mix(in srgb, var(--accent, #7dd3fc) 55%, transparent);
+  outline-offset: 2px;
 }
 
 .option-shell.is-selected {
@@ -526,13 +539,105 @@ body {
   opacity: 0.9;
 }
 
+.refs {
+  flex: 0 0 auto;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  /* Nested in .body on Linux — body already has 18px horizontal padding. */
+  padding: 12px 0;
+  border-top: 1px solid rgb(var(--hairline-rgb) / 0.06);
+  opacity: 0;
+  transform: translateY(10px);
+  transition:
+    opacity 680ms var(--ease),
+    transform 680ms var(--ease);
+  transition-delay: 140ms;
+}
+
+.app.is-ready .refs:not([hidden]) {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.refs[hidden] {
+  display: none !important;
+}
+
+.refs-label {
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-eyebrow);
+}
+
+.refs-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-start;
+  max-height: 160px;
+  overflow: auto;
+}
+
+.ref-tile {
+  position: relative;
+  flex: 0 0 auto;
+  width: 96px;
+  height: 72px;
+  padding: 2px;
+  border-radius: calc(var(--r-tile-inner) + 2px);
+  background: rgb(var(--hairline-rgb) / 0.045);
+  border: 1px solid rgb(var(--hairline-rgb) / 0.1);
+  overflow: hidden;
+}
+
+.ref-tile img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: var(--r-tile-inner);
+  background: rgb(var(--card-core-rgb) / 0.9);
+  pointer-events: none;
+}
+
+.ref-remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: rgb(var(--ground-rgb) / 0.72);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition:
+    background var(--hover-ms) var(--ease),
+    color var(--hover-ms) var(--ease);
+}
+
+.ref-remove:hover {
+  background: rgb(var(--ember-rgb) / 0.85);
+  color: #fff;
+}
+
 .freeform {
   flex: 0 0 auto;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 12px 18px 0;
+  /* Nested in .body on Linux — body already has 18px horizontal padding. */
+  padding: 12px 0 8px;
   border-top: 1px solid rgb(var(--hairline-rgb) / 0.06);
   opacity: 0;
   transform: translateY(10px);
@@ -540,6 +645,12 @@ body {
     opacity 680ms var(--ease),
     transform 680ms var(--ease);
   transition-delay: 160ms;
+}
+
+/* When References is showing, drop the double hairline and keep equal gap. */
+.refs:not([hidden]) + .freeform {
+  border-top: 0;
+  padding-top: 0;
 }
 
 .app.is-ready .freeform {
@@ -593,12 +704,20 @@ body {
 
 .footer {
   flex: 0 0 auto;
+  /* Never shrink — Cancel/OK must stay visible when options/refs grow. */
   flex-shrink: 0;
+  z-index: 5;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 14px 18px 16px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  padding: 10px 18px 20px;
+  background: linear-gradient(
+    180deg,
+    rgb(var(--ground-rgb) / 0) 0%,
+    rgb(var(--ground-rgb) / 0.55) 35%,
+    rgb(var(--ground-rgb) / 0.92) 100%
+  );
   opacity: 0;
   transform: translateY(10px);
   transition:
@@ -612,16 +731,131 @@ body {
   transform: translateY(0);
 }
 
+.footer-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.voice-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.voice-status {
+  font-size: 12px;
+  font-weight: 550;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-secondary);
+}
+
+.voice-status[data-state="speaking"] {
+  color: rgb(120 180 255);
+}
+
+.voice-status[data-state="listening"] {
+  color: rgb(90 220 160);
+}
+
+.voice-status[data-state="analysing"] {
+  color: rgb(220 190 90);
+}
+
+.voice-status[data-state="heard"] {
+  color: rgb(140 220 180);
+}
+
+.voice-status[data-state="error"] {
+  color: rgb(255 120 140);
+}
+
+.voice-recover {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgb(var(--hairline-rgb) / 0.08);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.04);
+}
+
+.voice-recover-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.35;
+}
+
+.voice-recover-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.voice-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.voice-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.voice-check input {
+  accent-color: rgb(var(--accent-rgb));
+}
+
+.btn-voice {
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 550;
+  background: rgb(var(--hairline-rgb) / 0.08);
+  color: var(--text-secondary);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05);
+}
+
+.btn-voice:hover:not(:disabled) {
+  background: rgb(var(--hairline-rgb) / 0.14);
+  color: var(--text-primary);
+}
+
+.btn-voice.is-accent {
+  background: rgb(var(--accent-rgb) / 0.22);
+  color: var(--text-primary);
+}
+
 .hint {
   font-size: 11px;
   color: var(--text-tertiary);
   letter-spacing: 0.01em;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .actions {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-shrink: 0;
 }
 
 .btn {

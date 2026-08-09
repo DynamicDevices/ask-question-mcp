@@ -39,27 +39,61 @@
           </div>
           <h1 class="question" id="question"></h1>
           <div class="options" id="options" role="listbox"></div>
+
+          <!-- Linux WebKit/Adw: refs + freeform must live in the scrolling
+               .body or the pinned footer clips Cancel/OK. Windows can pin
+               them outside; this is the only structural Linux deviation from
+               theoriginalcheese Nebula index.html. -->
+          <div class="refs" id="refs" hidden>
+            <div class="refs-label">References</div>
+            <div class="refs-strip" id="refs-strip" role="list"></div>
+          </div>
+
+          <div class="freeform" id="freeform">
+            <label class="freeform-label" for="freeform-input">Or type something else</label>
+            <div class="freeform-shell">
+              <textarea
+                id="freeform-input"
+                class="freeform-input"
+                rows="2"
+                placeholder="Something else… · Ctrl+V image"
+                autocomplete="off"
+                spellcheck="false"
+              ></textarea>
+            </div>
+          </div>
         </main>
 
-        <div class="freeform" id="freeform">
-          <label class="freeform-label" for="freeform-input">Or type something else</label>
-          <div class="freeform-shell">
-            <textarea
-              id="freeform-input"
-              class="freeform-input"
-              rows="2"
-              placeholder="Something else…"
-              autocomplete="off"
-              spellcheck="false"
-            ></textarea>
-          </div>
-        </div>
-
         <footer class="footer">
-          <div class="hint" id="hint">Select · Enter OK · Esc cancel</div>
-          <div class="actions">
-            <button type="button" class="btn btn-ghost" id="cancel-btn">Cancel</button>
-            <button type="button" class="btn btn-primary" id="ok-btn" disabled>OK</button>
+          <!-- Voice chrome stays in the footer (not <main>) so Cancel/OK never clip. -->
+          <div class="voice-bar" id="voice-bar" hidden>
+            <div class="voice-status" id="voice-status" data-state="idle" hidden></div>
+            <div class="voice-recover" id="voice-recover" hidden>
+              <div class="voice-recover-label" id="voice-recover-label"></div>
+              <div class="voice-recover-actions">
+                <button type="button" class="btn btn-voice" id="voice-repeat-btn">Repeat</button>
+                <button type="button" class="btn btn-voice is-accent" id="voice-use-this-btn" hidden>Use this</button>
+              </div>
+            </div>
+            <div class="voice-controls" id="voice-controls">
+              <label class="voice-check" id="audio-label" title="Speak questions and listen for answers (saved)">
+                <input type="checkbox" id="audio-chk" />
+                <span>Audio</span>
+              </label>
+              <button type="button" class="btn btn-voice" id="replay-btn" hidden title="Replay question (R)">Replay</button>
+              <button type="button" class="btn btn-voice" id="listen-btn" hidden title="Listen for a spoken answer (L)">Listen</button>
+              <label class="voice-check" id="always-listen-label" hidden title="Auto-start the mic when this dialog opens (saved)">
+                <input type="checkbox" id="always-listen-chk" />
+                <span>Always listen</span>
+              </label>
+            </div>
+          </div>
+          <div class="footer-row">
+            <div class="hint" id="hint">Select · Enter OK · Esc cancel</div>
+            <div class="actions">
+              <button type="button" class="btn btn-ghost" id="cancel-btn">Cancel</button>
+              <button type="button" class="btn btn-primary" id="ok-btn" disabled>OK</button>
+            </div>
           </div>
         </footer>
       </div>

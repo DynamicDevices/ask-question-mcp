@@ -12,7 +12,8 @@ when a user wants to diverge from the packaged defaults.
 
 Env overrides:
 
-- ``ASK_QUESTION_AUDIO=0|1`` — master TTS+STT kill switch (``audio_enabled``)
+- ``ASK_QUESTION_AUDIO=0`` — hard mute (ops / text-only). ``=1`` does **not**
+  override the dialog Audio checkbox / ``prefs.audio_enabled`` (checkbox wins).
 - ``ASK_QUESTION_DUCK=0|1`` — lower other apps while speaking/listening (``duck_enabled``)
 - ``ASK_QUESTION_ACK=0|1`` — spoken ack after OK (``ack_enabled``; default off)
 - ``ASK_QUESTION_ALWAYS_LISTEN=0|1`` — auto mic after speak (default off)
@@ -93,10 +94,14 @@ def _env_bool(name: str) -> bool | None:
 
 
 def get_audio_enabled() -> bool:
-    """Master switch for TTS speak + STT listen (both off when False)."""
+    """Master switch for TTS speak + STT listen (both off when False).
+
+    ``ASK_QUESTION_AUDIO=0`` hard-mutes. ``ASK_QUESTION_AUDIO=1`` is ignored so
+    the footer checkbox / prefs can mute without fighting mcp.json env.
+    """
     env = _env_bool("ASK_QUESTION_AUDIO")
-    if env is not None:
-        return env
+    if env is False:
+        return False
     return bool(load_prefs().get("audio_enabled", True))
 
 
