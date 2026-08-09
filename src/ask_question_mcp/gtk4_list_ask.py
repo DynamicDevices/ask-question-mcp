@@ -2624,7 +2624,7 @@ def _main() -> int:
 
             GLib.timeout_add(150, _poll_speak_phase)
             always = False if _prefs is None else _prefs.get_always_listen()
-            audio_on = True if _prefs is None else _prefs.get_audio_enabled()
+            audio_on = False if _prefs is None else _prefs.get_audio_enabled()
             if always and audio_on:
                 start_voice_listen_thread()
 

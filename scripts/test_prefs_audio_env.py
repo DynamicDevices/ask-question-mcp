@@ -24,6 +24,10 @@ def main() -> int:
     os.environ.pop("ASK_QUESTION_AUDIO", None)
     assert prefs.get_audio_enabled() is False, "prefs false must mute"
 
+    # No prefs file → packaged default is quiet (audio off).
+    prefs_path.unlink(missing_ok=True)
+    assert prefs.get_audio_enabled() is False, "shipped default must mute"
+
     prefs_path.write_text('{"audio_enabled": true}\n', encoding="utf-8")
     assert prefs.get_audio_enabled() is True, "prefs true must unmute"
 
