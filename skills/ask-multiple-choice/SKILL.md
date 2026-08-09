@@ -1,27 +1,19 @@
 ---
 name: ask-multiple-choice
 description: >-
-  Desktop MCP ask_multiple_choice for every decision fork — Anthony's opinion
-  when stuck, choosing paths, confirming work, or picking options. Prefer this
-  over markdown A/B/C or host AskQuestion. Supports multi-select and optional
-  image= / images= previews. Use whenever the ask-question MCP is available
-  and a human choice is needed.
+  Prefer desktop MCP ask_multiple_choice for decision forks — not markdown
+  A/B/C. Use when choosing or confirming. Pass image=/images= when the human
+  must judge a still in the dialog.
 ---
 
 # Ask multiple choice (desktop MCP)
 
-Cursor stand-in for Claude Code **AskUserQuestion**. **Need-band:** freedom —
-faster decisions without chat A/B/C noise.
+**Need-band:** freedom — faster decisions without chat A/B/C noise.
 
-## When (auto — do not wait to be asked)
+## When (auto)
 
-Any fork that needs **Anthony's opinion**, including when you are **stuck**:
-
-- ship / wait / pick a path
-- confirm irreversible or risky work
-- choose among concrete options
-- several answers may apply together → multi-select
-- preference unknown — ask; do not guess
+Any **decision fork**: ship/wait, pick a path, confirm irreversible work,
+choose among options the human must decide.
 
 ## Do
 
@@ -35,36 +27,71 @@ Any fork that needs **Anthony's opinion**, including when you are **stuck**:
    (always fully visible); put Command/To+body/path **before** meta notes.
    Do **not** dump process templates, PATTERN blocks, or long meta into routine
    forks. No meta about dialogs/voice.
-4. **Permission / action asks:** state **what** will happen **and why** (one
-   sentence each is enough). Opaque “proceed?” without purpose is not enough.
+4. **Permission / action asks (Alex 2026-07-30):** state **what** Briar will do
+   **and why** (one sentence each is enough). Opaque “run Task agents?” /
+   “proceed?” without purpose is not enough — Alex must understand the aim.
    Pattern: `mcq-permission-what-and-why`.
-5. Mark preferred only as **`Label (recommended)`** + **`recommended_id`**
-   (or **`recommended_ids`** for multi).
-6. Set **`allow_multiple=true`** when more than one option can be correct together
-   (checklist). Default single-select otherwise.
-7. **`dangerous=true`** for irreversible / high-risk forks.
-8. **Images the human must judge:** pass **`image=`** (one path / `file://`) or
-   **`images=`** (list). Chat `Read` of a PNG does **not** put pixels in the MCQ.
-   Linux Gtk shows the preview in-dialog; Windows WebView path may ignore images
-   until wired.
-9. Wait for the JSON result.
-   - Cancel → **stop** (do not invent a choice).
-   - Freeform → honour **`freeform_text`**.
-   - Multi → use **`ids`** / **`labels`**.
+5. Mark preferred only as **`Label (recommended)`** + **`recommended_id`**.
+6. **`dangerous=true`** for irreversible / high-risk forks.
+7. **Images the human must judge** (Alex loves this — signed-off 2026-08-03):
+   pass **`image=`** (one path / `file://` URI) or **`images=`** (list, max 4).
+   Chat `Read` of a PNG does **not** put pixels in the MCQ — agents **must**
+   pass the path into the dialog. Linux Gtk: opens large on the **primary**
+   usable workarea (not the largest secondary); human can **click the preview**
+   (large ↔ compact ~320px) and **maximize** (header button, **F**, or
+   **double-click the title bar**).
+   **Multi-image:** Gtk shows a **carousel** (one still at a time; click
+   left/right of the still, Prev/Next, or ←/→) — never tiny stacked stills.
+   Prefer one clear still when possible;
+   `images=` is fine for related stills the human must flip through.
+   Pattern: `mcq-with-image` + `mcq-images-one-at-a-time`.
+8. Wait for the JSON result (and any MCP **Image** blocks if the human pasted
+   references). On cancel → stop. On freeform → use **`freeform_text`**.
+   Default `timeout_sec=0` waits for the human — do not invent a choice if they
+   take a long time.
 
-Humans use dialog keys (**1–8**, Enter, Esc); do not put hotkey text in
-`question`. Detail: repo `docs/AGENTS.md` (Dialog UX).
+Humans use the dialog keyboard (**1–8**, Enter, Esc; **Ctrl+V** paste images;
+**F** maximize when images; **←/→** when multi-image carousel); do not put
+hotkey instructions in `question`. Detail: repo `docs/AGENTS.md` (Dialog UX).
+
+## Voice — who is “I”? (Alex 2026-07-30)
+
+MCQs must not use ambiguous **I** / **you** for actions.
+
+| Role | How to refer |
+|------|----------------|
+| Human | **Alex** (or “Alex will…”) |
+| This assistant | **Briar** (or “Briar will…”) |
+
+**Do:** `Briar will restart the webhook` · `Alex approves the send` · option
+labels like `Briar sends now` / `Alex will edit first`.
+**Don't:** `I'll capture…` / `you refresh…` / `I mean the agent…` when either
+party could be “I”.
+
+Casual chat outside MCQs may still use normal I/you; **MCQ question + option
+labels** stay role-named. Pattern: `mcq-named-roles-alex-briar`.
 
 ## Don't
 
 - Markdown A/B/C, numbered lists, or host AskQuestion when this MCP is available
-- Asking the human to judge a still that exists only in chat when the dialog can
-  take **`image=`** / **`images=`**
-- Soft MCQs before a real send-gate — draft in chat, then one confirm
+- Desktop MCQ for clarifications / next steps when the ask originated over
+  **WhatsApp admin inbound** — keep those on WhatsApp (Charlize voice or short
+  text) per `cursor-pa-whatsapp` SOUL; desktop MCQ is for Cursor-session forks
+  not originated on WA (unless Alex opts in). P0 send-gates to third parties
+  may still use desktop MCQ.
+- Asking Alex to judge a still that exists only in chat when the dialog can take
+  **`image=`** / **`images=`**
+- Expecting several `images=` to appear as a readable grid/stack — Gtk shows a
+  **carousel** (one at a time); use that, or sequential single-`image=` MCQs
+- “Send now?” / “Ship it?” with no body/path when the human has not seen the draft
+- Permission MCQs that name a tool/action but omit **why** (Task agents, long
+  scans, enable MCP, restart services, etc.)
+- Stuffing PATTERN/PROPOSAL/OWNS walls into every MCQ
+- Soft MCQs before a send-gate (“draft OK?”, “ready?”, “shall Briar send?”) —
+  draft in chat, then **one** send-gate only (`email-one-send-gate`)
 - `check_setup` before routine MCQs (only first enable, dialog failure, or before voice)
 - Invent a choice after `cancelled: true`
-- Skip the dialog because the skill wasn't @-mentioned — the always-on user rule
-  still applies when the MCP is loaded
+- Ambiguous **I/you** in MCQ question or option labels (use Alex / Briar)
 
 ## Setup (humans)
 
@@ -73,4 +100,4 @@ cd /path/to/ask-question-mcp && uv sync
 uv run ask-question-install --host cursor --skill
 ```
 
-Then reload the host. Windows: see `docs/WINDOWS.md`. Detail: `docs/AGENTS.md`.
+Then reload the host. Detail: repo `docs/AGENTS.md`.

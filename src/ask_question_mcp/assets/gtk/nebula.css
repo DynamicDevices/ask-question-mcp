@@ -1,0 +1,192 @@
+/* Nebula-inspired Gtk theme (glass) — ported from Windows WebView dialog tokens. */
+
+window.ask-q-nebula {
+  background-color: #0c0a14;
+  color: #f7f5ff;
+}
+
+window.ask-q-nebula.ask-q-danger {
+  box-shadow: 0 0 0 2px #ff5c7a;
+}
+
+/* Confirm card */
+window.ask-q-nebula box.ask-q-banner {
+  background-color: rgba(255, 92, 122, 0.14);
+  padding: 14px 16px 16px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 92, 122, 0.35);
+}
+
+window.ask-q-nebula label.ask-q-banner-title {
+  color: #ffb3c1;
+  font-weight: 700;
+  font-size: 1.05em;
+  letter-spacing: 0.12em;
+}
+
+window.ask-q-nebula label.ask-q-banner-lead {
+  color: #f7f5ff;
+  font-weight: 600;
+  margin-top: 4px;
+  line-height: 1.35;
+}
+
+window.ask-q-nebula label.ask-q-banner-body {
+  color: #a39bc9;
+  margin-top: 4px;
+  line-height: 1.35;
+}
+
+window.ask-q-nebula label.ask-q-question-lead {
+  color: #f7f5ff;
+  font-weight: 600;
+  font-size: 1.15em;
+  line-height: 1.35;
+}
+
+window.ask-q-nebula label.ask-q-question-detail {
+  color: #a39bc9;
+  line-height: 1.35;
+}
+
+/* Option tiles */
+window.ask-q-nebula listbox.ask-q-options {
+  background: transparent;
+  border: none;
+}
+
+window.ask-q-nebula listbox.ask-q-options row {
+  margin: 4px 0;
+  padding: 2px;
+  border-radius: 16px;
+  background: rgba(245, 243, 255, 0.04);
+  border: 1px solid rgba(245, 243, 255, 0.07);
+}
+
+window.ask-q-nebula listbox.ask-q-options row:hover {
+  background: rgba(155, 140, 255, 0.10);
+  border-color: rgba(155, 140, 255, 0.22);
+}
+
+window.ask-q-nebula listbox.ask-q-options row checkbutton {
+  padding: 10px 12px;
+  border-radius: 13px;
+  background: rgba(22, 18, 42, 0.88);
+  color: #f7f5ff;
+}
+
+window.ask-q-nebula listbox.ask-q-options row checkbutton:checked {
+  background: rgba(155, 140, 255, 0.18);
+  color: #c9bfff;
+}
+
+window.ask-q-nebula button.suggested-action {
+  background: #9b8cff;
+  color: #0c0a14;
+  border-color: #7a6ce0;
+  border-radius: 12px;
+  font-weight: 650;
+}
+
+window.ask-q-nebula button.suggested-action.ask-q-danger-ok {
+  background: #ff5c7a;
+  color: #ffffff;
+  border-color: #c43d58;
+}
+
+window.ask-q-nebula button {
+  border-radius: 12px;
+  color: #f7f5ff;
+}
+
+window.ask-q-nebula entry {
+  background: rgba(22, 18, 42, 0.92);
+  color: #f7f5ff;
+  border-radius: 12px;
+  border: 1px solid rgba(245, 243, 255, 0.10);
+  padding: 8px 10px;
+}
+
+window.ask-q-nebula entry:focus {
+  border-color: rgba(155, 140, 255, 0.45);
+}
+
+window.ask-q-nebula label.dim-label,
+window.ask-q-nebula .dim-label {
+  color: #8b84b8;
+}
+
+window.ask-q-nebula box.ask-q-footer {
+  padding: 10px 16px 16px 16px;
+  border-top: 1px solid rgba(245, 243, 255, 0.06);
+  background-color: rgba(18, 16, 31, 0.92);
+}
+
+/* References (human Ctrl+V paste) */
+window.ask-q-nebula box.ask-q-refs {
+  padding: 10px 16px;
+  border-top: 1px solid rgba(245, 243, 255, 0.06);
+}
+
+window.ask-q-nebula label.ask-q-refs-label {
+  color: #7a72ad;
+  font-size: 0.85em;
+  letter-spacing: 0.12em;
+  font-weight: 600;
+}
+
+window.ask-q-nebula box.ask-q-ref-tile {
+  border-radius: 12px;
+  background: rgba(245, 243, 255, 0.045);
+  border: 1px solid rgba(245, 243, 255, 0.10);
+  padding: 2px;
+}
+
+window.ask-q-nebula button.ask-q-ref-remove {
+  min-width: 22px;
+  min-height: 22px;
+  padding: 0;
+  border-radius: 11px;
+  background: rgba(12, 10, 20, 0.72);
+  color: #f7f5ff;
+}
+
+/* Voice status on dark */
+window.ask-q-nebula label.ask-q-status-idle {
+  color: rgba(247, 245, 255, 0.55);
+}
+
+window.ask-q-nebula label.ask-q-status-speaking {
+  color: #c9bfff;
+  background-color: rgba(155, 140, 255, 0.16);
+  border: 1px solid rgba(155, 140, 255, 0.35);
+}
+
+window.ask-q-nebula label.ask-q-status-listening {
+  color: #ffb3c1;
+  background-color: rgba(255, 92, 122, 0.14);
+  border: 1px solid rgba(255, 92, 122, 0.35);
+}
+
+window.ask-q-nebula label.ask-q-status-analysing {
+  color: #9bd6ff;
+  background-color: rgba(60, 180, 200, 0.14);
+  border: 1px solid rgba(60, 180, 200, 0.35);
+}
+
+window.ask-q-nebula label.ask-q-status-heard {
+  color: #b8f0c8;
+  background-color: rgba(80, 180, 120, 0.14);
+  border: 1px solid rgba(80, 180, 120, 0.35);
+}
+
+window.ask-q-nebula label.ask-q-status-error {
+  color: #ffcc80;
+  background-color: rgba(255, 160, 60, 0.14);
+  border: 1px solid rgba(255, 160, 60, 0.35);
+}
+
+window.ask-q-nebula box.ask-q-voice-recover {
+  background-color: rgba(255, 160, 60, 0.12);
+  border: 1px solid rgba(255, 160, 60, 0.35);
+}

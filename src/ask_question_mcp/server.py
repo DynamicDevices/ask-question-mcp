@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import base64
 import json
+from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
@@ -22,6 +24,40 @@ mcp = FastMCP(
         "Detail: docs/AGENTS.md."
     ),
 )
+
+
+def _mcq_tool_result(result: dict[str, Any]) -> str:
+    """Lean JSON string. Pasted stills are embedded as base64 in JSON.
+
+    Cursor's MCP host raises on FastMCP ``Image`` / mixed content-block lists
+    (``Unable to serialize unknown type: Image``), so we keep a single string
+    return. Agents can still read ``pasted_images`` from the JSON.
+    """
+    blobs = result.pop("_pasted_image_blobs", None) or []
+    pasted: list[dict[str, str]] = []
+    for blob in blobs:
+        if not isinstance(blob, dict):
+            continue
+        data = blob.get("data")
+        if not isinstance(data, (bytes, bytearray)) or not data:
+            continue
+        mime = str(blob.get("mime") or "image/png").strip().lower() or "image/png"
+        fmt = str(blob.get("format") or "png").strip().lower() or "png"
+        pasted.append(
+            {
+                "mime": mime,
+                "format": fmt,
+                "data": base64.b64encode(bytes(data)).decode("ascii"),
+            }
+        )
+    if pasted:
+        result["pasted_images"] = pasted
+        notes = result.get("capabilities")
+        if isinstance(notes, dict):
+            nlist = list(notes.get("notes") or [])
+            nlist.append(f"Human pasted {len(pasted)} reference image(s) (base64 in pasted_images).")
+            notes["notes"] = nlist
+    return json.dumps(result, ensure_ascii=False)
 
 
 @mcp.tool()
@@ -61,11 +97,11 @@ def ask_multiple_choice(
     title: str = "Decide",
     agent: str | None = None,
     entry_seed: str | None = None,
-    timeout_sec: int = 300,
+    timeout_sec: int = 0,
     image: str | None = None,
     images: list[str] | None = None,
 ) -> str:
-    """Desktop MCQ for every decision fork — never markdown A/B/C when available. agent=LANE.id; recommended in label + recommended_id; Something else always; optional image/images (local path or file://) for Gtk preview; dangerous arms OK ~1s. On cancel/errors → check_setup once."""
+    """Desktop MCQ for every decision fork — never markdown A/B/C when available. agent=LANE.id; recommended in label + recommended_id; Something else always; optional image/images (local path or file://) for Gtk+Nebula preview; human Ctrl+V paste returns pasted_images base64 in JSON; default timeout_sec=0 (waits); dangerous arms OK ~1s. On cancel/errors → check_setup once."""
     try:
         result = ask_zenity(
             question,
@@ -83,7 +119,7 @@ def ask_multiple_choice(
             image=image,
             images=images,
         )
-        return json.dumps(result, ensure_ascii=False)
+        return _mcq_tool_result(result)
     except AskCancelled as exc:
         payload: dict = {
             "cancelled": True,

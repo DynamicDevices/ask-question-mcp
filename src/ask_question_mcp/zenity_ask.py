@@ -44,6 +44,8 @@ OTHER_LABEL = "Something else…"
 # Standalone Gtk4 dialogs (must run under system python with gi/Adw).
 _GTK4_LIST_ASK = Path(__file__).resolve().with_name("gtk4_list_ask.py")
 _GTK4_ENTRY_ASK = Path(__file__).resolve().with_name("gtk4_entry_ask.py")
+# Linux Nebula WebKit dialog (same HTML/CSS/JS as Windows WebView).
+_LINUX_WEBVIEW_ASK = Path(__file__).resolve().with_name("linux_webview_ask.py")
 # Windows dialogs — WebView2 (glass) → Edge --app → tkinter.
 _WIN_WEBVIEW_ASK = Path(__file__).resolve().with_name("win_webview_ask.py")
 _WIN_WEBVIEW_ENTRY_ASK = Path(__file__).resolve().with_name(
@@ -52,6 +54,39 @@ _WIN_WEBVIEW_ENTRY_ASK = Path(__file__).resolve().with_name(
 _WIN_EDGE_ASK = Path(__file__).resolve().with_name("win_edge_ask.py")
 _WIN_LIST_ASK = Path(__file__).resolve().with_name("win_list_ask.py")
 _WIN_ENTRY_ASK = Path(__file__).resolve().with_name("win_entry_ask.py")
+
+
+
+def _linux_ui_backend() -> str:
+    """``nebula`` (WebKit), ``gtk``, or ``auto`` (prefer Nebula)."""
+    raw = (os.environ.get("ASK_QUESTION_LINUX_UI") or "auto").strip().lower()
+    if raw in {"nebula", "webview", "webkit", "glass"}:
+        return "nebula"
+    if raw in {"gtk", "gtk4", "adw"}:
+        return "gtk"
+    return "auto"
+
+
+def _linux_webview_usable() -> bool:
+    if not _LINUX_WEBVIEW_ASK.is_file():
+        return False
+    try:
+        gtk_py = _resolve_gtk_python()
+        probe = subprocess.run(
+            [
+                gtk_py,
+                "-c",
+                "import gi; gi.require_version('WebKit','6.0'); "
+                "from gi.repository import WebKit; print('ok')",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=8,
+        )
+        return probe.returncode == 0 and "ok" in (probe.stdout or "")
+    except Exception:
+        return False
 
 
 def _win_webview2_env() -> dict[str, str]:
@@ -816,12 +851,23 @@ def _ask_list(
             return chosen[:1], voice_meta, freeform_text
         return chosen, voice_meta, freeform_text
 
-    if not _GTK4_LIST_ASK.is_file():
+    if not _GTK4_LIST_ASK.is_file() and not _LINUX_WEBVIEW_ASK.is_file():
         raise RuntimeError(f"missing gtk4 list dialog: {_GTK4_LIST_ASK}")
     gtk_py = _resolve_gtk_python()
 
     speak_on = bool(speak_enabled and speak_text.strip())
     listen_on = bool(voice_answer and speak_on and not allow_multiple)
+    backend = _linux_ui_backend()
+    use_nebula = backend == "nebula" or (
+        backend == "auto" and _linux_webview_usable()
+    )
+    list_script = _LINUX_WEBVIEW_ASK if use_nebula else _GTK4_LIST_ASK
+    if use_nebula and not list_script.is_file():
+        list_script = _GTK4_LIST_ASK
+        use_nebula = False
+    if not list_script.is_file():
+        raise RuntimeError(f"missing list dialog: {list_script}")
+
     payload = {
         "question": question.strip(),
         "title": title,
@@ -841,17 +887,25 @@ def _ask_list(
         ),
         "speak_enabled": speak_on,
         "speak_text": speak_text.strip(),
-        # MCP / uv venv python — gtk runs under system python without the package.
+        # MCP / uv venv python — gtk/nebula run under system python without the package.
         "speak_python": sys.executable if speak_on else "",
         "voice_answer": listen_on,
         "audio_mode": audio_mode,
         "capability_notes": list(capability_notes or []),
         "images": image_paths,
+        "theme": (os.environ.get("ASK_QUESTION_THEME") or "glass").strip().lower()
+        or "glass",
     }
     env = {**os.environ, "DISPLAY": display}
+    if use_nebula:
+        env["WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS"] = "1"
+        env["WEBKIT_DISABLE_DMABUF_RENDERER"] = "1"
+        env["GDK_BACKEND"] = (
+            (os.environ.get("ASK_QUESTION_GDK_BACKEND") or "x11").strip() or "x11"
+        )
     try:
         proc = subprocess.run(
-            [gtk_py, str(_GTK4_LIST_ASK)],
+            [gtk_py, str(list_script)],
             input=json.dumps(payload),
             check=False,
             capture_output=True,
@@ -860,7 +914,7 @@ def _ask_list(
             env=env,
         )
     except subprocess.TimeoutExpired as exc:
-        raise AskCancelled("gtk4 list timed out") from exc
+        raise AskCancelled("linux list dialog timed out") from exc
 
     raw = (proc.stdout or "").strip()
     if not raw:

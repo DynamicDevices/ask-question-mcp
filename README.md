@@ -85,13 +85,20 @@ Full env / prefs: [SETUP.md](SETUP.md). Never commit tokens.
 ## Features
 
 - Radiolist / checklist; recommended option first; options capped at **8**
-- Keyboard: **1–8** select · **Enter** OK · **Esc** cancel (footer hint;
-  see [docs/AGENTS.md — Dialog UX](docs/AGENTS.md#dialog-ux-humans))
+- Keyboard: **1–8** select · **Enter** OK · **Esc** cancel · **Ctrl+V** image
+  (footer hint; see [docs/AGENTS.md — Dialog UX](docs/AGENTS.md#dialog-ux-humans))
 - **Readable Confirm bodies:** first line (the ask) always fully visible;
   Command / To+body / notes scroll underneath — so tall gates do not hide the
   payload or push Cancel/OK off-screen
 - Optional **image / images** preview in the dialog (Linux Gtk; click to
-  enlarge, **F** / header to maximize; primary monitor only)
+  enlarge, **F** / header / **double-click title** to maximize; primary
+  monitor only). Multi-image is a **carousel** (one still at a time; click
+  left/right of the still, Prev/Next, or ←/→)
+- **Ctrl+V paste references** (Linux Gtk Nebula): thumbnails in-dialog;
+  returned as MCP image blocks (max 4, no lasting files)
+- **Idle timeout hold:** default `timeout_sec=0` (waits). If a timeout is set,
+  typing / paste / select cancels auto-close until OK/Cancel
+- Linux aesthetic: **Nebula** dark glass (inspired by the Windows WebView dialog)
 - Remembers last dialog size (`prefs.window`; position on Windows; size-only
   on typical Wayland)
 - Windows: scrollable option list + same lead/detail Confirm layout
@@ -127,8 +134,7 @@ Full table: [Dialog UX (humans)](docs/AGENTS.md#dialog-ux-humans).
 |-------|------|----|-------|--------|
 | Ubuntu 24.04 + GNOME + PipeWire | Cursor | Yes | Yes | **Verified** (2026-07) |
 | Same stack | Claude Code | Yes | Text-only | **Verified** (2026-07) — [@jackghx](https://github.com/jackghx) |
-| Windows 10/11 + WebView2 | Cursor | Text (Nebula UI) | No | Phase 2 UI — **Anthony laptop** |
-| Windows 10/11 + tkinter | Cursor | Text | No | Fallback if pywebview missing |
+| Windows 10/11 + tkinter | Cursor | Text | No | Phase 1 — **not yet reported** |
 | macOS / headless CI | — | No | No | Unsupported / N/A |
 
 More rows & how to report: [CONTRIBUTING.md](CONTRIBUTING.md).
