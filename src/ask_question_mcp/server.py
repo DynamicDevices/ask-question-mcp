@@ -18,7 +18,8 @@ mcp = FastMCP(
         "REQUIRED for decision forks: call ask_multiple_choice — never markdown "
         "A/B/C or host AskQuestion when this server is available. Desktop Gtk/tk "
         "MCQ; text-only without TTS/STT. Pass agent=LANE.id; recommended in label + "
-        "recommended_id; dangerous=true for irreversible; Something else always "
+        "recommended_id; action_class=file|secrets|comms|destructive|policy; "
+        "dangerous=true for irreversible; Something else always "
         "offered. check_setup only on first enable, dialog failure, or before "
         "enabling voice — never before routine MCQs. UI before audio. "
         "Detail: docs/AGENTS.md."
@@ -93,6 +94,7 @@ def ask_multiple_choice(
     allow_multiple: bool = False,
     allow_other: bool = True,
     dangerous: bool = False,
+    action_class: str | None = None,
     speak: bool = True,
     title: str = "Decide",
     agent: str | None = None,
@@ -101,7 +103,7 @@ def ask_multiple_choice(
     image: str | None = None,
     images: list[str] | None = None,
 ) -> str:
-    """Desktop MCQ for every decision fork — never markdown A/B/C when available. agent=LANE.id; recommended in label + recommended_id; Something else always; optional image/images (local path or file://) for Gtk+Nebula preview; human Ctrl+V paste returns pasted_images base64 in JSON; default timeout_sec=0 (waits); dangerous arms OK ~1s. On cancel/errors → check_setup once."""
+    """Desktop MCQ for decision forks — not markdown A/B/C. agent=LANE.id; recommended_id; action_class=file|secrets|comms|destructive|policy; dangerous arms OK; Something else always; optional image/images; timeout_sec=0 waits. Cancel → check_setup once."""
     try:
         result = ask_zenity(
             question,
@@ -111,6 +113,7 @@ def ask_multiple_choice(
             allow_multiple=allow_multiple,
             allow_other=True,
             dangerous=dangerous,
+            action_class=action_class,
             speak=speak,
             title=title,
             agent=agent,

@@ -730,6 +730,7 @@ def _ask_list(
     recommended: set[str] | None = None,
     danger_ids: set[str],
     dangerous: bool,
+    action_class: str | None = None,
     allow_multiple: bool,
     allow_other: bool,
     title: str,
@@ -749,6 +750,12 @@ def _ask_list(
     """
     image_paths = [str(p) for p in (images or []) if str(p).strip()]
     rec_ids = sorted(recommended or set())
+    from ask_question_mcp.action_class import ui_fields as _action_ui_fields
+
+    band = _action_ui_fields(
+        action_class=action_class,
+        dangerous=bool(dangerous or danger_ids),
+    )
     if _is_windows():
         win_py = _resolve_win_python()
         list_script = _resolve_win_list_script(win_py)
@@ -760,7 +767,11 @@ def _ask_list(
             "preselect": sorted(preselect),
             "recommended_ids": rec_ids,
             "danger_ids": sorted(danger_ids),
-            "dangerous": bool(dangerous or danger_ids),
+            "dangerous": bool(band["dangerous"]),
+            "action_class": band.get("action_class"),
+            "eyebrow": band.get("eyebrow"),
+            "banner_prefix": band.get("banner_prefix"),
+            "css_band": band.get("css_band"),
             "allow_multiple": allow_multiple,
             "allow_other": bool(allow_other),
             "timeout_sec": timeout_sec,
@@ -876,7 +887,11 @@ def _ask_list(
         "preselect": sorted(preselect),
         "recommended_ids": rec_ids,
         "danger_ids": sorted(danger_ids),
-        "dangerous": bool(dangerous or danger_ids),
+        "dangerous": bool(band["dangerous"]),
+        "action_class": band.get("action_class"),
+        "eyebrow": band.get("eyebrow"),
+        "banner_prefix": band.get("banner_prefix"),
+        "css_band": band.get("css_band"),
         "allow_multiple": allow_multiple,
         "allow_other": bool(allow_other),
         "timeout_sec": timeout_sec,
@@ -966,6 +981,7 @@ def ask_zenity(
     allow_multiple: bool = False,
     allow_other: bool = True,
     dangerous: bool = False,
+    action_class: str | None = None,
     speak: bool = True,
     title: str = "Decide",
     agent: str | None = None,
@@ -982,6 +998,8 @@ def ask_zenity(
     pair with ``"auto_listen": true`` to start mic on open (e.g. Re-record).
     ``entry_seed`` prefills the edit box (voice-turn transcript confirm).
     Pass ``dangerous=True`` to flag the whole decision.
+    ``action_class``: ``file`` | ``secrets`` | ``comms`` | ``destructive`` |
+    ``policy`` — colours Confirm chrome (Alex 2026-08-09).
     ``speak`` defaults True (local TTS). Pass ``speak=False``, uncheck dialog
     **Audio** (prefs ``audio_enabled``), or set ``ASK_QUESTION_AUDIO=0`` /
     ``ASK_QUESTION_SPEAK=0`` to mute.
@@ -1091,7 +1109,13 @@ def ask_zenity(
     # UI first: never duck / speak / listen if the dialog cannot appear.
     display = _ensure_ui_ready()
 
-    whole_danger = bool(dangerous) or bool(danger_ids)
+    from ask_question_mcp.action_class import ui_fields as _action_ui_fields
+
+    _band = _action_ui_fields(
+        action_class=action_class,
+        dangerous=bool(dangerous) or bool(danger_ids),
+    )
+    whole_danger = bool(_band["dangerous"])
     win_title = window_title(agent=who, title=title, dangerous=whole_danger)
     speak_line = _speak_script(question=question.strip(), dangerous=whole_danger)
 
@@ -1159,6 +1183,7 @@ def ask_zenity(
             recommended=recommended,
             danger_ids=danger_ids,
             dangerous=whole_danger,
+            action_class=action_class,
             allow_multiple=allow_multiple,
             allow_other=allow_other,
             title=win_title,

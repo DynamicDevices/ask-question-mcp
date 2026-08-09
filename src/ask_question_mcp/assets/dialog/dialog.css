@@ -264,10 +264,33 @@ body {
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08);
 }
 
-.eyebrow.is-danger {
+.eyebrow.is-danger,
+.eyebrow.is-destructive {
   color: var(--danger-text);
   background: var(--danger-bg);
   border-color: var(--danger-border);
+}
+
+/* Action-class bands (Alex 2026-08-09) — FILE · SECRETS · COMMS · DESTRUCTIVE · POLICY */
+.eyebrow.is-file {
+  color: #bfdbfe;
+  background: rgb(59 130 246 / 0.16);
+  border-color: rgb(59 130 246 / 0.35);
+}
+.eyebrow.is-secrets {
+  color: #fde68a;
+  background: rgb(217 119 6 / 0.18);
+  border-color: rgb(217 119 6 / 0.4);
+}
+.eyebrow.is-comms {
+  color: #99f6e4;
+  background: rgb(13 148 136 / 0.18);
+  border-color: rgb(13 148 136 / 0.4);
+}
+.eyebrow.is-policy {
+  color: #fed7aa;
+  background: rgb(194 65 12 / 0.18);
+  border-color: rgb(194 65 12 / 0.4);
 }
 
 .agent {
@@ -388,6 +411,51 @@ body {
   font-size: 12.5px;
   line-height: 1.4;
   color: var(--danger-text);
+}
+
+.banner.is-file .banner-inner {
+  background: rgb(59 130 246 / 0.14);
+}
+.banner.is-file .banner-accent {
+  background: #3b82f6;
+}
+.banner.is-file .banner-copy {
+  color: #bfdbfe;
+}
+
+.banner.is-secrets .banner-inner {
+  background: rgb(217 119 6 / 0.16);
+}
+.banner.is-secrets .banner-accent {
+  background: #d97706;
+}
+.banner.is-secrets .banner-copy {
+  color: #fde68a;
+}
+
+.banner.is-comms .banner-inner {
+  background: rgb(13 148 136 / 0.16);
+}
+.banner.is-comms .banner-accent {
+  background: #0d9488;
+}
+.banner.is-comms .banner-copy {
+  color: #99f6e4;
+}
+
+.banner.is-policy .banner-inner {
+  background: rgb(194 65 12 / 0.16);
+}
+.banner.is-policy .banner-accent {
+  background: #c2410c;
+}
+.banner.is-policy .banner-copy {
+  color: #fed7aa;
+}
+
+.banner.is-destructive .banner-inner,
+.banner.is-danger .banner-inner {
+  background: var(--danger-bg);
 }
 
 .options {
@@ -965,13 +1033,47 @@ body {
   background: #fff;
 }
 
-.btn-primary.is-danger {
+.btn-primary.is-danger,
+.btn-primary.is-destructive {
   background: var(--ember);
   color: #1a0610;
 }
 
-.btn-primary.is-danger:hover:not(:disabled) {
+.btn-primary.is-danger:hover:not(:disabled),
+.btn-primary.is-destructive:hover:not(:disabled) {
   background: #ff7a94;
+}
+
+.btn-primary.is-file {
+  background: #3b82f6;
+  color: #0b1220;
+}
+.btn-primary.is-file:hover:not(:disabled) {
+  background: #60a5fa;
+}
+
+.btn-primary.is-secrets {
+  background: #d97706;
+  color: #1a0f00;
+}
+.btn-primary.is-secrets:hover:not(:disabled) {
+  background: #f59e0b;
+}
+
+.btn-primary.is-comms {
+  background: #0d9488;
+  color: #041412;
+}
+.btn-primary.is-comms:hover:not(:disabled) {
+  background: #14b8a6;
+}
+
+.btn-primary.is-policy {
+  background: #c2410c;
+  color: #1a0a00;
+}
+.btn-primary.is-policy:hover:not(:disabled) {
+  background: #ea580c;
 }
 
 .btn-icon {
