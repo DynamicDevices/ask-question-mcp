@@ -1,5 +1,5 @@
 {
-  "audio_enabled": true,
+  "audio_enabled": false,
   "duck_enabled": true,
   "ack_enabled": false,
   "always_listen": false,

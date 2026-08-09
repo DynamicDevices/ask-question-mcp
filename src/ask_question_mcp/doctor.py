@@ -970,7 +970,7 @@ def setup_guide(topic: str) -> dict[str, Any]:
             "Complete the STT walkthrough (topic=stt).",
             "Put both URLs in mcp.json `env` (see topic=mcp).",
             "Re-run check_setup until ready.tts and ready.stt are true.",
-            "Keep the dialog Audio checkbox on (prefs audio_enabled, default true).",
+            "Turn the dialog Audio checkbox on (prefs audio_enabled, default false).",
         ],
         "docs": [DOCS_VOICE],
     }

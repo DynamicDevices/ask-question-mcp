@@ -986,7 +986,7 @@ def main() -> int:
     ui_payload["voice_answer"] = voice_answer
     ui_payload["audio_mode"] = audio_mode
     ui_payload["audio_enabled"] = (
-        bool(_prefs.get_audio_enabled()) if _prefs is not None else True
+        bool(_prefs.get_audio_enabled()) if _prefs is not None else False
     )
     ui_payload["always_listen"] = (
         bool(_prefs.get_always_listen()) if _prefs is not None else False

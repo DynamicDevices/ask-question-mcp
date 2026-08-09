@@ -30,11 +30,11 @@ from typing import Any
 _PREFS_PATH = Path.home() / ".config" / "ask-question-mcp" / "prefs.json"
 
 # Packaged defaults for new installs / other users (no prefs.json required).
-# Text-first: speak questions when TTS is configured; do not auto-listen or
-# speak acks until the human opts in (dialog checkbox / prefs.json / env).
+# Quiet-first: Audio checkbox off until the human opts in (dialog / prefs.json).
+# ``ASK_QUESTION_AUDIO=0`` still hard-mutes; ``=1`` does not force speak on.
 # Volumes tuned 2026-07-26 under session duck + pw-play + flat-volumes boost.
 _DEFAULTS: dict[str, Any] = {
-    "audio_enabled": True,
+    "audio_enabled": False,
     "duck_enabled": True,
     "ack_enabled": False,
     "always_listen": False,
@@ -102,7 +102,7 @@ def get_audio_enabled() -> bool:
     env = _env_bool("ASK_QUESTION_AUDIO")
     if env is False:
         return False
-    return bool(load_prefs().get("audio_enabled", True))
+    return bool(load_prefs().get("audio_enabled", _DEFAULTS["audio_enabled"]))
 
 
 def set_audio_enabled(enabled: bool) -> None:
