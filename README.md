@@ -16,6 +16,7 @@ dialog (`ask_multiple_choice`) on any compatible host. **Works text-only**
 
 [Demo](https://www.youtube.com/watch?v=5wVKCIXAfi4) ·
 [SETUP](SETUP.md) ·
+[Changelog](CHANGELOG.md) ·
 [Dependencies](DEPENDENCIES.md) ·
 [Security](SECURITY.md) (3-year fix window) ·
 [Maintainers](MAINTAINERS.md)
@@ -98,6 +99,8 @@ Full env / prefs: [SETUP.md](SETUP.md). Never commit tokens.
   returned as MCP image blocks (max 4, no lasting files)
 - **Idle timeout hold:** default `timeout_sec=0` (waits). If a timeout is set,
   typing / paste / select cancels auto-close until OK/Cancel
+- **`action_class`** band chrome: `file` · `secrets` · `comms` · `destructive` ·
+  `policy` (COMMS wording only for real outbound messages)
 - Linux aesthetic: **Nebula** glass (dark default) + **light** daylight companion
   (`ASK_QUESTION_THEME` / prefs `theme`: `glass` | `light` | `ink` | `signal` | `hybrid`)
 - Remembers last dialog size (`prefs.window`; position on Windows; size-only
