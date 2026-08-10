@@ -68,7 +68,12 @@
     const [lead, detail] = splitLeadDetail(body);
     const qEl = $("#question");
     const dEl = $("#question-detail");
-    if (qEl) qEl.textContent = lead || body || "";
+    const text = lead || body || "";
+    if (qEl) {
+      qEl.textContent = text;
+      // Adaptive: long policy/Confirm asks use a smaller lead (Alex 2026-08-10)
+      qEl.classList.toggle("is-long", text.length > 100);
+    }
     if (dEl) {
       if (detail) {
         dEl.hidden = false;
