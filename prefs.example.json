@@ -5,5 +5,6 @@
   "always_listen": false,
   "speak_volume": 0.6,
   "ack_volume": 0.55,
+  "theme": "glass",
   "window": { "w": 520, "h": 480 }
 }

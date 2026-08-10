@@ -18,6 +18,8 @@ Env overrides:
 - ``ASK_QUESTION_ACK=0|1`` — spoken ack after OK (``ack_enabled``; default off)
 - ``ASK_QUESTION_ALWAYS_LISTEN=0|1`` — auto mic after speak (default off)
 - ``ASK_QUESTION_SPEAK_VOLUME`` / ``ASK_QUESTION_ACK_VOLUME`` (linear 0.01–1.0)
+- ``ASK_QUESTION_THEME=glass|light|ink|signal|hybrid`` — Nebula dialog look
+  (``glass`` dark default; ``light`` = daylight companion)
 """
 
 from __future__ import annotations
@@ -40,8 +42,25 @@ _DEFAULTS: dict[str, Any] = {
     "always_listen": False,
     "speak_volume": 0.60,
     "ack_volume": 0.55,
+    # Nebula WebView look: glass (dark) | light | ink | signal | hybrid
+    "theme": "glass",
     # Last dialog size/position (x/y may be ignored on Wayland).
     "window": {"w": 520, "h": 480},
+}
+
+_THEMES = frozenset({"glass", "light", "ink", "signal", "hybrid"})
+_THEME_ALIASES: dict[str, str] = {
+    "glass": "glass",
+    "dark": "glass",
+    "nebula": "glass",
+    "night": "glass",
+    "light": "light",
+    "day": "light",
+    "daylight": "light",
+    "lumen": "light",
+    "ink": "ink",
+    "signal": "signal",
+    "hybrid": "hybrid",
 }
 
 
@@ -178,6 +197,32 @@ def set_ack_volume(volume: float) -> None:
 
 def set_speak_volume(volume: float) -> None:
     save_prefs({"speak_volume": _clamp_vol(volume, float(_DEFAULTS["speak_volume"]))})
+
+
+def normalize_theme(raw: Any) -> str | None:
+    """Return canonical theme id or None if unset/unknown."""
+    if raw is None:
+        return None
+    key = str(raw).strip().lower().replace("-", "_").replace(" ", "_")
+    if not key:
+        return None
+    return _THEME_ALIASES.get(key)
+
+
+def get_theme() -> str:
+    """Nebula dialog theme: env ``ASK_QUESTION_THEME`` → prefs → glass."""
+    env = normalize_theme(os.environ.get("ASK_QUESTION_THEME"))
+    if env:
+        return env
+    pref = normalize_theme(load_prefs().get("theme"))
+    if pref:
+        return pref
+    return str(_DEFAULTS["theme"])
+
+
+def set_theme(theme: str) -> None:
+    canon = normalize_theme(theme) or "glass"
+    save_prefs({"theme": canon})
 
 
 def get_window_geometry() -> dict[str, int]:

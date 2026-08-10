@@ -100,3 +100,33 @@
   --r-tile: 18px;
   --r-tile-inner: 15px;
 }
+
+/* Daylight — light companion to glass (cool paper, steel accent — not purple-on-white). */
+[data-theme="light"] {
+  --ground: #eef1f5;
+  --panel: #f7f8fb;
+  --card-core: #ffffff;
+  --raised: #e4e9f0;
+  --accent: #0f6e8c;
+  --accent-text: #0a5570;
+  --ember: #c43d55;
+  --text: #15202b;
+  --text-secondary: #4a5a6a;
+  --text-tertiary: #6b7c8c;
+  --text-eyebrow: #5a6b7c;
+  --ground-deep: #e2e7ee;
+  --ground-rgb: 238 241 245;
+  --accent-rgb: 15 110 140;
+  --ember-rgb: 196 61 85;
+  --card-core-rgb: 255 255 255;
+  --panel-rgb: 247 248 251;
+  --raised-rgb: 228 233 240;
+  --hairline-rgb: 20 30 40;
+  --orb-a: 90 160 190;
+  --orb-b: 180 140 100;
+  --danger-bg: rgb(196 61 85 / 0.10);
+  --danger-border: rgb(196 61 85 / 0.32);
+  --danger-text: #8f2940;
+  --r-tile: 16px;
+  --r-tile-inner: 13px;
+}

@@ -86,6 +86,22 @@ body {
   filter: blur(80px);
 }
 
+[data-theme="light"] .aura::before,
+[data-theme="light"] .aura::after {
+  opacity: 0.22;
+  filter: blur(72px);
+}
+
+[data-theme="light"] .aura-grain {
+  opacity: 0.03;
+  mix-blend-mode: multiply;
+}
+
+html:has([data-theme="light"]),
+body:has([data-theme="light"]) {
+  color-scheme: light;
+}
+
 @keyframes aura-drift {
   from {
     transform: translate(0, 0) scale(1);
@@ -111,11 +127,18 @@ body {
   animation-duration: var(--star-speed-near, 90s);
 }
 
-.stars.far {
-  animation-duration: var(--star-speed-far, 150s);
-  animation-delay: calc(var(--star-speed-far, 150s) * -0.32);
-  opacity: 0.78;
+[data-theme="light"] .stars.far {
+  opacity: 0.35;
 }
+
+[data-theme="light"] .star-dot {
+  background: rgb(40 60 80 / 0.35);
+}
+
+[data-theme="light"] .star-dot.is-bright {
+  background: rgb(15 110 140 / 0.55);
+}
+
 
 @keyframes wind-drift {
   0% {

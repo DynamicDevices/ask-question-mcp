@@ -9,7 +9,7 @@ PyGObject). Freeform ``Something else`` / ``opens_entry`` options use
 Windows: prefer frameless Nebula WebView2 (``win_webview_ask.py``, theme
 ``glass`` by default); then Edge ``--app`` (``win_edge_ask.py``); then
 tkinter. Override with ``ASK_QUESTION_WIN_UI=pywebview|edge|tk|auto`` and
-``ASK_QUESTION_THEME=glass|ink|signal|hybrid``.
+``ASK_QUESTION_THEME=glass|light|ink|signal|hybrid``.
 
 Recommended options are listed first and pre-selected. Dangerous decisions
 get danger chrome. Window title includes the raising agent/lane. On Linux,
@@ -782,6 +782,9 @@ def _ask_list(
             "capability_notes": list(capability_notes or []),
             # Preview is Linux Gtk-only for now; paths ignored on Windows.
             "images": image_paths,
+            "theme": __import__(
+                "ask_question_mcp.prefs", fromlist=["get_theme"]
+            ).get_theme(),
         }
         try:
             raw, rc, err = _run_win_dialog(
@@ -908,8 +911,9 @@ def _ask_list(
         "audio_mode": audio_mode,
         "capability_notes": list(capability_notes or []),
         "images": image_paths,
-        "theme": (os.environ.get("ASK_QUESTION_THEME") or "glass").strip().lower()
-        or "glass",
+        "theme": __import__(
+            "ask_question_mcp.prefs", fromlist=["get_theme"]
+        ).get_theme(),
     }
     env = {**os.environ, "DISPLAY": display}
     if use_nebula:

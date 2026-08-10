@@ -927,10 +927,12 @@ def main() -> int:
         ui_payload["arm_ms"] = int(_danger_arm.danger_arm_ms(dangerous=True))
     else:
         ui_payload["arm_ms"] = 250
-    theme = str(
-        payload.get("theme") or os.environ.get("ASK_QUESTION_THEME") or "glass"
-    )
-    ui_payload["theme"] = theme.strip().lower() or "glass"
+    theme_raw = payload.get("theme") or os.environ.get("ASK_QUESTION_THEME")
+    if _prefs is not None and hasattr(_prefs, "normalize_theme"):
+        canon = _prefs.normalize_theme(theme_raw) if theme_raw else None
+        ui_payload["theme"] = canon or _prefs.get_theme()
+    else:
+        ui_payload["theme"] = str(theme_raw or "glass").strip().lower() or "glass"
     if ui_payload["dangerous"] and _danger_arm is not None:
         title = _danger_arm.prefix_danger_mark(title)
     if payload.get("entry_seed") is not None:
