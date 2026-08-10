@@ -34,6 +34,52 @@
     return String(label || "").replace(/^\d+\s*[·.]\s*/, "").trim();
   }
 
+  /** Match dialog_keys.format_confirm_body — dense " · " packs become lines. */
+  function formatConfirmBody(question) {
+    const q = String(question || "").trim();
+    if (!q) return q;
+    if (q.includes("\n")) return q;
+    if (q.includes(" · ")) {
+      const parts = q
+        .split(" · ")
+        .map((p) => p.trim())
+        .filter(Boolean);
+      if (parts.length >= 2) return parts.join("\n");
+    }
+    return q;
+  }
+
+  /** Match dialog_keys.split_lead_detail — first line = ask/referent lead. */
+  function splitLeadDetail(body) {
+    const text = String(body || "").replace(/^\n+|\n+$/g, "");
+    if (!text.trim()) return ["", ""];
+    const lines = text.split("\n");
+    let i = 0;
+    while (i < lines.length && !lines[i].trim()) i += 1;
+    if (i >= lines.length) return ["", ""];
+    const lead = lines[i];
+    const rest = lines.slice(i + 1);
+    while (rest.length && !rest[0].trim()) rest.shift();
+    return [lead, rest.join("\n").replace(/\n+$/g, "")];
+  }
+
+  function renderQuestion(rawQuestion) {
+    const body = formatConfirmBody(rawQuestion);
+    const [lead, detail] = splitLeadDetail(body);
+    const qEl = $("#question");
+    const dEl = $("#question-detail");
+    if (qEl) qEl.textContent = lead || body || "";
+    if (dEl) {
+      if (detail) {
+        dEl.hidden = false;
+        dEl.textContent = detail;
+      } else {
+        dEl.hidden = true;
+        dEl.textContent = "";
+      }
+    }
+  }
+
   function sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
@@ -690,7 +736,7 @@
     if (bandClass) eyebrowEl.classList.add(bandClass);
     else if (dangerous) eyebrowEl.classList.add("is-danger");
     $("#title-agent").textContent = payload.agent_hint || payload.title || "";
-    $("#question").textContent = payload.question || "";
+    renderQuestion(payload.question || "");
 
     const banner = $("#banner");
     banner.classList.toggle("is-on", dangerous);
@@ -804,6 +850,7 @@
   function fitWindow() {
     const chrome = document.querySelector(".chrome");
     const banner = document.getElementById("banner");
+    const questionBlock = document.getElementById("question-block");
     const question = document.getElementById("question");
     const options = document.getElementById("options");
     const refs = document.getElementById("refs");
@@ -811,7 +858,8 @@
     const footer = document.querySelector(".footer");
     // Titlebar + breathing room; too-tight budgets clip OK/Cancel on scaled monitors.
     let h = 36;
-    [chrome, question, refs, freeform, footer].forEach((el) => {
+    const qMeasure = questionBlock || question;
+    [chrome, qMeasure, refs, freeform, footer].forEach((el) => {
       if (el && !el.hidden) h += el.offsetHeight;
     });
     // Voice recover chrome can grow after mount — keep Cancel/OK on-screen.

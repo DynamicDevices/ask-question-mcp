@@ -49,7 +49,7 @@ def test_banner_does_not_repeat_question() -> None:
     js = (
         ROOT / "src" / "ask_question_mcp" / "assets" / "dialog" / "dialog.js"
     ).read_text(encoding="utf-8")
-    assert 'banner-copy").textContent' in js or "$(\"#banner-copy\")" in js
+    assert 'banner-copy").textContent' in js or '$("#banner-copy")' in js
     # Old bug: `${prefix}${payload.question || ""}`
     assert "${prefix}${payload.question" not in js, (
         "REGRESSION: banner-copy must not append payload.question "
@@ -58,7 +58,21 @@ def test_banner_does_not_repeat_question() -> None:
     assert "prefix}${payload.question" not in js
 
 
+def test_nebula_lead_detail_split() -> None:
+    """Nebula must split dense Preloop ' · ' packs like Gtk (lead + detail)."""
+    html = INDEX.read_text(encoding="utf-8")
+    js = (
+        ROOT / "src" / "ask_question_mcp" / "assets" / "dialog" / "dialog.js"
+    ).read_text(encoding="utf-8")
+    assert 'id="question-detail"' in html, "missing #question-detail"
+    assert "function formatConfirmBody" in js
+    assert "function splitLeadDetail" in js
+    assert "function renderQuestion" in js
+    assert "renderQuestion(payload.question" in js
+
+
 if __name__ == "__main__":
     test_freeform_inside_main_body()
     test_banner_does_not_repeat_question()
+    test_nebula_lead_detail_split()
     print("test_nebula_layout: ok")

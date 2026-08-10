@@ -371,6 +371,37 @@ body {
   transform: translateY(0);
 }
 
+.question-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.question-detail {
+  margin: 0;
+  max-height: 160px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  font-size: 13.5px;
+  font-weight: 450;
+  letter-spacing: -0.01em;
+  line-height: 1.45;
+  color: var(--text-muted, color-mix(in srgb, var(--text) 72%, transparent));
+  white-space: pre-wrap;
+  opacity: 0;
+  transform: translateY(8px);
+  transition:
+    opacity 720ms var(--ease),
+    transform 720ms var(--ease);
+  transition-delay: 140ms;
+}
+
+.app.is-ready .question-detail {
+  opacity: 1;
+  transform: translateY(0);
+}
+
 [data-theme="ink"] .question,
 [data-theme="hybrid"] .question {
   font-weight: 520;
