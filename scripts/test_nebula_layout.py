@@ -44,6 +44,21 @@ def test_freeform_inside_main_body() -> None:
     assert 'id="listen-btn"' in html
 
 
+def test_banner_does_not_repeat_question() -> None:
+    """Dangerous chrome strip must not paste the full question (looks doubled)."""
+    js = (
+        ROOT / "src" / "ask_question_mcp" / "assets" / "dialog" / "dialog.js"
+    ).read_text(encoding="utf-8")
+    assert 'banner-copy").textContent' in js or "$(\"#banner-copy\")" in js
+    # Old bug: `${prefix}${payload.question || ""}`
+    assert "${prefix}${payload.question" not in js, (
+        "REGRESSION: banner-copy must not append payload.question "
+        "(question already shown in #question)"
+    )
+    assert "prefix}${payload.question" not in js
+
+
 if __name__ == "__main__":
     test_freeform_inside_main_body()
+    test_banner_does_not_repeat_question()
     print("test_nebula_layout: ok")
