@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.1] — 2026-08-10
+
+### Fixed
+- Nebula question lead font: 19px → 16px; leads longer than 100 characters use
+  14px (`.question.is-long`) so long policy/Confirm asks stay readable
+
 ## [0.2.0] — 2026-08-10
 
 ### Added
