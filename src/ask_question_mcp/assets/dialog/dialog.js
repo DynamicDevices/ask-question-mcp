@@ -711,9 +711,15 @@
     const theme = String(payload.theme || "glass").toLowerCase();
     const app = $("#app");
     if (app) {
-      app.dataset.theme = ["glass", "ink", "signal", "hybrid"].includes(theme)
-        ? theme
-        : "glass";
+      const allowed = ["glass", "ink", "signal", "hybrid", "light"];
+      app.dataset.theme = allowed.includes(theme) ? theme : "glass";
+      const scheme = app.dataset.theme === "light" ? "light" : "dark";
+      try {
+        document.documentElement.style.colorScheme = scheme;
+        document.body.style.colorScheme = scheme;
+      } catch (_) {
+        /* ignore */
+      }
     }
     const pre = payload.preselect || payload.recommended_ids || [];
     state.selected = new Set(

@@ -98,7 +98,8 @@ Full env / prefs: [SETUP.md](SETUP.md). Never commit tokens.
   returned as MCP image blocks (max 4, no lasting files)
 - **Idle timeout hold:** default `timeout_sec=0` (waits). If a timeout is set,
   typing / paste / select cancels auto-close until OK/Cancel
-- Linux aesthetic: **Nebula** dark glass (inspired by the Windows WebView dialog)
+- Linux aesthetic: **Nebula** glass (dark default) + **light** daylight companion
+  (`ASK_QUESTION_THEME` / prefs `theme`: `glass` | `light` | `ink` | `signal` | `hybrid`)
 - Remembers last dialog size (`prefs.window`; position on Windows; size-only
   on typical Wayland)
 - Windows: scrollable option list + same lead/detail Confirm layout
