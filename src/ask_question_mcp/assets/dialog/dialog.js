@@ -697,12 +697,14 @@
     for (const b of BANDS) banner.classList.remove(`is-${b}`);
     if (bandClass) banner.classList.add(bandClass);
     else if (dangerous) banner.classList.add("is-danger");
-    const prefix =
-      payload.banner_prefix ||
-      (dangerous ? "⛔ Confirm — " : "");
-    $("#banner-copy").textContent = dangerous
-      ? `${prefix}${payload.question || ""}`
-      : "";
+    // Band strip only — never paste the question here (eyebrow + #question
+    // already carry the ask; repeating it made dangerous MCQs look doubled).
+    const prefix = String(
+      payload.banner_prefix || (dangerous ? "⛔ Confirm" : ""),
+    )
+      .replace(/\s*[—\-–:]\s*$/, "")
+      .trim();
+    $("#banner-copy").textContent = dangerous ? prefix : "";
 
     const ok = $("#ok-btn");
     for (const b of BANDS) ok.classList.remove(`is-${b}`);
