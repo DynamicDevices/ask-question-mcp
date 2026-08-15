@@ -32,6 +32,7 @@ DEFAULT_ASKPASS = (
     / "scripts"
     / "briar-ssh-askpass-gui.sh"
 )
+DEFAULT_AGENT_SOCK = Path(f"/run/user/{os.getuid()}/briar-send-cap/agent.sock")
 
 
 class SendCapError(Exception):
@@ -222,6 +223,25 @@ def capability_signing_bytes(cap: Mapping[str, Any]) -> bytes:
     )
 
 
+def _agent_socket() -> Optional[Path]:
+    """Return Briar's native OpenSSH agent socket.
+
+    GCR may list FIDO SK keys but refuses ``ssh-keygen -Y sign`` operations,
+    so send-cap minting deliberately uses its own OpenSSH agent.
+    """
+    candidates = [
+        os.environ.get("BRIAR_SEND_CAP_SSH_AUTH_SOCK"),
+        str(DEFAULT_AGENT_SOCK),
+    ]
+    for raw in candidates:
+        if not raw:
+            continue
+        path = Path(raw)
+        if path.exists():
+            return path
+    return None
+
+
 def signing_env() -> Dict[str, str]:
     """Environment for ssh-keygen so any passphrase prompt is a desktop dialog.
 
@@ -229,6 +249,9 @@ def signing_env() -> Dict[str, str]:
     command line, so SSH_ASKPASS is forced even when a tty is attached.
     """
     env = dict(os.environ)
+    agent_sock = _agent_socket()
+    if agent_sock:
+        env["SSH_AUTH_SOCK"] = str(agent_sock)
     askpass = env.get("BRIAR_SEND_CAP_ASKPASS") or str(DEFAULT_ASKPASS)
     if Path(askpass).is_file() and os.access(askpass, os.X_OK):
         env["SSH_ASKPASS"] = askpass
@@ -237,9 +260,88 @@ def signing_env() -> Dict[str, str]:
     return env
 
 
+def _public_key_parts(path: Path) -> Tuple[str, str]:
+    try:
+        parts = path.read_text(encoding="utf-8").split()
+    except OSError as exc:
+        raise SendCapError(f"public signing key unreadable: {path}") from exc
+    if len(parts) < 2:
+        raise SendCapError(f"public signing key malformed: {path}")
+    return parts[0], parts[1]
+
+
+def agent_has_key(
+    public_key: Path,
+    *,
+    runner: Optional[Callable[..., subprocess.CompletedProcess]] = None,
+) -> bool:
+    """Check whether the exact public key is loaded; never expose key material."""
+    if not _agent_socket():
+        return False
+    run = runner or subprocess.run
+    try:
+        proc = run(
+            ["ssh-add", "-L"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=5,
+            env=signing_env(),
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        return False
+    if proc.returncode != 0:
+        return False
+    wanted = _public_key_parts(public_key)
+    for line in (proc.stdout or "").splitlines():
+        parts = line.split()
+        if len(parts) >= 2 and (parts[0], parts[1]) == wanted:
+            return True
+    return False
+
+
+def signing_key_for_agent(
+    private_key: Path,
+    public_key: Path,
+    *,
+    runner: Optional[Callable[..., subprocess.CompletedProcess]] = None,
+) -> Path:
+    """Load the encrypted SK handle once, then return its public-key path.
+
+    OpenSSH accepts a public key for ``ssh-keygen -Y sign`` when the matching
+    private key is in ssh-agent. Loading prompts for the passphrase through the
+    desktop askpass helper; each actual signature still requires FIDO touch.
+    """
+    # Injected runners are unit-test fakes for the signing operation itself.
+    # They should not need to emulate the host ssh-agent.
+    if runner is not None:
+        return private_key
+    if not public_key.is_file() or not _agent_socket():
+        return private_key
+    if agent_has_key(public_key):
+        return public_key
+    try:
+        proc = subprocess.run(
+            ["ssh-add", str(private_key)],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=120,
+            env=signing_env(),
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError) as exc:
+        raise SendCapError(f"ssh-agent key load failed: {exc}") from exc
+    if proc.returncode != 0:
+        err = (proc.stderr or proc.stdout or "").strip()
+        raise SendCapError(f"ssh-agent key load failed: {err or 'cancelled'}")
+    if not agent_has_key(public_key):
+        raise SendCapError("ssh-agent did not retain the enrolled signing key")
+    return public_key
+
+
 def ssh_sign(
     message: bytes,
-    private_key: Path,
+    signing_key: Path,
     *,
     namespace: str = NAMESPACE,
     runner: Optional[Callable[..., subprocess.CompletedProcess]] = None,
@@ -247,8 +349,8 @@ def ssh_sign(
 ) -> str:
     """Sign with OpenSSH (FIDO SK keys prompt for touch). Returns signature armor."""
     run = runner or subprocess.run
-    if not private_key.is_file():
-        raise SendCapError(f"signing key missing: {private_key}")
+    if not signing_key.is_file():
+        raise SendCapError(f"signing key missing: {signing_key}")
     with tempfile.TemporaryDirectory(prefix="briar-send-cap-") as tmp:
         msg_path = Path(tmp) / "payload"
         msg_path.write_bytes(message)
@@ -258,7 +360,7 @@ def ssh_sign(
                 "-Y",
                 "sign",
                 "-f",
-                str(private_key),
+                str(signing_key),
                 "-n",
                 namespace,
                 str(msg_path),
@@ -371,6 +473,8 @@ def maybe_mint_send_capability(
                 or DEFAULT_SK_KEY
             )
         )
+        pub = Path(str(row.get("public_key_path") or priv.with_suffix(".pub")))
+        signing_key = signing_key_for_agent(priv, pub, runner=runner)
         cap = build_capability(
             send_cap_request,
             yk_serial=serial,
@@ -380,7 +484,7 @@ def maybe_mint_send_capability(
         )
         signature = ssh_sign(
             capability_signing_bytes(cap),
-            priv,
+            signing_key,
             runner=runner,
         )
         path = write_capability_sidecar(cap, signature, directory=cap_dir)

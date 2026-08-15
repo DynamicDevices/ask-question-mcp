@@ -21,9 +21,15 @@ SEND_NOW_OPTS = [
 
 
 class FakeRunner:
-    def __init__(self, serials: list[str], sign_ok: bool = True):
+    def __init__(
+        self,
+        serials: list[str],
+        sign_ok: bool = True,
+        agent_keys: str = "",
+    ):
         self.serials = serials
         self.sign_ok = sign_ok
+        self.agent_keys = agent_keys
         self.calls: list[list[str]] = []
 
     def __call__(self, argv, **kwargs):  # noqa: ANN001
@@ -31,6 +37,13 @@ class FakeRunner:
         if argv[:3] == ["ykman", "list", "--serials"]:
             return subprocess.CompletedProcess(
                 argv, 0, stdout="\n".join(self.serials) + "\n", stderr=""
+            )
+        if argv[:2] == ["ssh-add", "-L"]:
+            return subprocess.CompletedProcess(
+                argv,
+                0 if self.agent_keys else 1,
+                stdout=self.agent_keys,
+                stderr="",
             )
         if argv[:3] == ["ssh-keygen", "-Y", "sign"]:
             if not self.sign_ok:
@@ -46,6 +59,44 @@ class FakeRunner:
 
 
 class SendCapTests(unittest.TestCase):
+    def test_agent_has_exact_public_key(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            socket = Path(tmp) / "agent.sock"
+            socket.touch()
+            pub = Path(tmp) / "key.pub"
+            pub.write_text("ssh-ed25519 AAAATEST wanted-comment\n", encoding="utf-8")
+            runner = FakeRunner(
+                [],
+                agent_keys=(
+                    "ssh-ed25519 AAAAOTHER other\n"
+                    "ssh-ed25519 AAAATEST different-comment\n"
+                ),
+            )
+            with mock.patch.dict(
+                "os.environ",
+                {"BRIAR_SEND_CAP_SSH_AUTH_SOCK": str(socket)},
+                clear=False,
+            ):
+                self.assertTrue(sc.agent_has_key(pub, runner=runner))
+                self.assertEqual(
+                    runner.calls[0][:2],
+                    ["ssh-add", "-L"],
+                )
+
+    def test_signing_env_prefers_briar_agent(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            socket = Path(tmp) / "agent.sock"
+            socket.touch()
+            with mock.patch.dict(
+                "os.environ",
+                {
+                    "BRIAR_SEND_CAP_SSH_AUTH_SOCK": str(socket),
+                    "SSH_AUTH_SOCK": "/tmp/wrong-agent.sock",
+                },
+                clear=False,
+            ):
+                self.assertEqual(sc.signing_env()["SSH_AUTH_SOCK"], str(socket))
+
     def test_gate_detection(self) -> None:
         self.assertTrue(
             sc.is_send_now_gate(
