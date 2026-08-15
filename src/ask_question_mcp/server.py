@@ -102,8 +102,15 @@ def ask_multiple_choice(
     timeout_sec: int = 0,
     image: str | None = None,
     images: list[str] | None = None,
+    send_cap_request: dict | None = None,
 ) -> str:
-    """Desktop MCQ for decision forks — not markdown A/B/C. agent=LANE.id; recommended_id; action_class=file|secrets|comms|destructive|policy; dangerous arms OK; Something else always; optional image/images; timeout_sec=0 waits. Cancel → check_setup once."""
+    """Desktop MCQ for decision forks — not markdown A/B/C. agent=LANE.id; recommended_id; action_class=file|secrets|comms|destructive|policy; dangerous arms OK; Something else always; optional image/images; timeout_sec=0 waits. Cancel → check_setup once.
+
+    For Briar P0 Send now / Hold / Edit gates, pass send_cap_request with the
+    final outbound fields (recipient, message/media, op, lease token, …). On
+    Send now, a YubiKey FIDO touch mints a mode-0600 send_capability_file path
+    (never the capability value itself).
+    """
     try:
         result = ask_zenity(
             question,
@@ -122,6 +129,21 @@ def ask_multiple_choice(
             image=image,
             images=images,
         )
+        from ask_question_mcp.send_capability import maybe_mint_send_capability
+
+        selected = list(result.get("selected_ids") or [])
+        cap_path, cap_err = maybe_mint_send_capability(
+            dangerous=dangerous,
+            action_class=action_class,
+            allow_multiple=allow_multiple,
+            options=options,
+            selected_ids=selected,
+            send_cap_request=send_cap_request,
+        )
+        if cap_path:
+            result["send_capability_file"] = cap_path
+        if cap_err:
+            result["send_capability_error"] = cap_err
         return _mcq_tool_result(result)
     except AskCancelled as exc:
         payload: dict = {
