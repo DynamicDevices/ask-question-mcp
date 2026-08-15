@@ -24,6 +24,14 @@ ALLOWED_SERIALS = ("38907480", "38907389")
 DEFAULT_SK_KEY = Path.home() / ".ssh" / "id_ed25519_sk_breakglass"
 DEFAULT_CAP_DIR = Path.home() / ".local" / "share" / "whatsapp-mcp" / "send-caps"
 SERIAL_MAP_PATH = Path.home() / ".config" / "cursorpa" / "send-cap-keys.json"
+DEFAULT_ASKPASS = (
+    Path.home()
+    / ".cursor"
+    / "skills"
+    / "cursor-pa-whatsapp"
+    / "scripts"
+    / "briar-ssh-askpass-gui.sh"
+)
 
 
 class SendCapError(Exception):
@@ -214,6 +222,21 @@ def capability_signing_bytes(cap: Mapping[str, Any]) -> bytes:
     )
 
 
+def signing_env() -> Dict[str, str]:
+    """Environment for ssh-keygen so any passphrase prompt is a desktop dialog.
+
+    The key handle passphrase must never be typed into chat or passed on the
+    command line, so SSH_ASKPASS is forced even when a tty is attached.
+    """
+    env = dict(os.environ)
+    askpass = env.get("BRIAR_SEND_CAP_ASKPASS") or str(DEFAULT_ASKPASS)
+    if Path(askpass).is_file() and os.access(askpass, os.X_OK):
+        env["SSH_ASKPASS"] = askpass
+        env["SSH_ASKPASS_REQUIRE"] = "force"
+        env.setdefault("DISPLAY", ":0")
+    return env
+
+
 def ssh_sign(
     message: bytes,
     private_key: Path,
@@ -244,6 +267,7 @@ def ssh_sign(
             capture_output=True,
             text=True,
             timeout=timeout_s,
+            env=signing_env(),
         )
         sig_path = Path(str(msg_path) + ".sig")
         if proc.returncode != 0 or not sig_path.is_file():
