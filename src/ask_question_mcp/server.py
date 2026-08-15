@@ -104,13 +104,7 @@ def ask_multiple_choice(
     images: list[str] | None = None,
     send_cap_request: dict | None = None,
 ) -> str:
-    """Desktop MCQ for decision forks — not markdown A/B/C. agent=LANE.id; recommended_id; action_class=file|secrets|comms|destructive|policy; dangerous arms OK; Something else always; optional image/images; timeout_sec=0 waits. Cancel → check_setup once.
-
-    For Briar P0 Send now / Hold / Edit gates, pass send_cap_request with the
-    final outbound fields (recipient, message/media, op, lease token, …). On
-    Send now, a YubiKey FIDO touch mints a mode-0600 send_capability_file path
-    (never the capability value itself).
-    """
+    """Desktop MCQ for decision forks — not markdown A/B/C. agent=LANE.id; recommended_id; action_class=file|secrets|comms|destructive|policy; dangerous arms OK; Something else always; optional image/images; timeout_sec=0 waits. Cancel → check_setup once. Briar P0: send_cap_request on Send now mints mode-0600 send_capability_file (path only)."""
     try:
         result = ask_zenity(
             question,
