@@ -912,7 +912,7 @@ def setup_guide(topic: str) -> dict[str, Any]:
             "Provision a host with a suitable GPU (ROCm/CUDA as required by Qwen3-TTS) "
             "or accept CPU-only if your stack supports it.",
             "Install Qwen3-TTS + deps in a venv; place voice reference clips for style "
-            "`charlie-t` (or set NOTIFY_VOICE_STYLE to a style you provide).",
+            "`max` (or set NOTIFY_VOICE_STYLE to a style you provide).",
             "Run a FastAPI (or similar) server that implements:",
             "  - GET /health → 200 when ready",
             "  - POST /tts JSON {text, style, seed} → {name, style, …}; then GET /audio/{name} WAV",

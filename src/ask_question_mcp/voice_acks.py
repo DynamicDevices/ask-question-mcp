@@ -1,6 +1,6 @@
 """Voice helpers for ask-question-mcp (acks + question speak).
 
-Never the user's voice: style is always ``charlie-t``, with Piper
+Never the user's voice: style defaults to ``max`` (``NOTIFY_VOICE_STYLE``), with Piper
 fallback. Question lines are cached under ``~/.cache/ask-question-mcp/`` so
 repeats skip the GPU; acks are a fixed phrase set (also cached).
 
@@ -218,7 +218,7 @@ def _tts_svc() -> str:
     ).rstrip("/")
 
 
-_TTS_STYLE = os.environ.get("NOTIFY_VOICE_STYLE", "charlie-t")
+_TTS_STYLE = os.environ.get("NOTIFY_VOICE_STYLE", "max")
 _TTS_SEED = int(os.environ.get("NOTIFY_VOICE_SEED", "2"))
 _TTS_TIMEOUT = float(os.environ.get("NOTIFY_VOICE_TTS_TIMEOUT", "15"))
 # Whole-stream budget (sentence streaming); first chunk still bounded by _TTS_TIMEOUT.
