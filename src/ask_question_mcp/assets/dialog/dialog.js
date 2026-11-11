@@ -16,6 +16,10 @@
     pasted: [],
     timeoutId: null,
     engaged: false,
+    activityTimer: null,
+    activityPending: false,
+    activityInFlight: false,
+    activityLastSent: -Infinity,
     closing: false,
     voice: null,
   };
@@ -297,13 +301,44 @@
   }
 
   function markEngaged() {
-    if (state.engaged) return;
+    // Idle-reset (Alex 2026-08-13): restart the auto-close clock on each
+    // interaction — do not cancel forever, and do not ignore later activity.
     state.engaged = true;
     if (state.timeoutId != null) {
       clearTimeout(state.timeoutId);
       state.timeoutId = null;
     }
-    apiCall("hold_timeout").catch(() => {});
+    const sec = Number(state.payload?.timeout_sec || 0);
+    if (sec > 0) {
+      state.timeoutId = setTimeout(() => cancel("timeout"), sec * 1000);
+    }
+    // Text entry must not start bridge/file I/O on every input event. Send
+    // promptly on first activity, then coalesce bursts with a trailing update
+    // so the host also hears about the final keystroke. Keep at most one
+    // request in flight when a bridge is slow. The local idle clock above
+    // still resets immediately on every interaction.
+    state.activityPending = true;
+    scheduleActivity();
+  }
+
+  function scheduleActivity() {
+    if (state.closing || state.activityTimer != null || state.activityInFlight) return;
+    const sec = Number(state.payload?.timeout_sec || 0);
+    const interval = sec > 0 ? Math.min(250, sec * 250) : 250;
+    const delay = Math.max(0, state.activityLastSent + interval - performance.now());
+    state.activityTimer = setTimeout(() => {
+      state.activityTimer = null;
+      if (state.closing || !state.activityPending) return;
+      state.activityPending = false;
+      state.activityInFlight = true;
+      state.activityLastSent = performance.now();
+      apiCall("hold_timeout")
+        .catch(() => {})
+        .finally(() => {
+          state.activityInFlight = false;
+          if (state.activityPending) scheduleActivity();
+        });
+    }, delay);
   }
 
   function dataUrlToPayload(dataUrl) {
@@ -443,6 +478,11 @@
   }
 
   function markLeaving() {
+    if (state.activityTimer != null) {
+      clearTimeout(state.activityTimer);
+      state.activityTimer = null;
+    }
+    state.activityPending = false;
     const app = $("#app");
     if (app) app.classList.add("is-leaving");
   }
@@ -780,7 +820,7 @@
           const typed = freeformText();
           if (!typed) return;
           const other = (payload.ids || []).find((id) => OTHER_IDS.has(id));
-          if (other) {
+          if (other && (state.selected.size !== 1 || !state.selected.has(other))) {
             state.selected = new Set([other]);
             syncSelectionUi();
           }

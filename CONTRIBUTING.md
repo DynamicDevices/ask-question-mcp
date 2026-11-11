@@ -22,6 +22,21 @@ Optional voice: set `ASK_QUESTION_TTS_URL` and `ASK_QUESTION_STT_URL` to your
 own HTTP services (see [SETUP.md](SETUP.md)). Never commit tokens or
 `prefs.json`.
 
+Optional typing regressions use existing local browser/desktop test tooling:
+
+```bash
+# Python environment with Playwright and its Chromium browser installed:
+python scripts/test_typing_activity.py
+# Linux system Python with GTK4, WebKit 6, Xvfb, X11 and XTest:
+timeout 30s xvfb-run -a /usr/bin/python3 scripts/test_typing_webkit.py --native-keys
+```
+
+The native test uses a virtual display, temporary preferences and the actual
+HTTP bridge. `--decorated` restores the expensive background during typing for
+comparison; without it, focus hides the decoration. It checks exact text and
+parent activity markers and reports input-to-render timing. Browser tests also
+cover selection updates, slow bridges, timeout reset, cancellation and submit.
+
 Dialog keyboard / geometry behaviour for humans:
 [docs/AGENTS.md — Dialog UX](docs/AGENTS.md#dialog-ux-humans).
 

@@ -51,6 +51,15 @@ body {
   mix-blend-mode: overlay;
 }
 
+/* WebKit may repaint these full-window blur/noise layers for each textarea
+   edit (including caret blinks), especially without accelerated compositing.
+   Keep typing on a plain background; restore the decoration on focus-out.
+   Pausing animation alone still leaves the expensive filter layers to paint. */
+.app:has(#freeform-input:focus) .aura,
+.app:has(#freeform-input:focus) .aura-grain {
+  display: none;
+}
+
 .aura::before,
 .aura::after {
   content: "";
