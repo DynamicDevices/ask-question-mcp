@@ -12,11 +12,14 @@ when a user wants to diverge from the packaged defaults.
 
 Env overrides:
 
-- ``ASK_QUESTION_AUDIO=0|1`` — master TTS+STT kill switch (``audio_enabled``)
+- ``ASK_QUESTION_AUDIO=0`` — hard mute (ops / text-only). ``=1`` does **not**
+  override the dialog Audio checkbox / ``prefs.audio_enabled`` (checkbox wins).
 - ``ASK_QUESTION_DUCK=0|1`` — lower other apps while speaking/listening (``duck_enabled``)
 - ``ASK_QUESTION_ACK=0|1`` — spoken ack after OK (``ack_enabled``; default off)
 - ``ASK_QUESTION_ALWAYS_LISTEN=0|1`` — auto mic after speak (default off)
 - ``ASK_QUESTION_SPEAK_VOLUME`` / ``ASK_QUESTION_ACK_VOLUME`` (linear 0.01–1.0)
+- ``ASK_QUESTION_THEME=glass|light|ink|signal|hybrid`` — Nebula dialog look
+  (``glass`` dark default; ``light`` = daylight companion)
 """
 
 from __future__ import annotations
@@ -29,18 +32,35 @@ from typing import Any
 _PREFS_PATH = Path.home() / ".config" / "ask-question-mcp" / "prefs.json"
 
 # Packaged defaults for new installs / other users (no prefs.json required).
-# Text-first: speak questions when TTS is configured; do not auto-listen or
-# speak acks until the human opts in (dialog checkbox / prefs.json / env).
+# Quiet-first: Audio checkbox off until the human opts in (dialog / prefs.json).
+# ``ASK_QUESTION_AUDIO=0`` still hard-mutes; ``=1`` does not force speak on.
 # Volumes tuned 2026-07-26 under session duck + pw-play + flat-volumes boost.
 _DEFAULTS: dict[str, Any] = {
-    "audio_enabled": True,
+    "audio_enabled": False,
     "duck_enabled": True,
     "ack_enabled": False,
     "always_listen": False,
     "speak_volume": 0.60,
     "ack_volume": 0.55,
+    # Nebula WebView look: glass (dark) | light | ink | signal | hybrid
+    "theme": "glass",
     # Last dialog size/position (x/y may be ignored on Wayland).
     "window": {"w": 520, "h": 480},
+}
+
+_THEMES = frozenset({"glass", "light", "ink", "signal", "hybrid"})
+_THEME_ALIASES: dict[str, str] = {
+    "glass": "glass",
+    "dark": "glass",
+    "nebula": "glass",
+    "night": "glass",
+    "light": "light",
+    "day": "light",
+    "daylight": "light",
+    "lumen": "light",
+    "ink": "ink",
+    "signal": "signal",
+    "hybrid": "hybrid",
 }
 
 
@@ -93,11 +113,15 @@ def _env_bool(name: str) -> bool | None:
 
 
 def get_audio_enabled() -> bool:
-    """Master switch for TTS speak + STT listen (both off when False)."""
+    """Master switch for TTS speak + STT listen (both off when False).
+
+    ``ASK_QUESTION_AUDIO=0`` hard-mutes. ``ASK_QUESTION_AUDIO=1`` is ignored so
+    the footer checkbox / prefs can mute without fighting mcp.json env.
+    """
     env = _env_bool("ASK_QUESTION_AUDIO")
-    if env is not None:
-        return env
-    return bool(load_prefs().get("audio_enabled", True))
+    if env is False:
+        return False
+    return bool(load_prefs().get("audio_enabled", _DEFAULTS["audio_enabled"]))
 
 
 def set_audio_enabled(enabled: bool) -> None:
@@ -173,6 +197,32 @@ def set_ack_volume(volume: float) -> None:
 
 def set_speak_volume(volume: float) -> None:
     save_prefs({"speak_volume": _clamp_vol(volume, float(_DEFAULTS["speak_volume"]))})
+
+
+def normalize_theme(raw: Any) -> str | None:
+    """Return canonical theme id or None if unset/unknown."""
+    if raw is None:
+        return None
+    key = str(raw).strip().lower().replace("-", "_").replace(" ", "_")
+    if not key:
+        return None
+    return _THEME_ALIASES.get(key)
+
+
+def get_theme() -> str:
+    """Nebula dialog theme: env ``ASK_QUESTION_THEME`` → prefs → glass."""
+    env = normalize_theme(os.environ.get("ASK_QUESTION_THEME"))
+    if env:
+        return env
+    pref = normalize_theme(load_prefs().get("theme"))
+    if pref:
+        return pref
+    return str(_DEFAULTS["theme"])
+
+
+def set_theme(theme: str) -> None:
+    canon = normalize_theme(theme) or "glass"
+    save_prefs({"theme": canon})
 
 
 def get_window_geometry() -> dict[str, int]:

@@ -1,4 +1,4 @@
-"""Present MCQs via a desktop list dialog (Gtk4/Adw on Linux; tkinter on Windows).
+"""Present MCQs via a desktop list dialog (Gtk4/Adw on Linux; WebView2/tk on Windows).
 
 Linux: Zenity 4 ``--list`` always attaches a GtkSearchBar with key-capture on
 the column view, so typing filters the list even when the search entry is
@@ -6,8 +6,10 @@ CSS-hidden. List choices therefore use ``gtk4_list_ask.py`` (system
 PyGObject). Freeform ``Something else`` / ``opens_entry`` options use
 ``gtk4_entry_ask.py`` (type + Listen / STT); zenity ``--entry`` is fallback.
 
-Windows (Phase 1): ``win_list_ask.py`` / ``win_entry_ask.py`` (tkinter) —
-text click/type only; no speak/duck/STT.
+Windows: prefer frameless Nebula WebView2 (``win_webview_ask.py``, theme
+``glass`` by default); then Edge ``--app`` (``win_edge_ask.py``); then
+tkinter. Override with ``ASK_QUESTION_WIN_UI=pywebview|edge|tk|auto`` and
+``ASK_QUESTION_THEME=glass|light|ink|signal|hybrid``.
 
 Recommended options are listed first and pre-selected. Dangerous decisions
 get danger chrome. Window title includes the raising agent/lane. On Linux,
@@ -21,6 +23,7 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -41,9 +44,153 @@ OTHER_LABEL = "Something else…"
 # Standalone Gtk4 dialogs (must run under system python with gi/Adw).
 _GTK4_LIST_ASK = Path(__file__).resolve().with_name("gtk4_list_ask.py")
 _GTK4_ENTRY_ASK = Path(__file__).resolve().with_name("gtk4_entry_ask.py")
-# Windows tkinter dialogs (may run under uv venv python if tkinter works).
+# Linux Nebula WebKit dialog (same HTML/CSS/JS as Windows WebView).
+_LINUX_WEBVIEW_ASK = Path(__file__).resolve().with_name("linux_webview_ask.py")
+# Windows dialogs — WebView2 (glass) → Edge --app → tkinter.
+_WIN_WEBVIEW_ASK = Path(__file__).resolve().with_name("win_webview_ask.py")
+_WIN_WEBVIEW_ENTRY_ASK = Path(__file__).resolve().with_name(
+    "win_webview_entry_ask.py"
+)
+_WIN_EDGE_ASK = Path(__file__).resolve().with_name("win_edge_ask.py")
 _WIN_LIST_ASK = Path(__file__).resolve().with_name("win_list_ask.py")
 _WIN_ENTRY_ASK = Path(__file__).resolve().with_name("win_entry_ask.py")
+
+
+
+def _linux_ui_backend() -> str:
+    """``nebula`` (WebKit), ``gtk``, or ``auto`` (prefer Nebula)."""
+    raw = (os.environ.get("ASK_QUESTION_LINUX_UI") or "auto").strip().lower()
+    if raw in {"nebula", "webview", "webkit", "glass"}:
+        return "nebula"
+    if raw in {"gtk", "gtk4", "adw"}:
+        return "gtk"
+    return "auto"
+
+
+def _linux_webview_usable() -> bool:
+    if not _LINUX_WEBVIEW_ASK.is_file():
+        return False
+    try:
+        gtk_py = _resolve_gtk_python()
+        probe = subprocess.run(
+            [
+                gtk_py,
+                "-c",
+                "import gi; gi.require_version('WebKit','6.0'); "
+                "from gi.repository import WebKit; print('ok')",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=8,
+        )
+        return probe.returncode == 0 and "ok" in (probe.stdout or "")
+    except Exception:
+        return False
+
+
+def _win_webview2_env() -> dict[str, str]:
+    """Env for Windows dialog children — isolated Edge profile, unbuffered IO."""
+    env = dict(os.environ)
+    env["PYTHONUNBUFFERED"] = "1"
+    # Per-spawn folder (parent pid + nonce) so we never collide with Cursor's
+    # WebView2 or a previous orphaned dialog.
+    nonce = f"{os.getpid()}-{time.time_ns()}"
+    folder = (
+        Path(os.environ.get("TEMP") or os.environ.get("TMP") or ".")
+        / f"ask-question-mcp-webview2-{nonce}"
+    )
+    try:
+        folder.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        pass
+    env["WEBVIEW2_USER_DATA_FOLDER"] = str(folder)
+    return env
+
+
+def _kill_process_tree(pid: int) -> None:
+    """Force-kill dialog + WebView2 grandchildren (Windows)."""
+    if pid <= 0:
+        return
+    try:
+        subprocess.run(
+            ["taskkill", "/F", "/T", "/PID", str(pid)],
+            check=False,
+            capture_output=True,
+            timeout=8,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        try:
+            os.kill(pid, 9)
+        except OSError:
+            pass
+
+
+def _run_win_dialog(
+    win_py: str,
+    script: Path,
+    payload: dict[str, Any],
+    *,
+    timeout_sec: int,
+    grace_sec: int = 15,
+) -> tuple[str, int, str]:
+    """Spawn Windows MCQ/entry dialog; never leave orphans on timeout.
+
+    Returns ``(stdout, returncode, stderr)``. Do **not** use
+    ``CREATE_BREAKAWAY_FROM_JOB`` — that orphaned the GUI under Cursor MCP
+    (parent saw empty exit 0 while the dialog kept freezing the desktop).
+    """
+    result_path = (
+        Path(os.environ.get("TEMP") or os.environ.get("TMP") or ".")
+        / f"ask-question-mcp-result-{os.getpid()}-{id(payload)}.json"
+    )
+    try:
+        if result_path.is_file():
+            result_path.unlink()
+    except OSError:
+        pass
+
+    body = dict(payload)
+    body["result_path"] = str(result_path)
+    wait = (timeout_sec + grace_sec) if timeout_sec > 0 else None
+    proc = subprocess.Popen(
+        [win_py, "-u", str(script)],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        env=_win_webview2_env(),
+        # New process group aids taskkill /T without BREAKAWAY_FROM_JOB
+        # (breakaway orphaned dialogs under Cursor and froze the UI).
+        creationflags=getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0),
+    )
+    try:
+        stdout, stderr = proc.communicate(
+            input=json.dumps(body),
+            timeout=wait,
+        )
+    except subprocess.TimeoutExpired:
+        _kill_process_tree(proc.pid)
+        try:
+            stdout, stderr = proc.communicate(timeout=5)
+        except (subprocess.TimeoutExpired, ValueError, OSError):
+            stdout, stderr = "", ""
+        raise AskCancelled(
+            f"Windows dialog timed out (killed pid={proc.pid} script={script.name})"
+        ) from None
+
+    raw = (stdout or "").strip()
+    if not raw and result_path.is_file():
+        try:
+            raw = result_path.read_text(encoding="utf-8").strip()
+        except OSError:
+            raw = ""
+    try:
+        if result_path.is_file():
+            result_path.unlink()
+    except OSError:
+        pass
+    return raw, int(proc.returncode or 0), (stderr or "")
 
 
 def _truthy_env(name: str) -> bool:
@@ -165,9 +312,17 @@ def _probe_gi_adw(py: str) -> tuple[bool, str]:
 
 
 def _probe_tkinter(py: str) -> tuple[bool, str]:
+    # Prefer a cheap importlib check — spawning ``import tkinter`` as a
+    # subprocess from the MCP stdio host often hangs on Windows.
+    if Path(py).resolve() == Path(sys.executable).resolve():
+        import importlib.util
+
+        if importlib.util.find_spec("tkinter") is not None:
+            return True, f"{py} (tkinter present)"
+        return False, f"tkinter not importable on {py}"
     try:
         r = subprocess.run(
-            [py, "-c", "import tkinter; print('ok')"],
+            [py, "-c", "import importlib.util; print('ok' if importlib.util.find_spec('tkinter') else 'no')"],
             capture_output=True,
             text=True,
             timeout=8,
@@ -181,26 +336,161 @@ def _probe_tkinter(py: str) -> tuple[bool, str]:
         return False, str(exc)
 
 
+def _probe_webview(py: str) -> tuple[bool, str]:
+    # Same trap as tkinter: full ``import webview`` under MCP stdio can hang
+    # (pythonnet). Presence check is enough; the dialog subprocess loads it.
+    if Path(py).resolve() == Path(sys.executable).resolve():
+        import importlib.util
+
+        if importlib.util.find_spec("webview") is not None:
+            return True, f"{py} (pywebview present)"
+        return False, f"pywebview not installed on {py}"
+    try:
+        r = subprocess.run(
+            [
+                py,
+                "-c",
+                "import importlib.util; print('ok' if importlib.util.find_spec('webview') else 'no')",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=8,
+            check=False,
+        )
+        if r.returncode == 0 and "ok" in (r.stdout or ""):
+            return True, py
+        err = (r.stderr or r.stdout or "").strip()[:200]
+        return False, err or f"exit {r.returncode}"
+    except Exception as exc:  # noqa: BLE001
+        return False, str(exc)
+
+
+def _find_edge_browser() -> str | None:
+    """Path to msedge.exe if present (shared with win_edge_ask)."""
+    env = os.environ.get("ASK_QUESTION_EDGE", "").strip()
+    if env and Path(env).is_file():
+        return env
+    which = shutil.which("msedge") or shutil.which("msedge.exe")
+    if which:
+        return which
+    for cand in (
+        Path(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)"))
+        / "Microsoft"
+        / "Edge"
+        / "Application"
+        / "msedge.exe",
+        Path(os.environ.get("ProgramFiles", r"C:\Program Files"))
+        / "Microsoft"
+        / "Edge"
+        / "Application"
+        / "msedge.exe",
+    ):
+        if cand.is_file():
+            return str(cand)
+    return None
+
+
+def _win_ui_preference() -> str:
+    """``pywebview`` / ``nebula`` (frameless WebView2), ``edge``, ``tk``, or ``auto``."""
+    raw = os.environ.get("ASK_QUESTION_WIN_UI", "auto").strip().lower()
+    if raw in {"pywebview", "webview", "web", "nebula", "webview2"}:
+        return "pywebview"
+    if raw in {"edge"}:
+        return "edge"
+    if raw in {"tk", "tkinter", "tcl"}:
+        return "tk"
+    return "auto"
+
+
+def _resolve_win_list_script(win_py: str) -> Path:
+    pref = _win_ui_preference()
+
+    if pref == "edge":
+        if not _WIN_EDGE_ASK.is_file():
+            raise RuntimeError(f"missing {_WIN_EDGE_ASK}")
+        if not _find_edge_browser():
+            raise RuntimeError(
+                "Microsoft Edge not found. Install Edge or set ASK_QUESTION_EDGE, "
+                "or ASK_QUESTION_WIN_UI=pywebview|tk."
+            )
+        return _WIN_EDGE_ASK
+
+    if pref == "pywebview":
+        if not _WIN_WEBVIEW_ASK.is_file():
+            raise RuntimeError(f"missing {_WIN_WEBVIEW_ASK}")
+        ok, detail = _probe_webview(win_py)
+        if not ok:
+            raise RuntimeError(
+                f"pywebview unavailable on {win_py}: {detail}. Run: uv sync"
+            )
+        return _WIN_WEBVIEW_ASK
+
+    if pref == "tk":
+        if not _WIN_LIST_ASK.is_file():
+            raise RuntimeError(f"missing Windows list dialog: {_WIN_LIST_ASK}")
+        ok, detail = _probe_tkinter(win_py)
+        if not ok:
+            raise RuntimeError(f"tkinter unavailable on {win_py}: {detail}")
+        return _WIN_LIST_ASK
+
+    # auto: frameless WebView2 → Edge --app → tk
+    if _WIN_WEBVIEW_ASK.is_file():
+        wv_ok, _ = _probe_webview(win_py)
+        if wv_ok:
+            return _WIN_WEBVIEW_ASK
+    if _WIN_EDGE_ASK.is_file() and _find_edge_browser():
+        return _WIN_EDGE_ASK
+    if _WIN_LIST_ASK.is_file():
+        ok, detail = _probe_tkinter(win_py)
+        if ok:
+            return _WIN_LIST_ASK
+    else:
+        detail = "missing win_list_ask.py"
+    raise RuntimeError(
+        f"No working Windows UI backend on {win_py}: {detail}. "
+        "Install pywebview (uv sync), Edge, or Python tcl/tk."
+    )
+
+
+def _resolve_win_entry_script(win_py: str) -> Path:
+    """Freeform entry — tk (Edge list dialog already has inline freeform)."""
+    pref = _win_ui_preference()
+    if pref == "pywebview":
+        if not _WIN_WEBVIEW_ENTRY_ASK.is_file():
+            raise RuntimeError(f"missing {_WIN_WEBVIEW_ENTRY_ASK}")
+        ok, detail = _probe_webview(win_py)
+        if not ok:
+            raise RuntimeError(
+                f"pywebview unavailable on {win_py}: {detail}. Run: uv sync"
+            )
+        return _WIN_WEBVIEW_ENTRY_ASK
+
+    if not _WIN_ENTRY_ASK.is_file():
+        raise RuntimeError(f"missing Windows entry dialog: {_WIN_ENTRY_ASK}")
+    ok, detail = _probe_tkinter(win_py)
+    if ok:
+        return _WIN_ENTRY_ASK
+
+    if _WIN_WEBVIEW_ENTRY_ASK.is_file():
+        wv_ok, _ = _probe_webview(win_py)
+        if wv_ok:
+            return _WIN_WEBVIEW_ENTRY_ASK
+
+    raise RuntimeError(
+        f"No working Windows entry backend on {win_py}: {detail}"
+    )
+
+
 def _ensure_ui_ready() -> str:
     """Require a working dialog stack before any speak / duck / STT.
 
-    Linux: DISPLAY + Gtk4/Adw. Windows: win_* scripts + tkinter.
+    Linux: DISPLAY + Gtk4/Adw. Windows: WebView2 (pywebview) or tkinter.
     Returns a display token (DISPLAY value on Linux; ``win32`` on Windows).
     """
     if _is_windows():
-        if not _WIN_LIST_ASK.is_file():
-            raise RuntimeError(
-                f"missing Windows list dialog: {_WIN_LIST_ASK}. "
-                "Point mcp.json --directory at the ask-question-mcp checkout."
-            )
         win_py = _resolve_win_python()
-        ok, detail = _probe_tkinter(win_py)
-        if not ok:
-            raise RuntimeError(
-                f"tkinter unavailable on {win_py}: {detail}. "
-                "Install Python from python.org with tcl/tk (DEPENDENCIES.md "
-                "tier B Windows)."
-            )
+        # Resolving the list script probes webview then tk as needed.
+        _resolve_win_list_script(win_py)
         return "win32"
 
     display = os.environ.get("DISPLAY", "").strip()
@@ -302,9 +592,11 @@ def _entry_text(
     Returns ``(text, voice_meta)``.
     """
     if _is_windows():
-        if not _WIN_ENTRY_ASK.is_file():
-            raise AskCancelled(f"missing Windows entry dialog: {_WIN_ENTRY_ASK}")
         win_py = _resolve_win_python()
+        try:
+            entry_script = _resolve_win_entry_script(win_py)
+        except RuntimeError as exc:
+            raise AskCancelled(str(exc)) from exc
         payload = {
             "title": title,
             "prompt": prompt,
@@ -312,20 +604,18 @@ def _entry_text(
             "timeout_sec": timeout_sec,
         }
         try:
-            proc = subprocess.run(
-                [win_py, str(_WIN_ENTRY_ASK)],
-                input=json.dumps(payload),
-                check=False,
-                capture_output=True,
-                text=True,
-                timeout=timeout_sec + 30 if timeout_sec > 0 else None,
+            raw, rc, err = _run_win_dialog(
+                win_py,
+                entry_script,
+                payload,
+                timeout_sec=timeout_sec,
+                grace_sec=30,
             )
-        except subprocess.TimeoutExpired as exc:
-            raise AskCancelled("entry timed out") from exc
-        raw = (proc.stdout or "").strip()
+        except AskCancelled:
+            raise
         if not raw:
-            err = (proc.stderr or "").strip()
-            raise AskCancelled(err or "Windows entry produced no output")
+            detail = (err or "").strip() or f"exit {rc} script={entry_script.name}"
+            raise AskCancelled(f"Windows entry produced no output ({detail})")
         try:
             data = json.loads(raw)
         except json.JSONDecodeError as exc:
@@ -437,8 +727,10 @@ def _ask_list(
     ids: list[str],
     labels: dict[str, str],
     preselect: set[str],
+    recommended: set[str] | None = None,
     danger_ids: set[str],
     dangerous: bool,
+    action_class: str | None = None,
     allow_multiple: bool,
     allow_other: bool,
     title: str,
@@ -450,26 +742,36 @@ def _ask_list(
     capability_notes: list[str] | None = None,
     images: list[str] | None = None,
 ) -> tuple[list[str], dict[str, Any], str | None]:
-    """Radiolist/checklist via Gtk (Linux) or tkinter (Windows).
+    """Radiolist/checklist via Gtk (Linux) or WebView2/tk (Windows).
 
     Returns ``(chosen_ids, voice_meta, freeform_text_or_None)``. When the
     dialog already confirmed a spoken/typed freeform answer, ``freeform_text``
     is set and the entry step is skipped.
     """
     image_paths = [str(p) for p in (images or []) if str(p).strip()]
+    rec_ids = sorted(recommended or set())
+    from ask_question_mcp.action_class import ui_fields as _action_ui_fields
+
+    band = _action_ui_fields(
+        action_class=action_class,
+        dangerous=bool(dangerous or danger_ids),
+    )
     if _is_windows():
-        if not _WIN_LIST_ASK.is_file():
-            raise RuntimeError(f"missing Windows list dialog: {_WIN_LIST_ASK}")
         win_py = _resolve_win_python()
+        list_script = _resolve_win_list_script(win_py)
         payload = {
             "question": question.strip(),
             "title": title,
             "ids": ids,
             "labels": labels,
             "preselect": sorted(preselect),
-            "recommended_ids": sorted(preselect),
+            "recommended_ids": rec_ids,
             "danger_ids": sorted(danger_ids),
-            "dangerous": bool(dangerous or danger_ids),
+            "dangerous": bool(band["dangerous"]),
+            "action_class": band.get("action_class"),
+            "eyebrow": band.get("eyebrow"),
+            "banner_prefix": band.get("banner_prefix"),
+            "css_band": band.get("css_band"),
             "allow_multiple": allow_multiple,
             "allow_other": bool(allow_other),
             "timeout_sec": timeout_sec,
@@ -480,23 +782,64 @@ def _ask_list(
             "capability_notes": list(capability_notes or []),
             # Preview is Linux Gtk-only for now; paths ignored on Windows.
             "images": image_paths,
+            "theme": __import__(
+                "ask_question_mcp.prefs", fromlist=["get_theme"]
+            ).get_theme(),
         }
         try:
-            proc = subprocess.run(
-                [win_py, str(_WIN_LIST_ASK)],
-                input=json.dumps(payload),
-                check=False,
-                capture_output=True,
-                text=True,
-                timeout=timeout_sec + 15 if timeout_sec > 0 else None,
+            raw, rc, err = _run_win_dialog(
+                win_py,
+                list_script,
+                payload,
+                timeout_sec=timeout_sec,
+                grace_sec=15,
             )
-        except subprocess.TimeoutExpired as exc:
-            raise AskCancelled("Windows list timed out") from exc
+        except AskCancelled:
+            raise
 
-        raw = (proc.stdout or "").strip()
+        # Edge/WebView blank → fall back to tk so Cursor never sits on a dead HWND.
+        blank = False
+        if list_script in {_WIN_WEBVIEW_ASK, _WIN_EDGE_ASK}:
+            if not (raw or "").strip():
+                blank = True
+            else:
+                try:
+                    probe = json.loads(raw)
+                    reason = str(probe.get("reason") or "").casefold()
+                    if probe.get("cancelled") and (
+                        "blank" in reason or "failed to load" in reason
+                        or "edge not found" in reason
+                    ):
+                        blank = True
+                except json.JSONDecodeError:
+                    blank = True
+        if blank and _WIN_LIST_ASK.is_file():
+            try:
+                raw, rc, err = _run_win_dialog(
+                    win_py,
+                    _WIN_LIST_ASK,
+                    payload,
+                    timeout_sec=timeout_sec,
+                    grace_sec=15,
+                )
+            except AskCancelled:
+                raise
+
         if not raw:
-            err = (proc.stderr or "").strip()
-            raise AskCancelled(err or "Windows list produced no output")
+            detail = (err or "").strip() or f"exit {rc} script={list_script.name}"
+            try:
+                log = (
+                    Path(os.environ.get("TEMP") or os.environ.get("TMP") or ".")
+                    / "ask-question-mcp-win-list.log"
+                )
+                log.write_text(
+                    f"py={win_py}\nscript={list_script}\n"
+                    f"rc={rc}\nstderr={err!r}\n",
+                    encoding="utf-8",
+                )
+            except OSError:
+                pass
+            raise AskCancelled(f"Windows list produced no output ({detail})")
         try:
             data = json.loads(raw)
         except json.JSONDecodeError as exc:
@@ -522,21 +865,36 @@ def _ask_list(
             return chosen[:1], voice_meta, freeform_text
         return chosen, voice_meta, freeform_text
 
-    if not _GTK4_LIST_ASK.is_file():
+    if not _GTK4_LIST_ASK.is_file() and not _LINUX_WEBVIEW_ASK.is_file():
         raise RuntimeError(f"missing gtk4 list dialog: {_GTK4_LIST_ASK}")
     gtk_py = _resolve_gtk_python()
 
     speak_on = bool(speak_enabled and speak_text.strip())
     listen_on = bool(voice_answer and speak_on and not allow_multiple)
+    backend = _linux_ui_backend()
+    use_nebula = backend == "nebula" or (
+        backend == "auto" and _linux_webview_usable()
+    )
+    list_script = _LINUX_WEBVIEW_ASK if use_nebula else _GTK4_LIST_ASK
+    if use_nebula and not list_script.is_file():
+        list_script = _GTK4_LIST_ASK
+        use_nebula = False
+    if not list_script.is_file():
+        raise RuntimeError(f"missing list dialog: {list_script}")
+
     payload = {
         "question": question.strip(),
         "title": title,
         "ids": ids,
         "labels": labels,
         "preselect": sorted(preselect),
-        "recommended_ids": sorted(preselect),
+        "recommended_ids": rec_ids,
         "danger_ids": sorted(danger_ids),
-        "dangerous": bool(dangerous or danger_ids),
+        "dangerous": bool(band["dangerous"]),
+        "action_class": band.get("action_class"),
+        "eyebrow": band.get("eyebrow"),
+        "banner_prefix": band.get("banner_prefix"),
+        "css_band": band.get("css_band"),
         "allow_multiple": allow_multiple,
         "allow_other": bool(allow_other),
         "timeout_sec": timeout_sec,
@@ -547,17 +905,26 @@ def _ask_list(
         ),
         "speak_enabled": speak_on,
         "speak_text": speak_text.strip(),
-        # MCP / uv venv python — gtk runs under system python without the package.
+        # MCP / uv venv python — gtk/nebula run under system python without the package.
         "speak_python": sys.executable if speak_on else "",
         "voice_answer": listen_on,
         "audio_mode": audio_mode,
         "capability_notes": list(capability_notes or []),
         "images": image_paths,
+        "theme": __import__(
+            "ask_question_mcp.prefs", fromlist=["get_theme"]
+        ).get_theme(),
     }
     env = {**os.environ, "DISPLAY": display}
+    if use_nebula:
+        env["WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS"] = "1"
+        env["WEBKIT_DISABLE_DMABUF_RENDERER"] = "1"
+        env["GDK_BACKEND"] = (
+            (os.environ.get("ASK_QUESTION_GDK_BACKEND") or "x11").strip() or "x11"
+        )
     try:
         proc = subprocess.run(
-            [gtk_py, str(_GTK4_LIST_ASK)],
+            [gtk_py, str(list_script)],
             input=json.dumps(payload),
             check=False,
             capture_output=True,
@@ -566,7 +933,7 @@ def _ask_list(
             env=env,
         )
     except subprocess.TimeoutExpired as exc:
-        raise AskCancelled("gtk4 list timed out") from exc
+        raise AskCancelled("linux list dialog timed out") from exc
 
     raw = (proc.stdout or "").strip()
     if not raw:
@@ -618,6 +985,7 @@ def ask_zenity(
     allow_multiple: bool = False,
     allow_other: bool = True,
     dangerous: bool = False,
+    action_class: str | None = None,
     speak: bool = True,
     title: str = "Decide",
     agent: str | None = None,
@@ -634,6 +1002,8 @@ def ask_zenity(
     pair with ``"auto_listen": true`` to start mic on open (e.g. Re-record).
     ``entry_seed`` prefills the edit box (voice-turn transcript confirm).
     Pass ``dangerous=True`` to flag the whole decision.
+    ``action_class``: ``file`` | ``secrets`` | ``comms`` | ``destructive`` |
+    ``policy`` — colours Confirm chrome (Alex 2026-08-09).
     ``speak`` defaults True (local TTS). Pass ``speak=False``, uncheck dialog
     **Audio** (prefs ``audio_enabled``), or set ``ASK_QUESTION_AUDIO=0`` /
     ``ASK_QUESTION_SPEAK=0`` to mute.
@@ -711,15 +1081,18 @@ def ask_zenity(
     entry_ids = set(opens_entry_ids) | (OTHER_IDS & set(ids))
 
     preselect: set[str] = set()
+    recommended: set[str] = set()
     if recommended_ids:
         for rid in recommended_ids:
             if rid not in labels:
                 raise ValueError(f"recommended_ids entry {rid!r} not in options")
             preselect.add(rid)
+            recommended.add(rid)
     if recommended_id is not None:
         if recommended_id not in labels:
             raise ValueError(f"recommended_id {recommended_id!r} not in options")
         preselect.add(recommended_id)
+        recommended.add(recommended_id)
 
     other_tail = [i for i in ids if i in OTHER_IDS]
     core = [i for i in ids if i not in OTHER_IDS]
@@ -728,6 +1101,8 @@ def ask_zenity(
             i for i in core if i not in preselect
         ]
     elif not allow_multiple and core:
+        # Focus first option for keyboard UX — do NOT mark it Recommended
+        # unless the agent passed recommended_id / recommended_ids.
         preselect.add(core[0])
     ids = core + other_tail
 
@@ -738,7 +1113,13 @@ def ask_zenity(
     # UI first: never duck / speak / listen if the dialog cannot appear.
     display = _ensure_ui_ready()
 
-    whole_danger = bool(dangerous) or bool(danger_ids)
+    from ask_question_mcp.action_class import ui_fields as _action_ui_fields
+
+    _band = _action_ui_fields(
+        action_class=action_class,
+        dangerous=bool(dangerous) or bool(danger_ids),
+    )
+    whole_danger = bool(_band["dangerous"])
     win_title = window_title(agent=who, title=title, dangerous=whole_danger)
     speak_line = _speak_script(question=question.strip(), dangerous=whole_danger)
 
@@ -803,8 +1184,10 @@ def ask_zenity(
             ids=ids,
             labels=labels,
             preselect=preselect,
+            recommended=recommended,
             danger_ids=danger_ids,
             dangerous=whole_danger,
+            action_class=action_class,
             allow_multiple=allow_multiple,
             allow_other=allow_other,
             title=win_title,

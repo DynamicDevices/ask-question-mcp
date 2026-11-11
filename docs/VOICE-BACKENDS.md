@@ -41,7 +41,7 @@ You may substitute any server that matches the **API contracts** below.
 | GET | `/audio/{name}` | WAV bytes for that job |
 | POST | `/tts/stream` | Optional SSE stream for low-latency speak |
 
-Default style used by the MCP: `charlie-t` (`NOTIFY_VOICE_STYLE`). Provide a
+Default style used by the MCP: `max` (`NOTIFY_VOICE_STYLE`). Provide a
 matching voice-clone reference on the server, or change the style env.
 
 Optional Bearer: server `TTS_API_TOKEN`; client `ASK_QUESTION_TTS_TOKEN` or

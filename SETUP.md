@@ -123,7 +123,7 @@ Verify with `/mcp` inside Claude Code.
 
 Expose an HTTP service that accepts JSON `{"text","style","seed"}` and returns
 WAV audio (and optionally SSE `/tts/stream`). Style default used by this MCP:
-`charlie-t` (`NOTIFY_VOICE_STYLE`).
+`max` (`NOTIFY_VOICE_STYLE`).
 
 Ensure the service is reachable only on trusted networks or behind auth.
 

@@ -64,7 +64,7 @@ def label_with_hotkey(index: int, label: str) -> str:
     return f"{n} · {label}"
 
 
-KEYBOARD_HINT = "1–8 select · Enter OK · Esc cancel"
+KEYBOARD_HINT = "1–8 select · Enter OK · Esc cancel · Ctrl+V image"
 
 
 def format_confirm_body(question: str) -> str:

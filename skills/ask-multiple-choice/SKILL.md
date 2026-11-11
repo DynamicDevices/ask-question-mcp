@@ -45,11 +45,14 @@ choose among options the human must decide.
    Prefer one clear still when possible;
    `images=` is fine for related stills the human must flip through.
    Pattern: `mcq-with-image` + `mcq-images-one-at-a-time`.
-8. Wait for the JSON result. On cancel → stop. On freeform → use **`freeform_text`**.
+8. Wait for the JSON result (and any MCP **Image** blocks if the human pasted
+   references). On cancel → stop. On freeform → use **`freeform_text`**.
+   Default `timeout_sec=0` waits for the human — do not invent a choice if they
+   take a long time.
 
-Humans use the dialog keyboard (**1–8**, Enter, Esc; **F** maximize when images;
-**←/→** when multi-image carousel); do not put hotkey instructions in
-`question`. Detail: repo `docs/AGENTS.md` (Dialog UX).
+Humans use the dialog keyboard (**1–8**, Enter, Esc; **Ctrl+V** paste images;
+**F** maximize when images; **←/→** when multi-image carousel); do not put
+hotkey instructions in `question`. Detail: repo `docs/AGENTS.md` (Dialog UX).
 
 ## Voice — who is “I”? (Alex 2026-07-30)
 

@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#100d1c" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <title>Decide</title>
+    <link rel="stylesheet" href="tokens.css" />
+    <link rel="stylesheet" href="dialog.css" />
+  </head>
+  <body>
+    <div class="app" id="app" data-theme="glass">
+      <div class="aura" aria-hidden="true">
+        <div class="stars far" id="stars-far"></div>
+        <div class="stars near" id="stars-near"></div>
+      </div>
+      <div class="aura-grain" aria-hidden="true"></div>
+      <div class="core">
+        <header class="chrome pywebview-drag-region">
+          <div class="chrome-left">
+            <span class="eyebrow" id="eyebrow">Decide</span>
+            <span class="agent" id="title-agent"></span>
+          </div>
+          <button type="button" class="close-btn" id="close-btn" aria-label="Cancel">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </button>
+        </header>
+
+        <main class="body">
+          <div class="banner" id="banner">
+            <div class="banner-inner">
+              <div class="banner-accent"></div>
+              <div class="banner-copy" id="banner-copy"></div>
+            </div>
+          </div>
+          <div class="question-block" id="question-block">
+            <h1 class="question" id="question"></h1>
+            <div class="question-detail" id="question-detail" hidden></div>
+          </div>
+          <div class="options" id="options" role="listbox"></div>
+
+          <!-- Linux WebKit/Adw: refs + freeform must live in the scrolling
+               .body or the pinned footer clips Cancel/OK. Windows can pin
+               them outside; this is the only structural Linux deviation from
+               theoriginalcheese Nebula index.html. -->
+          <div class="refs" id="refs" hidden>
+            <div class="refs-label">References</div>
+            <div class="refs-strip" id="refs-strip" role="list"></div>
+          </div>
+
+          <div class="freeform" id="freeform">
+            <label class="freeform-label" for="freeform-input">Or type something else</label>
+            <div class="freeform-shell">
+              <textarea
+                id="freeform-input"
+                class="freeform-input"
+                rows="2"
+                placeholder="Something else… · Ctrl+V image"
+                autocomplete="off"
+                spellcheck="false"
+              ></textarea>
+            </div>
+          </div>
+        </main>
+
+        <footer class="footer">
+          <!-- Voice chrome stays in the footer (not <main>) so Cancel/OK never clip. -->
+          <div class="voice-bar" id="voice-bar" hidden>
+            <div class="voice-status" id="voice-status" data-state="idle" hidden></div>
+            <div class="voice-recover" id="voice-recover" hidden>
+              <div class="voice-recover-label" id="voice-recover-label"></div>
+              <div class="voice-recover-actions">
+                <button type="button" class="btn btn-voice" id="voice-repeat-btn">Repeat</button>
+                <button type="button" class="btn btn-voice is-accent" id="voice-use-this-btn" hidden>Use this</button>
+              </div>
+            </div>
+            <div class="voice-controls" id="voice-controls">
+              <label class="voice-check" id="audio-label" title="Speak questions and listen for answers (saved)">
+                <input type="checkbox" id="audio-chk" />
+                <span>Audio</span>
+              </label>
+              <button type="button" class="btn btn-voice" id="replay-btn" hidden title="Replay question (R)">Replay</button>
+              <button type="button" class="btn btn-voice" id="listen-btn" hidden title="Listen for a spoken answer (L)">Listen</button>
+              <label class="voice-check" id="always-listen-label" hidden title="Auto-start the mic when this dialog opens (saved)">
+                <input type="checkbox" id="always-listen-chk" />
+                <span>Always listen</span>
+              </label>
+            </div>
+          </div>
+          <div class="footer-row">
+            <div class="hint" id="hint">Select · Enter OK · Esc cancel</div>
+            <div class="actions">
+              <button type="button" class="btn btn-ghost" id="cancel-btn">Cancel</button>
+              <button type="button" class="btn btn-primary" id="ok-btn" disabled>OK</button>
+            </div>
+          </div>
+        </footer>
+      </div>
+    </div>
+    <script src="dialog.js"></script>
+  </body>
+</html>

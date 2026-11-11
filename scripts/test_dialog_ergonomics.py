@@ -251,6 +251,22 @@ def test_preview_click_action_and_title_dblclick() -> None:
     assert mod._is_titlebar_double_click("x") is False
 
 
+def test_carousel_skips_unreadable_images() -> None:
+    mod = _load_gtk4_list_ask()
+
+    def load(path: str) -> str:
+        if path == "bad":
+            raise OSError("unreadable image")
+        return path
+
+    assert mod._load_carousel_image([], 0, 1, load) is None
+    assert mod._load_carousel_image(["bad"], 0, 1, load) is None
+    assert mod._load_carousel_image(["a", "bad", "c"], 1, 1, load) == (2, "c")
+    assert mod._load_carousel_image(["a", "bad", "c"], 1, -1, load) == (0, "a")
+    assert mod._load_carousel_image(["bad", "b"], 2, 1, load) == (1, "b")
+    assert mod._load_carousel_image(["a"], 0, 1, lambda _: None) is None
+
+
 def main() -> None:
     test_hotkeys()
     test_question_body_cap()
@@ -259,6 +275,7 @@ def main() -> None:
     test_image_mcq_sizing_fits_laptop()
     test_multi_image_carousel_uses_full_single_budget()
     test_preview_click_action_and_title_dblclick()
+    test_carousel_skips_unreadable_images()
     print("OK dialog ergonomics (hotkeys + window geometry + sizing)")
 
 

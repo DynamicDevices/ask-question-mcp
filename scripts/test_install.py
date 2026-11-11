@@ -74,7 +74,7 @@ def test_prefs_quiet_defaults() -> None:
     d = prefs_mod.defaults()
     assert d["always_listen"] is False
     assert d["ack_enabled"] is False
-    assert d["audio_enabled"] is True
+    assert d["audio_enabled"] is False
 
 
 def main() -> None:

@@ -80,16 +80,52 @@ def main() -> int:
 
     result: dict[str, Any] = {"cancelled": True, "reason": "no selection"}
     closed = {"v": False}
+    timeout_after: dict[str, Any] = {"id": None}
 
     root = tk.Tk()
     root.title(title)
     root.resizable(True, True)
-    # Cursor-spawned MCP often has no console; keep dialog visible.
+    # Cursor-spawned MCP often has no console; keep dialog visible + front.
     try:
         root.attributes("-topmost", True)
-        root.after(400, lambda: root.attributes("-topmost", False))
+        root.lift()
+        root.focus_force()
     except tk.TclError:
         pass
+
+    def _raise_win32() -> None:
+        try:
+            import ctypes
+
+            hwnd = int(root.winfo_id())
+            # On Windows, winfo_id is the HWND for the Tk frame; climb to top.
+            user32 = ctypes.windll.user32
+            GA_ROOT = 2
+            top = user32.GetAncestor(hwnd, GA_ROOT) or hwnd
+            user32.ShowWindow(top, 9)
+            foreground = user32.GetForegroundWindow()
+            if foreground:
+                other_tid = user32.GetWindowThreadProcessId(foreground, None)
+                our_tid = ctypes.windll.kernel32.GetCurrentThreadId()
+                user32.AttachThreadInput(other_tid, our_tid, True)
+                user32.BringWindowToTop(top)
+                user32.SetForegroundWindow(top)
+                user32.AttachThreadInput(other_tid, our_tid, False)
+            else:
+                user32.BringWindowToTop(top)
+                user32.SetForegroundWindow(top)
+        except Exception:  # noqa: BLE001
+            pass
+
+    def _release_topmost() -> None:
+        try:
+            root.attributes("-topmost", False)
+        except tk.TclError:
+            pass
+
+    root.after(50, _raise_win32)
+    root.after(300, _raise_win32)
+    root.after(1200, _release_topmost)
 
     outer = ttk.Frame(root, padding=12)
     outer.grid(row=0, column=0, sticky="nsew")
@@ -232,6 +268,14 @@ def main() -> int:
         freeform_entry.grid(row=1, column=0, sticky="ew", pady=(4, 0))
 
         def on_ff_key(_event: object = None) -> None:
+            # First freeform keystroke cancels idle auto-close.
+            tid = timeout_after.get("id")
+            if tid is not None:
+                try:
+                    root.after_cancel(tid)
+                except Exception:  # noqa: BLE001
+                    pass
+                timeout_after["id"] = None
             text = freeform_var.get().strip()
             if not text:
                 return
@@ -426,9 +470,10 @@ def main() -> int:
     if timeout_sec > 0:
 
         def on_timeout() -> None:
+            timeout_after["id"] = None
             finish({"cancelled": True, "reason": "timeout"})
 
-        root.after(timeout_sec * 1000, on_timeout)
+        timeout_after["id"] = root.after(timeout_sec * 1000, on_timeout)
 
     # Restore size/position when known; else centre roughly.
     root.update_idletasks()

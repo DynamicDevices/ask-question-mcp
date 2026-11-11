@@ -73,15 +73,16 @@ skill via `ask-question-install --skill` (`~/.cursor/skills/ask-multiple-choice`
 | `allow_multiple` | bool | no | default `false` (radio); `true` = checklist |
 | `allow_other` | bool | no | **Ignored** — Something else is always appended when missing |
 | `dangerous` | bool | no | Danger chrome; OK/Enter armed ~1s (`ASK_QUESTION_DANGER_ARM_MS`, same default as normal). Normal MCQs arm ~1s (`ASK_QUESTION_ARM_MS`). |
+| `action_class` | string \| null | no | Band colour: `file` \| `secrets` \| `comms` \| `destructive` \| `policy`. Use **COMMS** only for real outbound messages (never “send this” for file/secrets/policy). Bare `dangerous=true` maps to destructive chrome. |
 | `speak` | bool | no | default `true` (honours mute env / missing TTS) |
 | `title` | string | no | default `"Decide"` — short noun phrase |
 | `agent` | string \| null | **strongly yes** | Window title prefix `[agent]` |
-| `timeout_sec` | int | no | default `300`; `0` = no timeout |
+| `timeout_sec` | int | no | default `0` (no idle auto-close — waits for the human). Positive = soft idle; typing / paste / select **holds** until OK/Cancel. Parent also respects engagement (absolute ceiling ~4h). |
 | `entry_seed` | string \| null | no | Prefill Something else / entry |
-| `image` | string \| null | no | Local PNG/JPEG (etc.) path or `file://` URI — Gtk preview above the question (Linux). Missing/unsupported files are skipped. |
+| `image` | string \| null | no | Local PNG/JPEG (etc.) path or `file://` URI — preview above the question (Linux Gtk + Nebula). Missing/unsupported files are skipped. |
 | `images` | string[] \| null | no | Same as `image`, up to 4 paths (combined with `image`, deduped). Gtk shows a **carousel** (one still at a time; click left/right of the still, Prev/Next, or ←/→). Prefer one clear still when possible. |
 
-**Images in the dialog (Linux Gtk):** pass an absolute path or `file://` URI so
+**Images in the dialog (Linux Gtk + Nebula):** pass an absolute path or `file://` URI so
 Alex sees the still *inside* the MCQ (not only in chat). Chat `Read` of a PNG
 does not put pixels in the dialog — use `image` / `images`. When images are
 present the window opens large on the **primary** usable workarea (not the
@@ -151,6 +152,7 @@ Routine forks stay short (no referent dump):
   "title": "Force push",
   "agent": "release-agent",
   "dangerous": true,
+  "action_class": "destructive",
   "recommended_id": "abort",
   "options": [
     { "id": "abort", "label": "Abort (recommended)" },
@@ -158,6 +160,9 @@ Routine forks stay short (no referent dump):
   ]
 }
 ```
+
+**Theme (Nebula):** env `ASK_QUESTION_THEME` or prefs `theme` —
+`glass` (default dark) · `light` · `ink` · `signal` · `hybrid`.
 
 OK and Enter stay locked briefly after open (countdown on OK): **~1s** for both
 normal (`ASK_QUESTION_ARM_MS`) and `dangerous` (`ASK_QUESTION_DANGER_ARM_MS`).
@@ -174,13 +179,17 @@ footer hint. Useful when coaching a human or writing host docs.
 | Input | Behaviour |
 |-------|-----------|
 | **1–8** (top row or keypad) | Select that option (1-based). Labels show `1 · …`. Multi-select **toggles**. Ignored while the Something else entry is focused. |
+| **↑ / ↓** | Move highlight among options; **Enter** confirms (single-select also selects as you move). |
 | **Enter** | Confirm OK after the arm delay (same as clicking OK). |
 | **Esc** / window close | Cancel. |
-| **Audio** (footer checkbox) | Persistent mute for TTS/STT (`prefs.audio_enabled`). Env `ASK_QUESTION_AUDIO=0` also mutes. |
+| **Audio** (footer checkbox) | Persistent mute for TTS/STT (`prefs.audio_enabled`). Env `ASK_QUESTION_AUDIO=0` hard-mutes; `=1` does **not** override the checkbox. |
 | **R** / **L** | Replay question / Listen (Linux voice only, when configured). |
 | **Click preview** (image MCQs) | Single still: toggle large vs compact (~320px). Multi-image: **left half → previous**, **right half → next**. |
 | **F** / header maximize / **double-click title bar** (image MCQs) | Maximize / restore the window so the still can use most of the screen. |
 | **← / →** or **Prev / Next** (multi-image) | Carousel: show previous / next still (one visible at a time). |
+| **Ctrl+V** (Linux Gtk + Nebula; Windows Nebula) | Paste clipboard images as in-dialog **References** (max 4). No lasting local files — pixels return in JSON `pasted_images`. |
+| **Linux Nebula** | Visual SoT: Anthony’s Windows fork (`theoriginalcheese/ask-question-mcp`). Hosted by `linux_webview_ask.py` (WebKit). Frameless chrome drag uses bridge `begin_move` → `Gdk.Toplevel.begin_move` (WebKit ignores `pywebview-drag-region`). Freeform/refs stay **inside** scrolling `<main>` so Cancel/OK never clip. Voice via `linux_webview_voice.py`; Audio checkbox wins over `ASK_QUESTION_AUDIO=1` (`=0` remains hard mute). Listen needs `ASK_QUESTION_STT_URL`. |
+| **Typing / paste / select** | First freeform keystroke, image paste, or option pick **cancels idle `timeout_sec` auto-close** until OK / Cancel / Esc. |
 
 ### Reading the question (lead + detail)
 
@@ -225,6 +234,11 @@ Parse the string before branching.
 **Multi select:** `ids` + `labels` instead of `id` / `label`.
 
 **Freeform:** same shape plus `"freeform": true` and `"freeform_text": "…"`.
+
+**Human-pasted references (Ctrl+V):** lean JSON may include
+`pasted_image_count` (and optional `pasted_image_notes`). The tool result then
+includes MCP **Image** content blocks after the JSON string so the model can
+see the stills.
 
 **Cancelled:**
 
@@ -287,7 +301,7 @@ Env cheat sheet: [SETUP.md](../SETUP.md#5-env-cheat-sheet).
 |---------|------------|
 | Tool missing / won’t start | Absolute `uv` path; check `REPO_ROOT`; reload; `check_setup` |
 | No dialog | `check_setup` → `display` / `gtk_*`; host must inherit `DISPLAY` |
-| Hang / timeout | Human must click; raise `timeout_sec`; off-screen window? |
+| Hang / timeout | Default waits forever (`timeout_sec=0`). If you set a positive timeout, typing/paste/select holds it. Off-screen window? |
 | Speaks without TTS URL | Local Piper / notify path — mute with Audio / `ASK_QUESTION_AUDIO=0` |
 | No speech / no mic | `setup_guide` topic `tts` / `stt`, or mute env |
 | Works in terminal, not IDE | Absolute `uv`; restart IDE after install |
