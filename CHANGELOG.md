@@ -3,6 +3,8 @@
 ## [Unreleased]
 
 ### Fixed
+- Update the locked certifi, MCP SDK (remaining on 1.x) and PyJWT dependencies
+  to resolve the dependency-audit findings blocking the typing-fix PR.
 - Keep Something else typing responsive in WebKit by hiding the animated blur,
   stars and noise while the text box has focus; restore them on focus-out.
 - Coalesce activity notifications, retain a final update and allow only one
