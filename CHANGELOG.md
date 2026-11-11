@@ -3,6 +3,9 @@
 ## [Unreleased]
 
 ### Fixed
+- Show multiple GTK image previews as a one-image carousel with click/arrow
+  navigation and title-bar double-click maximize. Skip unreadable images before
+  advancing the displayed image and counter.
 - Update the locked certifi, MCP SDK (remaining on 1.x) and PyJWT dependencies
   to resolve the dependency-audit findings blocking the typing-fix PR.
 - Keep Something else typing responsive in WebKit by hiding the animated blur,

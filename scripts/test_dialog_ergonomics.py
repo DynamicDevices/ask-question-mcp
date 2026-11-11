@@ -194,11 +194,11 @@ def test_image_mcq_sizing_fits_laptop() -> None:
     assert text_w <= 900 and text_h <= 480
 
 
-def test_multi_image_stack_fits_primary() -> None:
-    """Fake primary 1803×1202 + 2–3 large stills → window/stack ≤ usable.
+def test_multi_image_carousel_uses_full_single_budget() -> None:
+    """Multi-image carousel uses full single-still height (not N-way split).
 
-    Regression: each preview used the full single-image height size_request,
-    so N stacked images summed past the Framework eDP primary.
+    Regression: old stack UI divided height by N so stills were unreadable.
+    Carousel shows one at a time → same budget as ``n_images=1``.
     """
     mod = _load_gtk4_list_ask()
     primary = (1803, 1202)
@@ -206,32 +206,65 @@ def test_multi_image_stack_fits_primary() -> None:
     stack_w, stack_h = mod._preview_stack_max_wh(
         primary, maximized=False, expanded=True
     )
+    single_w, single_h = mod._preview_max_wh(
+        primary, maximized=False, expanded=True, n_images=1
+    )
+    assert single_w == stack_w and single_h == stack_h
 
     for n in (2, 3, 4):
         per_w, per_h = mod._preview_max_wh(
             primary, maximized=False, expanded=True, n_images=n
         )
-        assert per_w <= stack_w <= uw
+        assert (per_w, per_h) == (single_w, single_h)
         req_h = mod._multi_image_stack_request_h(
             primary, maximized=False, expanded=True, n_images=n
         )
-        assert req_h <= stack_h
-        assert per_h * n + mod._IMAGE_STACK_GAP * (n - 1) == req_h
-        # Old bug: N × ~50% usable ≫ primary height.
-        assert n * per_h < uh
+        assert req_h == single_h <= stack_h
         geom_w, geom_h = mod._image_mcq_default_size(primary, n_images=n)
         assert geom_w <= uw and geom_h <= uh
-        assert geom_h <= uh
 
-    # Compact multi-image also divides — 3×280 must not win.
+    # Compact multi-image still one still tall — not 3×280 stacked.
     c_req = mod._multi_image_stack_request_h(
         primary, maximized=False, expanded=False, n_images=3
     )
     _cw, c_stack = mod._preview_stack_max_wh(
         primary, maximized=False, expanded=False
     )
-    assert c_req <= c_stack <= 280
+    assert c_req == c_stack <= 280
     assert c_req + mod._IMAGE_MCQ_CHROME_H <= uh
+
+
+def test_preview_click_action_and_title_dblclick() -> None:
+    """Carousel left/right halves + title-bar double-click helpers."""
+    mod = _load_gtk4_list_ask()
+    assert mod._preview_click_action(10, 200, multi=False) == "toggle_expand"
+    assert mod._preview_click_action(190, 200, multi=False) == "toggle_expand"
+    assert mod._preview_click_action(0, 200, multi=True) == "prev"
+    assert mod._preview_click_action(99, 200, multi=True) == "prev"
+    assert mod._preview_click_action(100, 200, multi=True) == "next"
+    assert mod._preview_click_action(199, 200, multi=True) == "next"
+    assert mod._preview_click_action(1, 0, multi=True) == "next"
+    assert mod._is_titlebar_double_click(2) is True
+    assert mod._is_titlebar_double_click(1) is False
+    assert mod._is_titlebar_double_click(0) is False
+    assert mod._is_titlebar_double_click("2") is True
+    assert mod._is_titlebar_double_click("x") is False
+
+
+def test_carousel_skips_unreadable_images() -> None:
+    mod = _load_gtk4_list_ask()
+
+    def load(path: str) -> str:
+        if path == "bad":
+            raise OSError("unreadable image")
+        return path
+
+    assert mod._load_carousel_image([], 0, 1, load) is None
+    assert mod._load_carousel_image(["bad"], 0, 1, load) is None
+    assert mod._load_carousel_image(["a", "bad", "c"], 1, 1, load) == (2, "c")
+    assert mod._load_carousel_image(["a", "bad", "c"], 1, -1, load) == (0, "a")
+    assert mod._load_carousel_image(["bad", "b"], 2, 1, load) == (1, "b")
+    assert mod._load_carousel_image(["a"], 0, 1, lambda _: None) is None
 
 
 def main() -> None:
@@ -240,7 +273,9 @@ def main() -> None:
     test_window_geometry()
     test_pick_sizing_monitor_wh()
     test_image_mcq_sizing_fits_laptop()
-    test_multi_image_stack_fits_primary()
+    test_multi_image_carousel_uses_full_single_budget()
+    test_preview_click_action_and_title_dblclick()
+    test_carousel_skips_unreadable_images()
     print("OK dialog ergonomics (hotkeys + window geometry + sizing)")
 
 

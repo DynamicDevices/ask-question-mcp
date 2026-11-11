@@ -19,7 +19,7 @@ import subprocess
 import sys
 import threading
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 _MAX_PASTED = 4
 _PASTE_MAX_EDGE = 1280
@@ -144,9 +144,11 @@ _IMAGE_MCQ_CHROME_H = 400
 # GdkWaylandMonitor has no get_workarea — reserve for GNOME top panel / margins.
 _PANEL_RESERVE_H = 48
 _EDGE_MARGIN_W = 48
-# Vertical gap between stacked multi-image frames (matches Gtk.Box spacing=8).
+# Legacy gap helper (stack UI retired; carousel shows one still at a time).
 _IMAGE_STACK_GAP = 8
+# Hint + carousel nav row reserve above the still.
 _IMAGE_HINT_RESERVE_H = 28
+_IMAGE_CAROUSEL_NAV_RESERVE_H = 36
 # Confirm / question detail: cap so Cancel/OK stay on-screen. 180px was too
 # tight for shell-gate (ask + meta + Command) and Gtk Label wrap under-measure
 # clipped the last line without a usable scrollbar.
@@ -177,10 +179,10 @@ def _preview_stack_max_wh(
     maximized: bool,
     expanded: bool,
 ) -> tuple[int, int]:
-    """Total (max_w, max_h) for the entire preview stack (all images together).
+    """Total (max_w, max_h) for the image preview area (one visible still).
 
-    Multi-image MCQs must share this budget — never give each still the full
-    single-image height (that summed past primary usable and blew the window).
+    Multi-image MCQs use a carousel (one still at a time), so this budget is
+    the full single-image height — never N stacked previews.
     """
     raw_w, raw_h = int(monitor_wh[0]), int(monitor_wh[1])
     if raw_w <= 0 or raw_h <= 0:
@@ -209,18 +211,16 @@ def _preview_max_wh(
     expanded: bool,
     n_images: int = 1,
 ) -> tuple[int, int]:
-    """Return (max_w, max_h) for *one* image under current mode.
+    """Return (max_w, max_h) for the visible still under current mode.
 
-    ``n_images`` > 1 divides the stack budget so N vertical ``size_request``
-    mins cannot sum past primary usable height.
+    Carousel shows one image at a time, so ``n_images`` is ignored for height
+    (kept for call-site compatibility). Always uses the full preview budget.
     """
+    _ = _clamp_n_images(n_images)
     stack_w, stack_h = _preview_stack_max_wh(
         monitor_wh, maximized=maximized, expanded=expanded
     )
-    n = _clamp_n_images(n_images)
-    gap = _IMAGE_STACK_GAP * (n - 1)
-    per_h = max(64, (int(stack_h) - gap) // n)
-    return int(stack_w), int(per_h)
+    return int(stack_w), int(stack_h)
 
 
 def _multi_image_stack_request_h(
@@ -230,15 +230,18 @@ def _multi_image_stack_request_h(
     expanded: bool,
     n_images: int,
 ) -> int:
-    """Sum of per-image size_request heights (+ gaps) for N stacked previews."""
-    n = _clamp_n_images(n_images)
+    """Height request for the preview area (carousel = one still, full budget).
+
+    ``n_images`` is accepted for compatibility; only one still is shown.
+    """
+    _ = _clamp_n_images(n_images)
     _pw, per_h = _preview_max_wh(
         monitor_wh,
         maximized=maximized,
         expanded=expanded,
-        n_images=n,
+        n_images=1,
     )
-    return int(per_h) * n + _IMAGE_STACK_GAP * (n - 1)
+    return int(per_h)
 
 
 def _image_mcq_default_size(
@@ -253,10 +256,11 @@ def _image_mcq_default_size(
     prev_w, stack_h = _preview_stack_max_wh(
         monitor_wh, maximized=False, expanded=True
     )
-    # Multi-image still uses the same stack budget (not N× single height).
+    # Carousel: one still + optional nav; same budget as single-image MCQ.
     _ = _clamp_n_images(n_images)
+    nav_extra = _IMAGE_CAROUSEL_NAV_RESERVE_H if _clamp_n_images(n_images) > 1 else 0
     need_w = min(uw, prev_w + _EDGE_MARGIN_W)
-    need_h = min(uh, stack_h + _IMAGE_MCQ_CHROME_H)
+    need_h = min(uh, stack_h + _IMAGE_MCQ_CHROME_H + nav_extra)
     # Soft target ~88×90% usable; never exceed usable; no absolute 720×700
     # floors that can outgrow a small panel.
     geom_w = min(uw, max(int(prefs_w), int(uw * 0.88), need_w))
@@ -279,6 +283,50 @@ def _text_mcq_default_size(
     if question_len < 200 and n_options <= 6:
         geom_h = min(geom_h, 480, uh)
     return max(320, geom_w), max(280, geom_h)
+
+
+def _preview_click_action(
+    x: float,
+    width: float,
+    *,
+    multi: bool,
+) -> str:
+    """Map a still click to an action name (no Gtk — unit-tested).
+
+    Single-image: any click toggles compact ↔ large preview.
+    Multi-image carousel: left half → previous, right half → next
+    (Prev/Next buttons and ←/→ remain).
+    """
+    if not multi:
+        return "toggle_expand"
+    w = float(width)
+    if w <= 0.0:
+        return "next"
+    return "prev" if float(x) < (w * 0.5) else "next"
+
+
+def _load_carousel_image(
+    paths: list[str], idx: int, direction: int, load: Callable[[str], Any]
+) -> tuple[int, Any] | None:
+    """Find a readable still, wrapping once; never advance UI on load failure."""
+    step = -1 if direction < 0 else 1
+    for offset in range(len(paths)):
+        i = (int(idx) + offset * step) % len(paths)
+        try:
+            image = load(paths[i])
+        except Exception:  # noqa: BLE001 — missing/corrupt images are optional
+            continue
+        if image is not None:
+            return i, image
+    return None
+
+
+def _is_titlebar_double_click(n_press: int) -> bool:
+    """True when a GestureClick reports a title-bar double-click."""
+    try:
+        return int(n_press) == 2
+    except (TypeError, ValueError):
+        return False
 
 
 def _workarea_wh_for_window(win: object) -> tuple[int, int] | None:
@@ -649,8 +697,7 @@ def _main() -> int:
         scr_w, scr_h = _display_size_px(win.get_display())
         if image_paths:
             # Image MCQs open large but must fit usable *primary* monitor
-            # (preview stack + chrome). Absolute 720×700 floors overflowed eDP;
-            # multi-image must share one stack budget (not N× single height).
+            # (one still + chrome; carousel never stacks N stills).
             geom_w, geom_h = _image_mcq_default_size(
                 (scr_w, scr_h),
                 prefs_w=geom_w,
@@ -965,6 +1012,13 @@ def _main() -> int:
                 start_voice_listen_thread()
 
         header = Adw.HeaderBar()
+        # Explicit title widget so CSD / undecorated hosts still have a clear
+        # drag + double-click target (not only the compositor chrome).
+        header_title = Gtk.Label(label=title)
+        header_title.set_ellipsize(Pango.EllipsizeMode.END)
+        header_title.set_single_line_mode(True)
+        header_title.add_css_class("title")
+        header.set_title_widget(header_title)
         if speak_enabled:
             header_replay = Gtk.Button()
             header_replay.set_icon_name("media-playlist-repeat-symbolic")
@@ -977,13 +1031,16 @@ def _main() -> int:
         # Preview / maximize state (image MCQs). Defined before the header
         # maximize control so click handlers can reflow the still.
         preview_expanded = {"v": True}
+        # Carousel: one Gtk.Picture; paths list is the album.
         preview_pictures: list[tuple[str, Gtk.Picture]] = []
+        carousel_idx = {"v": 0}
+        carousel_counter_lbl: dict[str, Gtk.Label | None] = {"w": None}
         soft_maximized = {"v": False}
         restore_geom: dict[str, tuple[int, int] | None] = {"wh": None}
         max_btn: Gtk.Button | None = None
 
         def _preview_limits() -> tuple[int, int]:
-            """Return per-image (max_w, max_h) for compact/expanded/maximized."""
+            """Return (max_w, max_h) for the visible still (carousel = one)."""
             host = None
             if win.is_maximized() or soft_maximized["v"]:
                 host = _workarea_wh_for_window(win)
@@ -991,11 +1048,11 @@ def _main() -> int:
                 host or (scr_w, scr_h),
                 maximized=bool(win.is_maximized() or soft_maximized["v"]),
                 expanded=bool(preview_expanded["v"]),
-                n_images=max(1, len(image_paths)),
+                n_images=1,
             )
 
         def _stack_budget() -> tuple[int, int]:
-            """Total preview-stack (max_w, max_h) — never N× per-image."""
+            """Preview area (max_w, max_h) — one visible still."""
             host = None
             if win.is_maximized() or soft_maximized["v"]:
                 host = _workarea_wh_for_window(win)
@@ -1033,7 +1090,52 @@ def _main() -> int:
                     if preview_expanded["v"]
                     else f"{path}\nClick: larger preview"
                 )
+                if len(image_paths) > 1:
+                    tip = (
+                        f"{path}\nClick left: previous · Click right: next"
+                        "\n← → or Prev/Next also work"
+                    )
                 picture.set_tooltip_text(tip)
+
+        def _set_carousel_index(idx: int, direction: int = 1) -> None:
+            """Show image_paths[idx] in the single Picture (wrap)."""
+            n = len(image_paths)
+            if n < 1 or not preview_pictures:
+                return
+            max_w, max_h = _preview_limits()
+
+            def load(path: str) -> tuple[Any, Any] | None:
+                pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(path, max_w, max_h, True)
+                if pixbuf is None:
+                    return None
+                return pixbuf, Gdk.Texture.new_for_pixbuf(pixbuf)
+
+            loaded = _load_carousel_image(image_paths, idx, direction, load)
+            if loaded is None:
+                return
+            i, (pixbuf, texture) = loaded
+            _picture = preview_pictures[0][1]
+            _picture.set_paintable(texture)
+            _picture.set_size_request(-1, min(max_h, int(pixbuf.get_height())))
+            carousel_idx["v"] = i
+            path = image_paths[i]
+            preview_pictures[0] = (path, _picture)
+            _picture.set_tooltip_text(
+                f"{path}\nClick left: previous · Click right: next\n← → or Prev/Next also work"
+            )
+            lbl = carousel_counter_lbl["w"]
+            if lbl is not None:
+                lbl.set_label(f"{i + 1} / {n}")
+
+        def carousel_prev(*_args: object) -> None:
+            if len(image_paths) < 2:
+                return
+            _set_carousel_index(carousel_idx["v"] - 1, -1)
+
+        def carousel_next(*_args: object) -> None:
+            if len(image_paths) < 2:
+                return
+            _set_carousel_index(carousel_idx["v"] + 1)
 
         def _sync_max_btn() -> None:
             if max_btn is None:
@@ -1105,6 +1207,34 @@ def _main() -> int:
 
             GLib.timeout_add(50, _after_maximize)
 
+        def _on_titlebar_click(
+            gesture: Gtk.GestureClick,
+            n_press: int,
+            _x: float,
+            _y: float,
+            *_rest: object,
+        ) -> None:
+            """Double-click title / drag region → soft maximize / restore."""
+            if not _is_titlebar_double_click(n_press):
+                return
+            toggle_window_maximize()
+            try:
+                gesture.set_state(Gtk.EventSequenceState.CLAIMED)
+            except Exception:  # noqa: BLE001
+                pass
+
+        # Wire double-click on HeaderBar (CSD title / drag region), including
+        # hosts where the window is undecorated — same soft-fill as F / button.
+        title_dbl = Gtk.GestureClick()
+        title_dbl.set_button(1)
+        title_dbl.connect("pressed", _on_titlebar_click)
+        header.add_controller(title_dbl)
+        # Also on the title label so clicks on the text hit the handler.
+        title_lbl_dbl = Gtk.GestureClick()
+        title_lbl_dbl.set_button(1)
+        title_lbl_dbl.connect("pressed", _on_titlebar_click)
+        header_title.add_controller(title_lbl_dbl)
+
         if image_paths:
             # Maximize / restore so large stills can use most of the screen.
             max_btn = Gtk.Button()
@@ -1123,9 +1253,9 @@ def _main() -> int:
         def _append_image_previews(parent: Gtk.Box) -> None:
             """PNG/JPEG preview above the question; click toggles large/compact.
 
-            Multi-image: each still shares the stack height budget and the
-            stack lives in a scrolled viewport so size_request mins cannot
-            force a window taller than primary usable.
+            Multi-image: carousel — one still visible; left/right click on the
+            still (or Prev/Next / ←/→) to move. Full single-image height budget
+            (never N tiny stacked stills).
             """
             if not image_paths:
                 return
@@ -1139,15 +1269,45 @@ def _main() -> int:
             box.set_margin_end(16)
             box.set_margin_bottom(4)
             box.set_hexpand(True)
-            hint = Gtk.Label(
-                label="Click image to enlarge/shrink · header button or F maximizes"
-            )
+            multi = len(image_paths) > 1
+            if multi:
+                hint_bits = [
+                    "Click left/right of image for prev/next",
+                    "F maximizes",
+                ]
+            else:
+                hint_bits = ["Click image to enlarge/shrink", "F maximizes"]
+            hint = Gtk.Label(label=" · ".join(hint_bits))
             hint.add_css_class("dim-label")
             hint.set_xalign(0.0)
             hint.set_wrap(True)
             box.append(hint)
-            shown = 0
-            for path in image_paths:
+
+            if multi:
+                nav = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+                nav.set_halign(Gtk.Align.CENTER)
+                nav.set_margin_bottom(4)
+                prev_btn = Gtk.Button(label="◀ Prev")
+                prev_btn.set_focusable(False)
+                prev_btn.connect("clicked", carousel_prev)
+                next_btn = Gtk.Button(label="Next ▶")
+                next_btn.set_focusable(False)
+                next_btn.connect("clicked", carousel_next)
+                counter = Gtk.Label(label=f"1 / {len(image_paths)}")
+                counter.add_css_class("dim-label")
+                counter.set_width_chars(7)
+                carousel_counter_lbl["w"] = counter
+                nav.append(prev_btn)
+                nav.append(counter)
+                nav.append(next_btn)
+                box.append(nav)
+
+            # Load first readable still (skip missing mid-list).
+            start_i = 0
+            picture: Gtk.Picture | None = None
+            path0 = ""
+            first_h = max_h
+            for i, path in enumerate(image_paths):
                 try:
                     pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(
                         path, max_w, max_h, True
@@ -1165,45 +1325,66 @@ def _main() -> int:
                     picture = Gtk.Picture.new_for_paintable(texture)
                 except Exception:  # noqa: BLE001
                     picture = Gtk.Picture.new_for_filename(path)
-                picture.set_can_shrink(True)
-                try:
-                    picture.set_content_fit(Gtk.ContentFit.CONTAIN)
-                except AttributeError:
-                    pass
-                picture.set_halign(Gtk.Align.CENTER)
-                # Cap each still; N× this height stays ≤ stack_h (+ gaps).
-                picture.set_size_request(
-                    -1, min(max_h, int(pixbuf.get_height()))
-                )
-                picture.add_css_class("ask-q-image-preview")
-                picture.set_tooltip_text(
-                    f"{path}\nClick: compact preview"
-                )
-                preview_pictures.append((path, picture))
+                path0 = path
+                start_i = i
+                first_h = min(max_h, int(pixbuf.get_height()))
+                break
+            if picture is None:
+                return
 
-                def _on_preview_click(
-                    _gesture: Gtk.GestureClick,
-                    _n: int,
-                    _x: float,
-                    _y: float,
-                    *_rest: object,
-                ) -> None:
+            picture.set_can_shrink(True)
+            try:
+                picture.set_content_fit(Gtk.ContentFit.CONTAIN)
+            except AttributeError:
+                pass
+            picture.set_halign(Gtk.Align.CENTER)
+            picture.set_size_request(-1, first_h)
+            picture.add_css_class("ask-q-image-preview")
+            if multi:
+                tip = (
+                    f"{path0}\nClick left: previous · Click right: next"
+                    "\n← → or Prev/Next also work"
+                )
+            else:
+                tip = f"{path0}\nClick: compact preview"
+            picture.set_tooltip_text(tip)
+            preview_pictures.append((path0, picture))
+            carousel_idx["v"] = start_i
+            if carousel_counter_lbl["w"] is not None:
+                carousel_counter_lbl["w"].set_label(
+                    f"{start_i + 1} / {len(image_paths)}"
+                )
+
+            def _on_preview_click(
+                _gesture: Gtk.GestureClick,
+                _n: int,
+                x: float,
+                _y: float,
+                *_rest: object,
+            ) -> None:
+                width = float(picture.get_width() or 0)
+                action = _preview_click_action(x, width, multi=multi)
+                if action == "prev":
+                    carousel_prev()
+                elif action == "next":
+                    carousel_next()
+                else:
                     preview_expanded["v"] = not preview_expanded["v"]
                     _apply_preview_scale()
 
-                click = Gtk.GestureClick()
-                click.connect("released", _on_preview_click)
-                picture.add_controller(click)
-                frame = Gtk.Frame()
-                frame.set_child(picture)
-                box.append(frame)
-                shown += 1
-            if not shown:
-                return
-            # Viewport capped to stack budget (+ hint). ScrolledWindow keeps
-            # child size_request mins from forcing the outer window past
-            # primary usable; per-image heights already share stack_h.
-            max_scroll_h = int(stack_h) + _IMAGE_HINT_RESERVE_H
+            click = Gtk.GestureClick()
+            click.connect("released", _on_preview_click)
+            picture.add_controller(click)
+            frame = Gtk.Frame()
+            frame.set_child(picture)
+            box.append(frame)
+
+            # Re-apply scale so size_request matches the loaded still.
+            _apply_preview_scale()
+
+            # Viewport capped to stack budget (+ hint + optional nav).
+            nav_h = _IMAGE_CAROUSEL_NAV_RESERVE_H if multi else 0
+            max_scroll_h = int(stack_h) + _IMAGE_HINT_RESERVE_H + nav_h
             scroll = Gtk.ScrolledWindow()
             scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
             scroll.set_vexpand(False)
@@ -1212,9 +1393,7 @@ def _main() -> int:
             try:
                 scroll.set_max_content_height(max_scroll_h)
             except AttributeError:
-                # Older Gtk: hard-cap only when multiple stills would stack tall.
-                if shown > 1:
-                    scroll.set_size_request(min(int(stack_w), max_w), max_scroll_h)
+                scroll.set_size_request(min(int(stack_w), max_w), max_scroll_h)
             scroll.set_child(box)
             parent.append(scroll)
 
@@ -2558,6 +2737,18 @@ def _main() -> int:
                 return True
             if image_paths and keyval in (Gdk.KEY_f, Gdk.KEY_F):
                 toggle_window_maximize()
+                return True
+            if len(image_paths) > 1 and keyval in (
+                Gdk.KEY_Left,
+                Gdk.KEY_KP_Left,
+            ):
+                carousel_prev()
+                return True
+            if len(image_paths) > 1 and keyval in (
+                Gdk.KEY_Right,
+                Gdk.KEY_KP_Right,
+            ):
+                carousel_next()
                 return True
             # Explicitly do not treat Space as confirm (GTK would activate a
             # focused button; we keep focus on options instead).
